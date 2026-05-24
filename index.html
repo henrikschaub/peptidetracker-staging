@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="protocol-icon.png">
+<title>Henrik's Protocol v1.18</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');
+  :root{--bg:#0a0a0a;--surface:#131313;--surface2:#1c1c1c;--border:#2a2a2a;--accent:#e8ff3c;--accent2:#ff6b2b;--accent3:#3cffa0;--accent4:#c084fc;--text:#f0f0f0;--muted:#555;--muted2:#888;--danger:#ff3c3c;--warning:#ffb03c;}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{background:#0a0a0a !important;color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;margin:0;padding:0;}
+  body.locked{overflow:hidden;height:100vh;}
+  #pin-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;}
+  #pin-screen.hidden{display:none;}
+  .pin-logo{font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:4px;color:var(--accent);}
+  .pin-sub{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:2px;margin-top:4px;margin-bottom:44px;}
+  .pin-dots{display:flex;gap:14px;margin-bottom:36px;}
+  .pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);transition:all 0.15s;}
+  .pin-dot.filled{background:var(--accent);border-color:var(--accent);box-shadow:0 0 10px rgba(232,255,60,0.5);}
+  .pin-dot.error{background:var(--danger);border-color:var(--danger);animation:shake 0.35s ease;}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+  .pin-grid{display:grid;grid-template-columns:repeat(3,72px);gap:12px;}
+  .pin-btn{width:72px;height:72px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:22px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.12s;user-select:none;}
+  .pin-btn:active{background:var(--accent);color:#000;transform:scale(0.92);}
+  .pin-btn.del{font-size:15px;color:var(--muted2);}
+  .pin-btn.empty{background:transparent;border:none;cursor:default;}
+  .pin-err{font-size:12px;color:var(--danger);margin-top:18px;min-height:16px;letter-spacing:0.5px;}
+  #app{display:none;flex-direction:column;min-height:100vh;padding-bottom:40px;}
+  #app.visible{display:flex;}
+  .hdr{padding:22px 20px 0;display:flex;justify-content:space-between;align-items:flex-start;}
+  .hdr-title{font-family:'Bebas Neue',sans-serif;font-size:34px;letter-spacing:3px;color:var(--accent);line-height:1;}
+  .hdr-sub{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:1.5px;margin-top:3px;display:flex;align-items:center;gap:5px;}
+  .hdr-right{text-align:right;}
+  .hdr-day{font-family:'Bebas Neue',sans-serif;font-size:30px;color:var(--text);line-height:1;}
+  .hdr-weekday{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;}
+  .agent-status{display:inline-flex;align-items:center;margin-left:2px;}
+  .agent-dot{width:7px;height:7px;border-radius:50%;background:var(--border);transition:background 0.3s;flex-shrink:0;cursor:pointer;}
+  .agent-dot.up{background:#3cffa0;box-shadow:0 0 5px rgba(60,255,160,0.6);}
+  .agent-dot.down{background:#ff3c3c;box-shadow:0 0 5px rgba(255,60,60,0.5);}
+  .tabs{display:flex;padding:14px 20px 0;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;gap:4px;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;padding:8px 14px 12px;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all 0.15s;}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .content{flex:1;padding:20px;display:flex;flex-direction:column;gap:14px;}
+  .content.hidden{display:none;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+  .card-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 12px;border-bottom:1px solid var(--border);}
+  .card-title-wrap{display:flex;align-items:center;gap:10px;}
+  .card-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .card-title{font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1.5px;color:var(--text);}
+  .card-badge{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;padding:3px 8px;border-radius:20px;}
+  .badge-today{background:rgba(232,255,60,0.15);color:var(--accent);border:1px solid rgba(232,255,60,0.3);}
+  .badge-done{background:rgba(60,255,160,0.1);color:var(--accent3);border:1px solid rgba(60,255,160,0.2);}
+  .badge-upcoming{background:rgba(192,132,252,0.1);color:var(--accent4);border:1px solid rgba(192,132,252,0.2);}
+  .badge-bridge{background:rgba(255,107,43,0.1);color:var(--accent2);border:1px solid rgba(255,107,43,0.2);}
+  .card-body{padding:14px 16px;display:flex;flex-direction:column;gap:8px;}
+  .info-row{display:flex;justify-content:space-between;align-items:baseline;}
+  .info-label{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;}
+  .info-val{font-size:13px;font-weight:500;color:var(--text);}
+  .info-val.accent{color:var(--accent);}
+  .info-val.green{color:var(--accent3);}
+  .info-val.warn{color:var(--warning);}
+  .info-val.purple{color:var(--accent4);}
+  .divider{height:1px;background:var(--border);margin:4px 0;}
+  .note{font-size:11px;color:var(--muted2);background:var(--surface2);border-radius:6px;padding:8px 10px;margin-top:2px;line-height:1.5;}
+  .checklist{display:flex;flex-direction:column;}
+  .check-item{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.12s;user-select:none;}
+  .check-item:last-child{border-bottom:none;}
+  .check-item:active{background:var(--surface2);}
+  .check-box{width:22px;height:22px;border-radius:6px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;}
+  .check-box.checked{background:var(--accent3);border-color:var(--accent3);}
+  .check-box svg{display:none;}
+  .check-box.checked svg{display:block;}
+  .check-main{flex:1;}
+  .check-name{font-size:14px;font-weight:500;}
+  .check-detail{font-size:11px;color:var(--muted2);margin-top:2px;}
+  .check-item.checked-item .check-name{text-decoration:line-through;color:var(--muted2);}
+  .check-time{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;color:var(--muted2);}
+  .week-strip{display:flex;gap:6px;padding:0 20px;}
+  .week-day{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:10px;background:var(--surface);border:1px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);}
+  .week-day.today{border-color:var(--accent);}.week-day.selected-day{background:var(--surface2);border-color:var(--accent4);}
+  .week-day-name{font-weight:600;}
+  .week-day-num{font-family:'Bebas Neue',sans-serif;font-size:18px;line-height:1;color:var(--text);}
+  .week-day.today .week-day-num{color:var(--accent);}
+  .week-dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;min-height:6px;}
+  .week-dot{width:5px;height:5px;border-radius:50%;}
+  .timeline{display:flex;flex-direction:column;}
+  .milestone{display:flex;gap:14px;padding:14px 16px;border-bottom:1px solid var(--border);}
+  .milestone:last-child{border-bottom:none;}
+  .milestone-line{display:flex;flex-direction:column;align-items:center;}
+  .milestone-dot{width:12px;height:12px;border-radius:50%;border:2px solid var(--border);background:var(--surface2);flex-shrink:0;margin-top:3px;}
+  .milestone-dot.past{background:var(--accent3);border-color:var(--accent3);}
+  .milestone-dot.today-dot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 8px rgba(232,255,60,0.5);}
+  .milestone-dot.future{background:transparent;border-color:var(--muted);}
+  .milestone-connector{width:2px;flex:1;background:var(--border);margin-top:4px;min-height:20px;}
+  .milestone-body{flex:1;padding-bottom:4px;}
+  .milestone-date{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;}
+  .milestone-name{font-weight:600;font-size:14px;margin-top:2px;}
+  .milestone-desc{font-size:12px;color:var(--muted2);margin-top:3px;line-height:1.4;}
+  .prog-wrap{padding:12px 16px 14px;}
+  .prog-label{display:flex;justify-content:space-between;font-size:11px;color:var(--muted2);margin-bottom:6px;}
+  .prog-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .prog-fill{height:100%;border-radius:2px;transition:width 0.5s ease;}
+  .stack-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);}
+  .stack-row:last-child{border-bottom:none;}
+  .stack-pct{font-family:'Bebas Neue',sans-serif;font-size:24px;line-height:1;min-width:52px;}
+  .stack-info{flex:1;}
+  .stack-name{font-size:13px;font-weight:500;}
+  .stack-dose{font-size:11px;color:var(--muted2);margin-top:2px;}
+  .stack-bar-wrap{width:60px;}
+  .stack-bar{height:3px;background:var(--border);border-radius:2px;}
+  .stack-fill{height:100%;border-radius:2px;}
+  .alert-bar{padding:10px 14px;border-radius:8px;background:rgba(255,176,60,0.08);border:1px solid rgba(255,176,60,0.25);display:flex;gap:10px;align-items:flex-start;}
+  .alert-bar.green{background:rgba(60,255,160,0.06);border-color:rgba(60,255,160,0.2);}
+  .alert-icon{font-size:14px;margin-top:1px;flex-shrink:0;}
+  .alert-text{font-size:12px;color:var(--muted2);line-height:1.5;}
+  .alert-text strong{color:var(--text);}
+  .sched-day{margin-bottom:12px;}
+  .sched-day-label{font-size:11px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+  .sched-day-label.is-today{color:var(--accent);}
+  .pill-wrap{display:flex;flex-wrap:wrap;gap:5px;}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:11px;}
+  .pill-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+  .empty{padding:40px 20px;text-align:center;color:var(--muted2);font-size:13px;}
+  .empty-icon{font-size:32px;margin-bottom:12px;}
+  .reset-btn{margin:0 20px;padding:12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--muted2);font-size:12px;text-transform:uppercase;letter-spacing:1.5px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all 0.12s;width:calc(100% - 40px);}
+  .reset-btn:active{color:var(--danger);border-color:var(--danger);}
+</style>
+</head>
+<body class="locked">
+<div id="pin-screen">
+  <div class="pin-logo">PROTOCOL</div>
+  <div class="pin-sub">Henrik's Stack &nbsp;·&nbsp; <span style="color:var(--accent)">v1.44</span></div>
+  <div class="pin-dots">
+    <div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div>
+    <div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div>
+  </div>
+  <div class="pin-grid">
+    <button class="pin-btn" onclick="pinPress('1')">1</button><button class="pin-btn" onclick="pinPress('2')">2</button><button class="pin-btn" onclick="pinPress('3')">3</button>
+    <button class="pin-btn" onclick="pinPress('4')">4</button><button class="pin-btn" onclick="pinPress('5')">5</button><button class="pin-btn" onclick="pinPress('6')">6</button>
+    <button class="pin-btn" onclick="pinPress('7')">7</button><button class="pin-btn" onclick="pinPress('8')">8</button><button class="pin-btn" onclick="pinPress('9')">9</button>
+    <button class="pin-btn empty"></button><button class="pin-btn" onclick="pinPress('0')">0</button><button class="pin-btn del" onclick="pinDel()">⌫</button>
+  </div>
+  <div class="pin-err" id="pin-err"></div>
+</div>
+<div id="app">
+  <div class="hdr">
+    <div>
+      <div class="hdr-title">PROTOCOL</div>
+      <div class="hdr-sub">Henrik's Stack <span style="color:var(--border)">·</span> <span style="color:var(--accent);font-weight:600;letter-spacing:1px" id="header-version"></span><span class="agent-status" title="Agent status"><span class="agent-dot" id="agent-dot" onclick="checkAgentStatus()"></span></span></div>
+    </div>
+    <div class="hdr-right"><div class="hdr-day" id="hdr-day">—</div><div class="hdr-weekday" id="hdr-weekday">—</div></div>
+  </div>
+  <div style="height:14px"></div>
+  <div class="week-strip" id="week-strip"></div>
+  <div style="height:4px"></div>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('today',this)">Today</div>
+    <div class="tab" onclick="switchTab('schedule',this)">Schedule</div>
+    <div class="tab" onclick="switchTab('stack',this)">Stack</div>
+    <div class="tab" onclick="switchTab('timeline',this)">Timeline</div>
+    <div class="tab" onclick="switchTab('body',this)">Body Comp</div>
+    <div class="tab" onclick="switchTab('history',this)">History</div>
+  </div>
+  <div class="content" id="tab-today">
+    <div id="today-alerts" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <div class="card">
+      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent)"></div><div class="card-title">TODAY'S DOSES</div></div><span class="card-badge badge-today" id="today-badge">0 / 0</span></div>
+      <div class="checklist" id="today-checklist"><div class="empty"><div class="empty-icon">💉</div>Nothing scheduled</div></div>
+    </div>
+    <button class="reset-btn" onclick="resetToday()">Reset Today's Log</button>
+  </div>
+  <div class="content hidden" id="tab-schedule">
+    <div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">WEEKLY PATTERN</div></div></div><div class="card-body" id="schedule-body"></div></div>
+    <div class="card">
+      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent4)"></div><div class="card-title">TESTOVIRON BRIDGE</div></div><span class="card-badge badge-upcoming" id="testo-badge">—</span></div>
+      <div class="checklist" id="testo-list"></div>
+      <div class="prog-wrap"><div class="prog-label"><span>Bridge progress</span><span id="testo-prog-txt">—</span></div><div class="prog-bar"><div class="prog-fill" id="testo-prog" style="background:var(--accent4);width:0%"></div></div></div>
+    </div>
+  </div>
+  <div class="content hidden" id="tab-stack">
+    <div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent)"></div><div class="card-title">RETATRUTIDE</div></div><span class="card-badge badge-today">ACTIVE</span></div><div class="card-body"><div class="info-row"><span class="info-label">Dose</span><span class="info-val accent">3 mg / injection</span></div><div class="info-row"><span class="info-label">Frequency</span><span class="info-val">2× / week — Sun &amp; Wed</span></div><div class="info-row"><span class="info-label">Weekly total</span><span class="info-val">6 mg</span></div><div class="info-row"><span class="info-label">Route</span><span class="info-val">SC — 30 IU (10 mg/ml)</span></div><div class="divider"></div><div class="note">Changed from 5mg × 1/week to 3mg × 2/week for more stable exposure.</div></div></div>
+    <div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3)"></div><div class="card-title">CJC-1295 / IPAMORELIN</div></div><span class="card-badge badge-today">ACTIVE — PRE-HGH</span></div><div class="card-body"><div class="info-row"><span class="info-label">AM dose</span><span class="info-val green">4 IU — fasted AM</span></div><div class="info-row"><span class="info-label">PM dose</span><span class="info-val green">5 IU — pre-sleep PM</span></div><div class="info-row"><span class="info-label">Daily total</span><span class="info-val">9 IU</span></div><div class="divider"></div><div class="note">Bridge until HGH delivery. Discontinue on 4 Jul 2026 when HGH starts.</div></div></div>
+    <div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:#3b9eff"></div><div class="card-title">GLOW STACK</div></div><span class="card-badge badge-today">ACTIVE</span></div><div class="card-body"><div class="info-row"><span class="info-label">Daily dose</span><span class="info-val" style="color:#3b9eff">2 mg (9 IU)</span></div></div><div class="stack-row"><div class="stack-pct" style="color:var(--accent)">70%</div><div class="stack-info"><div class="stack-name">GHK-Cu</div><div class="stack-dose">1400 µg / day</div></div><div class="stack-bar-wrap"><div class="stack-bar"><div class="stack-fill" style="width:70%;background:var(--accent)"></div></div></div></div><div class="stack-row"><div class="stack-pct" style="color:var(--accent3)">15%</div><div class="stack-info"><div class="stack-name">TB-500</div><div class="stack-dose">300 µg / day</div></div><div class="stack-bar-wrap"><div class="stack-bar"><div class="stack-fill" style="width:15%;background:var(--accent3)"></div></div></div></div><div class="stack-row"><div class="stack-pct" style="color:#3b9eff">15%</div><div class="stack-info"><div class="stack-name">BPC-157</div><div class="stack-dose">300 µg / day</div></div><div class="stack-bar-wrap"><div class="stack-bar"><div class="stack-fill" style="width:15%;background:#3b9eff"></div></div></div></div></div>
+    <div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent4)"></div><div class="card-title">TESTOVIRON BRIDGE</div></div><span class="card-badge badge-bridge">BRIDGE</span></div><div class="card-body"><div class="info-row"><span class="info-label">Dose</span><span class="info-val purple">125 mg / injection</span></div><div class="info-row"><span class="info-label">Route</span><span class="info-val">SC — 27G × 12mm</span></div><div class="info-row"><span class="info-label">Filter needle</span><span class="info-val">18G aspiration</span></div><div class="info-row"><span class="info-label">Schedule</span><span class="info-val">11, 13, 18, 23 May</span></div><div class="divider"></div><div class="info-row"><span class="info-label">Trough panel</span><span class="info-val warn">29 Jun 2026 — urologist</span></div></div></div>
+    <div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--muted)"></div><div class="card-title">HGH — INCOMING</div></div><span class="card-badge badge-upcoming">FROM 4 JUL</span></div><div class="card-body"><div class="info-row"><span class="info-label">Start dose</span><span class="info-val">1 IU / day</span></div><div class="info-row"><span class="info-label">Schedule</span><span class="info-val">5-on / 2-off</span></div><div class="info-row"><span class="info-label">Vials</span><span class="info-val">24 IU × 10 vials</span></div><div class="info-row"><span class="info-label">Replaces</span><span class="info-val">CJC-1295 / IPA</span></div><div class="divider"></div><div class="note">Coincides with Nebido injection #2. Discontinue CJC/IPA on start day.</div></div></div>
+  </div>
+  <div class="content hidden" id="tab-history"><div class="empty"><div class="empty-icon">💊</div>Loading...</div></div>
+  <div class="content hidden" id="tab-timeline"><div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent)"></div><div class="card-title">MILESTONES</div></div></div><div class="timeline" id="timeline-body"></div></div></div>
+  <div class="content hidden" id="tab-body">
+    <div class="card">
+      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent)"></div><div class="card-title">LOG MEASUREMENT</div></div><span class="card-badge badge-today" id="bc-date-badge">—</span></div>
+      <div class="card-body" style="gap:12px;">
+        <div class="info-row"><span class="info-label">Height</span><span class="info-val" style="color:var(--muted2)">182 cm</span></div>
+        <div class="divider"></div>
+        <div style="display:flex;flex-direction:column;gap:4px;"><label class="info-label">Neck circumference (cm)</label><input id="bc-neck" type="number" step="0.5" min="20" max="60" placeholder="e.g. 42.0" onblur="this.value=this.value.replace(',','.')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:16px;font-family:'DM Sans',sans-serif;width:100%;outline:none;"></div>
+        <div style="display:flex;flex-direction:column;gap:4px;"><label class="info-label">Abdomen circumference (cm)</label><input id="bc-belly" type="number" step="0.5" min="50" max="160" placeholder="e.g. 94.0" onblur="this.value=this.value.replace(',','.')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:16px;font-family:'DM Sans',sans-serif;width:100%;outline:none;"></div>
+        <button onclick="bcLog()" style="margin-top:4px;padding:12px;border-radius:8px;background:var(--accent);border:none;color:#000;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer;width:100%;">Log Entry</button>
+        <div id="bc-err" style="font-size:11px;color:var(--danger);min-height:14px;text-align:center;"></div>
+      </div>
+    </div>
+    <div class="card" id="bc-results-card" style="display:none;">
+      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3)"></div><div class="card-title">LATEST RESULTS</div></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--border);">
+        <div style="padding:16px;text-align:center;border-right:1px solid var(--border);"><div style="font-family:'Bebas Neue',sans-serif;font-size:36px;line-height:1;color:var(--accent2)" id="res-bf">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">% BF</div></div>
+        <div style="padding:16px;text-align:center;border-right:1px solid var(--border);"><div style="font-family:'Bebas Neue',sans-serif;font-size:36px;line-height:1;color:var(--accent3)" id="res-bmi">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">BMI</div></div>
+        <div style="padding:16px;text-align:center;"><div style="font-family:'Bebas Neue',sans-serif;font-size:36px;line-height:1;color:var(--accent)" id="res-weight">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">kg</div></div>
+      </div>
+      <div style="padding:10px 16px;font-size:11px;color:var(--muted2);text-align:center;" id="res-neck-belly">—</div>
+    </div>
+    <div class="card" id="bc-chart-card" style="display:none;">
+      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent4)"></div><div class="card-title">TRENDS</div></div><span class="card-badge badge-upcoming" id="bc-entries-badge">0 entries</span></div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:20px;">
+        <div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Body Fat %</div><canvas id="chart-bf" height="120" style="width:100%;display:block;"></canvas></div>
+        <div style="height:1px;background:var(--border);"></div>
+        <div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">BMI</div><canvas id="chart-bmi" height="120" style="width:100%;display:block;"></canvas></div>
+      </div>
+    </div>
+    <div class="card" id="bc-history-card" style="display:none;"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--muted2)"></div><div class="card-title">HISTORY</div></div><button onclick="bcClearAll()" style="font-size:10px;color:var(--danger);background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;letter-spacing:1px;text-transform:uppercase;">Clear All</button></div><div id="bc-history-list" style="display:flex;flex-direction:column;"></div></div>
+  </div>
+</div>
+<script>
+const PIN='8538';
+function hashPin(p){let h=0;for(let i=0;i<p.length;i++)h=(Math.imul(31,h)+p.charCodeAt(i))|0;return h.toString(36);}
+const AGENT_URL="https://claude-agent-api-aged-sun-3616.fly.dev";
+const WEIGHTS_TOKEN=hashPin("8538");
+const HEIGHT_CM=182;
+const NOW=new Date();
+const TODAY_DOW=NOW.getDay();
+const WEEKLY=[
+  {id:'reta-sun',name:'Retatrutide',detail:'3 mg — 30 IU SC',dow:[0],time:'AM',dot:'#e8ff3c'},
+  {id:'reta-wed',name:'Retatrutide',detail:'3 mg — 30 IU SC',dow:[3],time:'AM',dot:'#e8ff3c'},
+  {id:'cjc-am',name:'CJC-1295 / IPA',detail:'4 IU — fasted AM',dow:[0,1,2,3,4,5,6],time:'AM',dot:'#3cffa0'},
+  {id:'cjc-pm',name:'CJC-1295 / IPA',detail:'5 IU — pre-sleep PM',dow:[0,1,2,3,4,5,6],time:'PM',dot:'#3cffa0'},
+  {id:'glow-1',name:'GLOW Stack',detail:'2 mg — GHK-Cu 1400µg / TB-500 300µg / BPC-157 300µg',dow:[0,1,2,3,4,5,6],time:'AM',dot:'#3b9eff'},
+  {id:'glow-2',name:'GLOW Stack (2nd dose)',detail:'2 mg — double dose period, ends 3 Jun',dow:[0,1,2,3,4,5,6],time:'PM',dot:'#3b9eff',startDate:new Date(2026,4,20),endDate:new Date(2026,5,3)},
+];
+const TESTO=[
+  {date:new Date(2026,4,4), label:'Injection 1',dose:'250mg',route:'IM'},
+  {date:new Date(2026,4,11),label:'Injection 2',dose:'125mg',route:'SC'},
+  {date:new Date(2026,4,16),label:'Injection 3',dose:'125mg',route:'SC'},
+  {date:new Date(2026,4,21),label:'Injection 4',dose:'125mg',route:'SC'},
+  {date:new Date(2026,4,27),label:'Injection 5',dose:'125mg',route:'SC'},
+];
+const MILESTONES=[
+  {date:new Date(2026,4,4), name:'Testoviron #1',desc:'250 mg IM — bridge begins (Lagos)'},
+  {date:new Date(2026,4,11),name:'Testoviron #2',desc:'125 mg SC'},
+  {date:new Date(2026,4,16),name:'Testoviron #3',desc:'125 mg SC'},
+  {date:new Date(2026,4,21),name:'Testoviron #4',desc:'125 mg SC'},
+  {date:new Date(2026,4,27),name:'Testoviron #5',desc:'125 mg SC — final bridge dose'},
+  {date:new Date(2026,4,20),name:'GLOW double dose starts',desc:'2×2 mg/day SC — shoulder, 14 days'},
+  {date:new Date(2026,5,3),name:'GLOW double dose ends',desc:'Reverts to 1×2 mg/day'},
+
+  {date:new Date(2026,5,29),name:'Trough Blood Panel',desc:'Urologist — E2, TT, hematocrit, LH, FSH'},
+  {date:new Date(2026,6,4),name:'HGH Start / Nebido #2',desc:'1 IU/day 5-on/2-off. CJC/IPA stops.'},
+];
+const BC_SEED=[
+  {date:"2026-3-23",dateLabel:"23 Mar 2026",neck:42,belly:99,bf:23.0},
+  {date:"2026-5-2", dateLabel:"2 May 2026", neck:42,belly:96,bf:21.0},
+  {date:"2026-5-3", dateLabel:"3 May 2026", neck:42,belly:94,bf:19.6},
+];
+const BC_KEY='proto-bodycomp-v2';
+let weights=[];
+let pinInput='';
+function pinPress(d){if(pinInput.length>=4)return;pinInput+=d;refreshDots();if(pinInput.length===4)setTimeout(checkPin,80);}
+function pinDel(){if(!pinInput.length)return;pinInput=pinInput.slice(0,-1);refreshDots();}
+function refreshDots(){for(let i=0;i<4;i++){const el=document.getElementById('d'+i);el.classList.toggle('filled',i<pinInput.length);el.classList.remove('error');}}
+function checkPin(){if(pinInput===PIN){document.getElementById('pin-screen').classList.add('hidden');document.getElementById('app').classList.add('visible');document.body.classList.remove('locked');init();}else{for(let i=0;i<4;i++)document.getElementById('d'+i).classList.add('error');document.getElementById('pin-err').textContent='Incorrect PIN';setTimeout(()=>{pinInput='';refreshDots();document.getElementById('pin-err').textContent='';},900);}}
+document.addEventListener('keydown',e=>{if(document.getElementById('pin-screen').classList.contains('hidden'))return;if(e.key>='0'&&e.key<='9')pinPress(e.key);if(e.key==='Backspace')pinDel();});
+function getData(k,d){try{return JSON.parse(localStorage.getItem(k))||d;}catch{return d;}}
+function setData(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+async function checkAgentStatus(){const dot=document.getElementById('agent-dot');if(!dot)return;try{const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),5000);const r=await fetch(AGENT_URL+"/weights",{headers:{"x-app-token":WEIGHTS_TOKEN},signal:ctrl.signal});dot.className='agent-dot '+(r.ok?'up':'down');}catch(e){dot.className='agent-dot down';}}
+async function syncWeightsFromAgent(){try{const r=await fetch(AGENT_URL+"/weights",{headers:{"x-app-token":WEIGHTS_TOKEN}});if(!r.ok)return;const remote=await r.json();const local=getData('weight_log',[]);const remoteDates=new Set(remote.map(w=>w.date));const merged=[...remote];for(const w of local){if(!remoteDates.has(w.date))merged.push(w);}merged.sort((a,b)=>a.date.localeCompare(b.date));weights=merged;setData('weight_log',merged);}catch(e){weights=getData('weight_log',[]);}}
+async function syncBodyCompFromAgent(){try{const r=await fetch(AGENT_URL+"/bodycomp",{headers:{"x-app-token":WEIGHTS_TOKEN}});if(!r.ok)return;const remote=await r.json();const local=bcLoad();const remoteDates=new Set(remote.map(e=>e.date));const merged=[...remote];for(const e of local){if(!remoteDates.has(e.date))merged.push(e);}merged.sort((a,b)=>a.date.localeCompare(b.date));bcSave(merged);bcRender();}catch(e){}}
+async function pushBodyCompToAgent(entry){try{await fetch(AGENT_URL+"/bodycomp",{method:"POST",headers:{"Content-Type":"application/json","x-app-token":WEIGHTS_TOKEN},body:JSON.stringify(entry)});}catch(e){}}
+async function deleteBodyCompFromAgent(date){try{await fetch(AGENT_URL+"/bodycomp/"+date,{method:"DELETE",headers:{"x-app-token":WEIGHTS_TOKEN}});}catch(e){}}
+function getWeightForDate(dateStr){if(!weights.length)return null;const target=new Date(dateStr.replace(/-/g,'/'));let best=null,bestDiff=Infinity;for(const w of weights){const diff=Math.abs(target-new Date(w.date.replace(/-/g,'/')));if(diff<bestDiff){bestDiff=diff;best=w.weight;}}return bestDiff<=7*86400000?best:null;}
+function switchTab(id,el){document.querySelectorAll('.content').forEach(c=>c.classList.add('hidden'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).classList.remove('hidden');el.classList.add('active');if(id==='body')setTimeout(bcRender,50);}
+function pushAllPeptideToBackend(){const btn=document.getElementById('peptide-sync-btn');if(btn){btn.textContent='Syncing...';btn.disabled=true;}const token=WEIGHTS_TOKEN;fetch(AGENT_URL+'/peptide-log',{headers:{'x-app-token':token}}).then(r=>r.json()).then(remote=>{const remoteDates=new Set(remote.map(e=>e.date));const keys=Object.keys(localStorage).filter(k=>k.startsWith('proto-chk-'));let count=0;const promises=keys.map(key=>{const date=key.replace('proto-chk-','');if(remoteDates.has(date))return Promise.resolve();const doses=JSON.parse(localStorage.getItem(key)||'[]');if(!doses.length)return Promise.resolve();count++;return fetch(AGENT_URL+'/peptide-log',{method:'POST',headers:{'Content-Type':'application/json','x-app-token':token},body:JSON.stringify({date,doses})});});return Promise.all(promises).then(()=>count);}).then(count=>{if(btn){btn.textContent='Done '+count+' synced';setTimeout(()=>{const b=btn.closest('.sync-bar');if(b)b.remove();},2000);}localStorage.setItem('peptide_sync_done_fly','1');}).catch(e=>{if(btn){btn.textContent='Failed';btn.disabled=false;}});}
+function pushAllPeptideToBackend(){const btn=document.getElementById('peptide-sync-btn');if(btn){btn.textContent='Syncing...';btn.disabled=true;}const token=WEIGHTS_TOKEN;fetch(AGENT_URL+'/peptide-log',{headers:{'x-app-token':token}}).then(r=>r.json()).then(remote=>{const remoteDates=new Set(remote.map(e=>e.date));const keys=Object.keys(localStorage).filter(k=>k.startsWith('proto-chk-'));let count=0;const promises=keys.map(key=>{const date=key.replace('proto-chk-','');if(remoteDates.has(date))return Promise.resolve();const doses=JSON.parse(localStorage.getItem(key)||'[]');if(!doses.length)return Promise.resolve();count++;return fetch(AGENT_URL+'/peptide-log',{method:'POST',headers:{'Content-Type':'application/json','x-app-token':token},body:JSON.stringify({date,doses})});});return Promise.all(promises).then(()=>count);}).then(count=>{if(btn){btn.textContent='Done '+count+' synced';setTimeout(()=>{const b=btn.closest('.sync-bar');if(b)b.remove();},2000);}localStorage.setItem('peptide_sync_done_fly','1');}).catch(e=>{if(btn){btn.textContent='Failed';btn.disabled=false;}});}
+function dateKey(d){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+function fmtDate(d){return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});}
+let _viewDate=null;
+function getChecked(){const dk=_viewDate?dateKey(_viewDate):dateKey(NOW);try{return JSON.parse(localStorage.getItem('proto-chk-'+dk)||'[]');}catch{return[];}}
+function setChecked(arr){const dk=_viewDate?dateKey(_viewDate):dateKey(NOW);localStorage.setItem('proto-chk-'+dk,JSON.stringify(arr));}
+function init(){document.getElementById('hdr-day').textContent=NOW.getDate()+' '+NOW.toLocaleString('en-GB',{month:'short'});document.getElementById('hdr-weekday').textContent=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][TODAY_DOW];buildWeekStrip();buildToday();buildSchedule();buildTimeline();initBodyComp();const VERSION='1.44';document.getElementById('header-version').textContent='v'+VERSION;document.getElementById('pin-version').textContent='v'+VERSION;if(!localStorage.getItem('peptide_sync_done_fly')){const bar=document.createElement('div');bar.className='sync-bar';bar.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#1c1c1c;border-top:1px solid var(--accent);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;z-index:500;font-size:13px;';bar.innerHTML='<span style="color:#f0f0f0">Sync local data to backend?<\/span><button id="peptide-sync-btn" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" onclick="pushAllPeptideToBackend()">Sync Now<\/button>';document.body.appendChild(bar);}if(!localStorage.getItem('peptide_sync_done_fly')){const bar=document.createElement('div');bar.className='sync-bar';bar.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#1c1c1c;border-top:1px solid var(--accent);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;z-index:500;font-size:13px;';bar.innerHTML='<span style="color:#f0f0f0">Sync local data to backend?<\/span><button id="peptide-sync-btn" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" onclick="pushAllPeptideToBackend()">Sync Now<\/button>';document.body.appendChild(bar);}checkAgentStatus();checkAppVersion();syncPeptideLogFromAgent();}
+function buildWeekStrip(){const strip=document.getElementById('week-strip');strip.innerHTML='';const mon=new Date(NOW);mon.setDate(NOW.getDate()-((NOW.getDay()+6)%7));for(let i=0;i<7;i++){const d=new Date(mon);d.setDate(mon.getDate()+i);const dow=d.getDay();const isToday=d.toDateString()===NOW.toDateString();const dots=[];WEEKLY.forEach(dose=>{if(dose.dow.includes(dow))dots.push(dose.dot);});TESTO.forEach(t=>{if(t.date.toDateString()===d.toDateString())dots.push('#c084fc');});const el=document.createElement('div');el.className='week-day'+(isToday?' today':'');el.style.cursor='pointer';el.onclick=()=>showDayInline(d,el);el.innerHTML=`<div class="week-day-name">${['M','T','W','T','F','S','S'][i]}</div><div class="week-day-num">${d.getDate()}</div><div class="week-dots">${[...new Set(dots)].slice(0,3).map(c=>`<div class="week-dot" style="background:${c}"></div>`).join('')}</div>`;strip.appendChild(el);}}
+function buildToday(){const list=document.getElementById('today-checklist');list.innerHTML='';const checked=getChecked();const alertWrap=document.getElementById('today-alerts');alertWrap.innerHTML='';TESTO.forEach((t,i)=>{const diff=Math.round((t.date-NOW)/86400000);if(diff===1){const a=document.createElement('div');a.className='alert-bar';a.innerHTML=`<div class="alert-icon">💉</div><div class="alert-text"><strong>Testoviron tomorrow</strong> — Injection ${i+1}/4, 125mg SC.</div>`;alertWrap.appendChild(a);}});const panel=new Date(2026,5,29);const pd=Math.round((panel-NOW)/86400000);if(pd>0&&pd<=7){const a=document.createElement('div');a.className='alert-bar';a.innerHTML=`<div class="alert-icon">🩸</div><div class="alert-text"><strong>Blood panel in ${pd} day${pd>1?'s':''}</strong> — Trough draw, urologist.</div>`;alertWrap.appendChild(a);}const hgh=new Date(2026,6,4);const hd=Math.round((hgh-NOW)/86400000);if(hd>0&&hd<=7){const a=document.createElement('div');a.className='alert-bar green';a.innerHTML=`<div class="alert-icon">🧬</div><div class="alert-text"><strong>HGH starts in ${hd} day${hd>1?'s':''}</strong> — Stop CJC/IPA.</div>`;alertWrap.appendChild(a);}const doses=[];WEEKLY.forEach(d=>{if(!d.dow.includes(TODAY_DOW))return;if(d.startDate&&NOW<d.startDate)return;if(d.endDate&&NOW>d.endDate)return;doses.push({id:d.id+'_'+dateKey(NOW),name:d.name,detail:d.detail,time:d.time,dot:d.dot});});TESTO.forEach((t,i)=>{if(t.date.toDateString()===NOW.toDateString())doses.push({id:'testo_'+i+'_'+dateKey(NOW),name:'Testoviron '+t.dose,detail:t.label+' — '+(t.route==='IM'?'IM deltoid':'27G×12mm SC, 18G filter'),time:null,dot:'#c084fc'});});if(!doses.length){list.innerHTML='<div class="empty"><div class="empty-icon">✓</div>Nothing scheduled today</div>';document.getElementById('today-badge').textContent='—';return;}const order={'AM':0,'null':1,'PM':2};doses.sort((a,b)=>(order[a.time]??1)-(order[b.time]??1));let done=0;doses.forEach(dose=>{const isChk=checked.includes(dose.id);if(isChk)done++;const item=document.createElement('div');item.className='check-item'+(isChk?' checked-item':'');item.innerHTML=`<div class="check-box ${isChk?'checked':''}"><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-main"><div class="check-name" style="color:${isChk?'':''+dose.dot}">${dose.name}</div><div class="check-detail">${dose.detail}</div></div>${dose.time?`<div class="check-time">${dose.time}</div>`:''}`; item.onclick=()=>toggle(dose.id);list.appendChild(item);});const badge=document.getElementById('today-badge');badge.textContent=done+' / '+doses.length;badge.className='card-badge '+(done===doses.length?'badge-done':'badge-today');}
+function toggle(id){const chk=getChecked();const i=chk.indexOf(id);if(i===-1)chk.push(id);else chk.splice(i,1);setChecked(chk);const dk=_viewDate?dateKey(_viewDate):dateKey(NOW);syncDayToAgent(dk,chk);if(_viewDate){const activeTile=document.querySelector('.week-day.selected-day');showDayInline(_viewDate,activeTile);}else{buildToday();}}
+async function syncDayToAgent(date,doses){try{await fetch(AGENT_URL+'/peptide-log',{method:'POST',headers:{'Content-Type':'application/json','x-app-token':WEIGHTS_TOKEN},body:JSON.stringify({date,doses})});}catch(e){}}
+async function syncPeptideLogFromAgent(){try{const r=await fetch(AGENT_URL+'/peptide-log',{headers:{'x-app-token':WEIGHTS_TOKEN}});if(!r.ok)return;window._peptideLog=await r.json();buildHistory();}catch(e){}}
+function getPastDoses(d){if(!window._peptideLog)return null;const dk=dateKey(d);const entry=window._peptideLog.find(e=>e.date===dk);return entry?entry.doses:null;}
+function buildHistory(){const tab=document.getElementById('tab-history');if(!tab)return;const log=window._peptideLog||[];if(!log.length){tab.innerHTML='<div class="content"><div class="empty"><div class="empty-icon">💊</div>No history yet</div></div>';return;}const days=[...log].reverse();tab.innerHTML='<div class="content">'+days.map(entry=>{const d=new Date(entry.date.replace(/-/g,'/'));const label=d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"});const count=entry.doses.length;return'<div class="card" style="margin-bottom:10px"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3)"></div><div class="card-title">'+label.toUpperCase()+'</div></div><span class="card-badge badge-done">'+count+' doses</span></div><div class="checklist">'+entry.doses.map(id=>{const name=id.replace(/_\d{4}-\d+-\d+$/,'').replace('glow-1','GLOW Stack').replace('glow-2','GLOW 2nd dose').replace('reta-sun','Retatrutide').replace('reta-wed','Retatrutide').replace('cjc-am','CJC/IPA AM').replace('cjc-pm','CJC/IPA PM').replace(/^testo_\d+$/,'Testoviron');return'<div class="check-item checked-item"><div class="check-box checked"><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-main"><div class="check-name" style="color:var(--accent3)">'+name+'</div></div></div>';}).join('')+'</div></div>';}).join('')+'</div>';}
+function resetToday(){setChecked([]);buildToday();}
+async function checkAppVersion(){try{const r=await fetch('https://henrikschaub.github.io/peptidetracker/version.json?t='+Date.now());if(!r.ok)return;const {version}=await r.json();const current=VERSION;if(version!==current){const b=document.createElement('div');b.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#1c1c1c;border-top:1px solid var(--accent4);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;z-index:400;font-size:13px;';b.innerHTML='<span style="color:var(--text)">New version <strong style="color:var(--accent4)">v'+version+'</strong> available</span><button onclick="window.location.reload(true)" style="background:var(--accent4);color:#000;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">Update</button>';document.body.appendChild(b);}}catch(e){}}
+function showDayInline(date,tileEl){
+  const d=new Date(date);
+  const isToday=d.toDateString()===NOW.toDateString();
+  const isPast=d<NOW&&!isToday;
+  const pastChecked=isPast?JSON.parse(localStorage.getItem('proto-chk-'+dateKey(d))||'[]'):[];
+  if(isToday){_viewDate=null;document.querySelectorAll('.week-day').forEach(e=>e.classList.remove('selected-day'));buildToday();return;}
+  const dow=d.getDay();
+  const doses=[];
+  WEEKLY.forEach(w=>{if(!w.dow.includes(dow))return;if(w.startDate&&d<w.startDate)return;if(w.endDate&&d>w.endDate)return;doses.push({id:w.id+'_'+dateKey(d),name:w.name,detail:w.detail,time:w.time,dot:w.dot});});
+  TESTO.forEach((t,i)=>{if(t.date.toDateString()===d.toDateString())doses.push({id:'testo_'+i+'_'+dateKey(d),name:'Testoviron '+(t.dose||'125mg'),detail:t.label+' — '+(t.route==='IM'?'IM deltoid':'27G×12mm SC, 18G filter'),time:null,dot:'#c084fc'});});
+  const list=document.getElementById('today-checklist');
+  const badge=document.getElementById('today-badge');
+  const label=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}).toUpperCase();
+  if(!doses.length){list.innerHTML='<div class="empty"><div class="empty-icon">✓</div>Nothing scheduled</div>';badge.textContent=label;return;}
+  _viewDate=d;
+  const order={'AM':0,'null':1,'PM':2};
+  doses.sort((a,b)=>(order[a.time]??1)-(order[b.time]??1));
+  list.innerHTML='';
+  const checked=getChecked();
+  doses.forEach(dose=>{
+    const realId=dose.id;
+    const isChk=checked.includes(realId);
+    const item=document.createElement('div');item.className='check-item'+(isChk?' checked-item':'');
+    item.onclick=()=>toggle(realId);
+    item.innerHTML=`<div class="check-box ${isChk?'checked':''}"><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-main"><div class="check-name" style="color:${dose.dot}">${dose.name}</div><div class="check-detail">${dose.detail}</div></div>${dose.time?`<div class="check-time">${dose.time}</div>`:''}` ;
+    list.appendChild(item);
+  });
+  badge.textContent=label;
+  badge.className='card-badge badge-upcoming';
+  document.querySelectorAll('.week-day').forEach(e=>e.classList.remove('selected-day'));
+  if(tileEl)tileEl.classList.add('selected-day');
+}
+function showDayModal(date){const d=new Date(date);const dow=d.getDay();const doses=[];WEEKLY.forEach(w=>{if(!w.dow.includes(dow))return;if(w.startDate&&d<w.startDate)return;if(w.endDate&&d>w.endDate)return;doses.push({name:w.name,detail:w.detail,time:w.time,dot:w.dot});});TESTO.forEach((t,i)=>{if(t.date.toDateString()===d.toDateString())doses.push({name:'Testoviron '+(t.dose||'125mg'),detail:t.label+' — '+(t.route==='IM'?'IM deltoid':'27G×12mm SC, 18G filter'),time:null,dot:'#c084fc'});});const order={'AM':0,'null':1,'PM':2};doses.sort((a,b)=>(order[a.time]??1)-(order[b.time]??1));const overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;display:flex;align-items:flex-end;justify-content:center;';overlay.onclick=e=>{if(e.target===overlay)document.body.removeChild(overlay);};const sheet=document.createElement('div');sheet.style.cssText='background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px;max-height:80vh;overflow-y:auto;';const rows=doses.length?doses.map(dose=>'<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)"><div style="width:8px;height:8px;border-radius:50%;background:'+dose.dot+';flex-shrink:0"></div><div style="flex:1"><div style="font-size:14px;font-weight:500;color:var(--text)">'+dose.name+'</div><div style="font-size:11px;color:var(--muted2);margin-top:2px">'+dose.detail+'</div></div>'+(dose.time?'<div style="font-family:Bebas Neue,sans-serif;font-size:14px;color:var(--muted2)">'+dose.time+'</div>':'')+'</div>').join(''):'<div style="color:var(--muted2);font-size:13px;text-align:center;padding:20px">Nothing scheduled</div>';sheet.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--accent)">'+d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}).toUpperCase()+'</div><button onclick="document.body.removeChild(this.closest(chr91+chr39+chr115+chr116+chr121+chr108+chr101+chr42+chr61+chr102+chr105+chr120+chr101+chr100+chr39+chr93))" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button></div>'+rows;overlay.appendChild(sheet);document.body.appendChild(overlay);}
+function buildSchedule(){const body=document.getElementById('schedule-body');body.innerHTML='';const dayLabels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];const dowMap=[1,2,3,4,5,6,0];dayLabels.forEach((lbl,i)=>{const dow=dowMap[i];const today=dow===TODAY_DOW;const doses=WEEKLY.filter(d=>d.dow.includes(dow));if(!doses.length)return;const wrap=document.createElement('div');wrap.className='sched-day';wrap.innerHTML=`<div class="sched-day-label ${today?'is-today':''}">${lbl}${today?' · today':''}</div><div class="pill-wrap"></div>`;const pills=wrap.querySelector('.pill-wrap');doses.forEach(d=>{const p=document.createElement('div');p.className='pill';p.innerHTML=`<div class="pill-dot" style="background:${d.dot}"></div>${d.name}${d.time?' · '+d.time:''}`;pills.appendChild(p);});body.appendChild(wrap);});const tList=document.getElementById('testo-list');tList.innerHTML='';let past=0;TESTO.forEach((t,i)=>{const isChecked=getChecked().includes('testo_'+i+'_'+dateKey(t.date));const isPast=(t.date<NOW&&t.date.toDateString()!==NOW.toDateString())||isChecked;const isToday2=t.date.toDateString()===NOW.toDateString();if(isPast)past++;const item=document.createElement('div');item.className='check-item';item.style.cursor='default';item.innerHTML=`<div class="check-box ${isPast?'checked':''}"><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="check-main"><div class="check-name" style="color:${isPast?'var(--muted2)':isToday2?'var(--accent)':'var(--accent4)'}">${t.label} — 125 mg</div><div class="check-detail">${fmtDate(t.date)}${isToday2?' · TODAY':''}</div></div><div style="font-size:11px;font-weight:600;color:${isPast?'var(--accent3)':isToday2?'var(--accent)':'var(--muted2)'}">${isPast?'DONE':isToday2?'TODAY':'—'}</div>`;tList.appendChild(item);});const pct=Math.round(past/TESTO.length*100);document.getElementById('testo-prog').style.width=pct+'%';document.getElementById('testo-prog-txt').textContent=past+' / '+TESTO.length+' done';const tb=document.getElementById('testo-badge');tb.textContent=past===TESTO.length?'COMPLETE':`${past}/${TESTO.length} DONE`;tb.className='card-badge '+(past===TESTO.length?'badge-done':'badge-upcoming');}
+function buildTimeline(){const body=document.getElementById('timeline-body');body.innerHTML='';MILESTONES.forEach((m,i)=>{const past=m.date<NOW&&m.date.toDateString()!==NOW.toDateString();const isToday=m.date.toDateString()===NOW.toDateString();const last=i===MILESTONES.length-1;const row=document.createElement('div');row.className='milestone';row.innerHTML=`<div class="milestone-line"><div class="milestone-dot ${past?'past':isToday?'today-dot':'future'}"></div>${!last?'<div class="milestone-connector"></div>':''}</div><div class="milestone-body"><div class="milestone-date">${fmtDate(m.date)}${isToday?' · TODAY':''}</div><div class="milestone-name" style="color:${past?'var(--muted2)':isToday?'var(--accent)':'var(--text)'}">${m.name}</div><div class="milestone-desc">${m.desc}</div></div>`;body.appendChild(row);});}
+function bcLoad(){try{return JSON.parse(localStorage.getItem(BC_KEY)||'[]');}catch{return[];}}
+function bcSave(arr){localStorage.setItem(BC_KEY,JSON.stringify(arr));}
+function navyBF(n,b,h){return Math.round((495/(1.0324-0.19077*Math.log10(b-n)+0.15456*Math.log10(h))-450)*10)/10;}
+function parseVal(id){const raw=document.getElementById(id).value.trim().replace(',','.');const v=parseFloat(raw);return isNaN(v)?null:v;}
+function bcLog(){const n=parseVal('bc-neck');const b=parseVal('bc-belly');const err=document.getElementById('bc-err');err.textContent='';if(n===null){err.textContent='Enter neck circumference';return;}if(b===null){err.textContent='Enter abdomen circumference';return;}if(n<20||n>60){err.textContent='Neck out of range';return;}if(b<50||b>200){err.textContent='Abdomen out of range';return;}if(b<=n){err.textContent='Abdomen must be larger than neck';return;}const bf=navyBF(n,b,HEIGHT_CM);if(bf<3||bf>60){err.textContent='Result out of range — check measurements.';return;}const entry={date:dateKey(NOW),dateLabel:fmtDate(NOW),neck:n,belly:b,bf:bf};const arr=bcLoad();const idx=arr.findIndex(e=>e.date===entry.date);if(idx!==-1)arr[idx]=entry;else arr.push(entry);arr.sort((a,b)=>a.date.localeCompare(b.date));bcSave(arr);pushBodyCompToAgent(entry);document.getElementById('bc-neck').value='';document.getElementById('bc-belly').value='';bcRender();}
+function bcRender(){const stored=bcLoad();const storedDates=new Set(stored.map(e=>e.date));const raw=[...stored];for(const s of BC_SEED){if(!storedDates.has(s.date))raw.push(s);}raw.sort((a,b)=>a.date.localeCompare(b.date));const arr=raw.map(e=>{const w=getWeightForDate(e.date);const bmi=w?Math.round(w/Math.pow(HEIGHT_CM/100,2)*10)/10:null;return{...e,resolvedWeight:w,bmi};});document.getElementById('bc-date-badge').textContent=fmtDate(NOW).toUpperCase();if(!arr.length){document.getElementById('bc-results-card').style.display='none';document.getElementById('bc-chart-card').style.display='none';document.getElementById('bc-history-card').style.display='none';return;}const latest=arr[arr.length-1];document.getElementById('bc-results-card').style.display='';document.getElementById('res-bf').textContent=latest.bf+'%';document.getElementById('res-bmi').textContent=latest.bmi?latest.bmi.toFixed(1):'—';document.getElementById('res-weight').textContent=latest.resolvedWeight?latest.resolvedWeight:'—';document.getElementById('res-neck-belly').textContent=`Neck ${latest.neck} cm · Belly ${latest.belly} cm`;document.getElementById('bc-chart-card').style.display='';document.getElementById('bc-entries-badge').textContent=arr.length+' entr'+(arr.length===1?'y':'ies');bcDrawChart('chart-bf',arr.map(e=>e.bf),arr.map(e=>e.dateLabel),'#ff6b2b','%');const bmiData=arr.filter(e=>e.bmi);if(bmiData.length>=1)bcDrawChart('chart-bmi',bmiData.map(e=>e.bmi),bmiData.map(e=>e.dateLabel),'#3cffa0','');document.getElementById('bc-history-card').style.display='';const list=document.getElementById('bc-history-list');list.innerHTML='';[...arr].reverse().forEach((e,i)=>{const row=document.createElement('div');row.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;';if(i===arr.length-1)row.style.borderBottom='none';row.innerHTML=`<div><div style="font-weight:500;color:var(--text)">${e.dateLabel}</div><div style="color:var(--muted2);margin-top:2px;">Neck ${e.neck} · Belly ${e.belly}${e.resolvedWeight?' · '+e.resolvedWeight+'kg':''}</div></div><div style="display:flex;gap:12px;align-items:center;"><div style="text-align:center"><div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent2);line-height:1">${e.bf}%</div><div style="font-size:9px;color:var(--muted2);">BF</div></div>${e.bmi?`<div style="text-align:center"><div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent3);line-height:1">${e.bmi}</div><div style="font-size:9px;color:var(--muted2);">BMI</div></div>`:''}<button onclick="bcDeleteEntry('${e.date}')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;">✕</button></div>`;list.appendChild(row);});}
+function bcDrawChart(canvasId,values,labels,color,unit){const canvas=document.getElementById(canvasId);if(!canvas)return;const dpr=window.devicePixelRatio||1;const cssW=canvas.offsetWidth||300;const cssH=120;canvas.width=cssW*dpr;canvas.height=cssH*dpr;canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);if(!values||values.length<1)return;const PAD={top:12,right:12,bottom:28,left:40};const cW=cssW-PAD.left-PAD.right;const cH=cssH-PAD.top-PAD.bottom;const minV=Math.min(...values);const maxV=Math.max(...values);const range=maxV-minV||1;const vMin=minV-range*0.15;const vMax=maxV+range*0.15;const xOf=i=>PAD.left+(values.length===1?cW/2:(i/(values.length-1))*cW);const yOf=v=>PAD.top+cH-((v-vMin)/(vMax-vMin))*cH;ctx.strokeStyle='#2a2a2a';ctx.lineWidth=0.5;for(let i=0;i<=3;i++){const y=PAD.top+(cH/3)*i;ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(PAD.left+cW,y);ctx.stroke();}ctx.fillStyle='#555';ctx.font='9px DM Sans,sans-serif';ctx.textAlign='right';for(let i=0;i<=3;i++){const v=vMax-(vMax-vMin)*(i/3);const y=PAD.top+(cH/3)*i;ctx.fillText(v.toFixed(1)+(unit||''),PAD.left-4,y+3);}if(values.length===1){ctx.beginPath();ctx.arc(xOf(0),yOf(values[0]),4,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();return;}const grad=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);grad.addColorStop(0,color+'33');grad.addColorStop(1,color+'00');ctx.beginPath();ctx.moveTo(xOf(0),PAD.top+cH);values.forEach((v,i)=>ctx.lineTo(xOf(i),yOf(v)));ctx.lineTo(xOf(values.length-1),PAD.top+cH);ctx.closePath();ctx.fillStyle=grad;ctx.fill();ctx.beginPath();ctx.moveTo(xOf(0),yOf(values[0]));values.forEach((v,i)=>{if(i>0)ctx.lineTo(xOf(i),yOf(v));});ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.stroke();values.forEach((v,i)=>{const x=xOf(i),y=yOf(v);ctx.beginPath();ctx.arc(x,y,3.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.beginPath();ctx.arc(x,y,1.5,0,Math.PI*2);ctx.fillStyle='#0a0a0a';ctx.fill();if(i===0||i===values.length-1||i%Math.max(1,Math.floor(values.length/4))===0){ctx.fillStyle='#555';ctx.font='9px DM Sans,sans-serif';ctx.textAlign='center';ctx.fillText(labels[i].split(' ').slice(0,2).join(' '),x,PAD.top+cH+18);}});}
+function bcDeleteEntry(date){const arr=bcLoad().filter(e=>e.date!==date);bcSave(arr);deleteBodyCompFromAgent(date);bcRender();}
+function bcClearAll(){if(!confirm('Delete all logged entries?'))return;localStorage.removeItem(BC_KEY);bcRender();}
+function initBodyComp(){weights=getData('weight_log',[]);syncWeightsFromAgent().then(()=>bcRender());syncBodyCompFromAgent();document.getElementById('bc-date-badge').textContent=fmtDate(NOW).toUpperCase();bcRender();}
+</script>
+</body>
+</html>
