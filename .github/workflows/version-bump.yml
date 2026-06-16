@@ -14,13 +14,14 @@ jobs:
     if: "github.actor != 'github-actions[bot]'"
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Bump version and push to main
+      - name: Bump version
         run: |
           CURRENT=$(jq -r '.version' version.json)
           MAJOR=$(echo "$CURRENT" | cut -d. -f1)
@@ -30,8 +31,27 @@ jobs:
           echo "{\"version\": \"${NEW}\"}" > version.json
           sed -i "s/const VERSION='[0-9.]*'/const VERSION='${NEW}'/" index.html
 
+          echo "NEW=${NEW}" >> $GITHUB_ENV
+
+      - name: Commit and push branch
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="version-bump/v${NEW}"
+          git push origin --delete "$BRANCH" || true
+          git checkout -b "$BRANCH"
           git add version.json index.html
           git commit -m "chore: bump to v${NEW}"
-          git push origin HEAD:main
+          git push origin "$BRANCH"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: Open PR and enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: bump to v${NEW}" \
+            --body "Auto-generated version bump. Merges automatically once CI passes.")
+          gh pr merge --auto --squash "$PR_URL"
