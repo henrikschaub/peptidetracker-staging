@@ -62,14 +62,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # GitHub suppresses workflow triggers from GITHUB_TOKEN pushes, so the
-          # pull_request CI run lands in action_required. Approve it so CI can
-          # record a "skipped" conclusion and satisfy the required branch check.
-          sleep 8
-          RUN_ID=$(gh api "repos/${{ github.repository }}/actions/runs?branch=$BRANCH&event=pull_request" \
-            --jq '[.workflow_runs[] | select(.status == "action_required")] | .[0].id')
-          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
-            gh api -X POST "repos/${{ github.repository }}/actions/runs/$RUN_ID/approve"
-            echo "Approved CI run $RUN_ID"
-          else
-            echo "No action_required run found (may have already passed)"
-          fi
+          # pull_request CI run lands in action_required. Poll until it appears,
+          # then approve it so CI records "skipped" and auto-merge can fire.
+          for i in $(seq 1 12); do
+            RUN_ID=$(gh api "repos/${{ github.repository }}/actions/runs?branch=$BRANCH&event=pull_request" \
+              --jq '[.workflow_runs[] | select(.status == "action_required")] | .[0].id')
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              gh api -X POST "repos/${{ github.repository }}/actions/runs/$RUN_ID/approve"
+              echo "Approved CI run $RUN_ID after $i attempts"
+              exit 0
+            fi
+            echo "Attempt $i: no action_required run yet, waiting 5s..."
+            sleep 5
+          done
+          echo "CI run did not appear in action_required within 60s — may have already passed"
