@@ -41,7 +41,7 @@ jobs:
           git push origin --delete "$BRANCH" || true
           git checkout -b "$BRANCH"
           git add version.json index.html
-          git commit -m "chore: bump to v${NEW} [skip ci]"
+          git commit -m "chore: bump to v${NEW}"
           git push origin "$BRANCH"
           echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
 
@@ -52,6 +52,6 @@ jobs:
           PR_URL=$(gh pr create \
             --base main \
             --head "$BRANCH" \
-            --title "chore: bump to v${NEW} [skip ci]" \
+            --title "chore: bump to v${NEW}" \
             --body "Auto-generated version bump. Merges automatically once CI passes.")
           gh pr merge --auto --squash "$PR_URL"
