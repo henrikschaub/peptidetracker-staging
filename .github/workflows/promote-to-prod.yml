@@ -1,8 +1,8 @@
 name: Promote to prod
 
 on:
-  push:
-    branches: [main]
+  repository_dispatch:
+    types: [promote]
 
 jobs:
   promote:
@@ -57,4 +57,4 @@ jobs:
             --base main \
             --head "$BRANCH" \
             --title "Promote staging changes ($GITHUB_SHA)" \
-            --body "Auto-generated PR mirroring the diff that just landed on peptidetracker-staging@main (commit ${GITHUB_SHA}). Prod's own CI + branch protection still gate the merge."
+            --body "Auto-generated PR mirroring the diff on peptidetracker-staging@main (commit ${GITHUB_SHA}), triggered manually via the staging app's 'Push to Prod' button. Prod's own CI + branch protection still gate the merge."
