@@ -42,3 +42,23 @@ tooling, never by end-user-facing apps.
 ## Deployment
 - GitHub Pages (staging URL) — deploys automatically on push to `main`
 - Monitor live version: `https://henrikschaub.github.io/peptidetracker-staging/version.json`
+
+## Environment-aware code — NEVER hardcode staging/prod URLs
+`index.html` is a single file that gets promoted from staging to prod verbatim.
+Any URL or value that differs between environments **must** use `IS_STAGING`:
+
+```js
+const IS_STAGING = (window.location.pathname||'').startsWith('/peptidetracker-staging');
+```
+
+Examples of things that must be dynamic, not hardcoded:
+- `version.json` fetch URL (use `IS_STAGING ? '.../peptidetracker-staging/...' : '.../peptidetracker/...'`)
+- Any feature flags or UI elements that should only appear in one environment
+
+The `IS_STAGING` constant is already declared at the top of the `<script>` block, right after `const VERSION`.
+
+## App structure
+- Single-file app: `index.html` (JS, CSS, HTML all inline)
+- `version.json` — current version, read by the update-checker in the app
+- `const VERSION='x.xx'` in index.html must match `version.json`
+- Version bump workflow auto-increments both on merge to main
