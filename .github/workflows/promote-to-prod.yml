@@ -1,0 +1,60 @@
+name: Promote to prod
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout staging
+        uses: actions/checkout@v4
+        with:
+          path: staging
+
+      - name: Checkout prod
+        uses: actions/checkout@v4
+        with:
+          repository: henrikschaub/peptidetracker
+          token: ${{ secrets.PROMOTE_TOKEN }}
+          path: prod
+
+      - name: Sync files into prod branch
+        run: |
+          cd prod
+          git config user.name "staging-promote-bot"
+          git config user.email "actions@github.com"
+          BRANCH="promote/staging-$(date +%Y%m%d%H%M%S)-${GITHUB_SHA::7}"
+          git checkout -b "$BRANCH"
+
+          # Mirror staging's tracked files into prod, except files prod owns independently
+          rsync -a --delete \
+            --exclude='.git' \
+            --exclude='version.json' \
+            --exclude='.github/workflows/version-bump.yml' \
+            --exclude='CLAUDE.md' \
+            ../staging/ ./
+
+          if git diff --quiet; then
+            echo "No changes to promote"
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "Promote staging changes (${GITHUB_SHA::7})"
+          git push origin "$BRANCH"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: Open PR on prod
+        if: env.BRANCH != ''
+        env:
+          GH_TOKEN: ${{ secrets.PROMOTE_TOKEN }}
+        run: |
+          cd prod
+          gh pr create \
+            --repo henrikschaub/peptidetracker \
+            --base main \
+            --head "$BRANCH" \
+            --title "Promote staging changes ($GITHUB_SHA)" \
+            --body "Auto-generated PR mirroring the diff that just landed on peptidetracker-staging@main (commit ${GITHUB_SHA}). Prod's own CI + branch protection still gate the merge."
