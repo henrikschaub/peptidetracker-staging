@@ -64,9 +64,10 @@ jobs:
           # GitHub suppresses workflow triggers from GITHUB_TOKEN pushes, so the
           # pull_request CI run lands in action_required. Poll until it appears,
           # then approve it so CI records "skipped" and auto-merge can fire.
+          # Filter by head_branch in jq (not URL param) to avoid %2F encoding issues.
           for i in $(seq 1 12); do
-            RUN_ID=$(gh api "repos/${{ github.repository }}/actions/runs?branch=$BRANCH&event=pull_request" \
-              --jq '[.workflow_runs[] | select(.status == "action_required")] | .[0].id')
+            RUN_ID=$(gh api "repos/${{ github.repository }}/actions/runs?event=pull_request&per_page=20" \
+              --jq "[.workflow_runs[] | select(.head_branch == \"$BRANCH\" and .status == \"action_required\")] | .[0].id")
             if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
               gh api -X POST "repos/${{ github.repository }}/actions/runs/$RUN_ID/approve"
               echo "Approved CI run $RUN_ID after $i attempts"
