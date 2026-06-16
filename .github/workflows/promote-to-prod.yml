@@ -36,6 +36,11 @@ jobs:
             --exclude='CLAUDE.md' \
             ../staging/ ./
 
+          # Reset VERSION in the promoted index.html to prod's current version so
+          # const VERSION and version.json stay in sync (staging has its own counter)
+          PROD_VERSION=$(jq -r '.version' version.json)
+          sed -i "s/const VERSION='[0-9.]*'/const VERSION='${PROD_VERSION}'/" index.html
+
           if git diff --quiet; then
             echo "No changes to promote"
             exit 0
