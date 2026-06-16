@@ -52,9 +52,17 @@ jobs:
           GH_TOKEN: ${{ secrets.PROMOTE_TOKEN }}
         run: |
           cd prod
-          gh pr create \
+          PR_URL=$(gh pr create \
             --repo henrikschaub/peptidetracker \
             --base main \
             --head "$BRANCH" \
             --title "Promote staging changes ($GITHUB_SHA)" \
-            --body "Auto-generated PR mirroring the diff on peptidetracker-staging@main (commit ${GITHUB_SHA}), triggered manually via the staging app's 'Push to Prod' button. Prod's own CI + branch protection still gate the merge."
+            --body "Auto-generated PR mirroring the diff on peptidetracker-staging@main (commit ${GITHUB_SHA}), triggered manually via the staging app's 'Push to Prod' button. Merges automatically once prod's required CI check passes.")
+          echo "PR_URL=$PR_URL" >> "$GITHUB_ENV"
+
+      - name: Enable auto-merge on the PR
+        if: env.PR_URL != ''
+        env:
+          GH_TOKEN: ${{ secrets.PROMOTE_TOKEN }}
+        run: |
+          gh pr merge --repo henrikschaub/peptidetracker --auto --squash "$PR_URL"
