@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: |
+          node -e "
+            const fs = require('fs');
+            const html = fs.readFileSync('index.html', 'utf8');
+            const script = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
+            fs.writeFileSync('/tmp/_ci_script.js', script);
+          "
+          node --check /tmp/_ci_script.js
+
+      - name: Frontend tests
+        run: node tests/test_frontend.js index.html
