@@ -16,8 +16,7 @@ const patchedScript = rawScript
   .replace('const WEEKLY_DEFAULT=',   'var WEEKLY_DEFAULT=')
   .replace("const VERSION='",         "var VERSION='")
   .replace('const AGENT_URL=',        'var AGENT_URL=')
-  .replace('const WEIGHTS_TOKEN=',    'var WEIGHTS_TOKEN=')
-  .replace('let WEIGHTS_TOKEN=',      'var WEIGHTS_TOKEN=')
+  .replace('let _googleToken=',      'var _googleToken=')
   .replace('const GOOGLE_CLIENT_ID=', 'var GOOGLE_CLIENT_ID=')
   .replace('const CYCLE_SUGGESTIONS=','var CYCLE_SUGGESTIONS=')
   .replace('var WIZ_TITLES=',         'var WIZ_TITLES=')
@@ -984,7 +983,8 @@ console.log('\n── Meta ─────────────────�
 check('VERSION defined',                    typeof G.VERSION==='string');
 check('VERSION is x.xx (no suffix)',        /^\d+\.\d+$/.test(G.VERSION),        `got "${G.VERSION}"`);
 check('AGENT_URL is https',                 G.AGENT_URL?.startsWith('https://'));
-check('WEIGHTS_TOKEN is string var',         typeof G.WEIGHTS_TOKEN==='string');
+check('authHeaders is function (Google-only auth)', typeof G.authHeaders==='function');
+check('no WEIGHTS_TOKEN/app_pin leftovers',  !rawScript.includes('WEIGHTS_TOKEN')&&!rawScript.includes('app_pin'));
 check('no duplicate functions',             (()=>{const fs=rawScript.match(/(?:async )?function (\w+)\s*\(/g)||[];const names=fs.map(s=>s.replace(/async |function |\s*\(/g,''));return names.every((n,i)=>names.indexOf(n)===i);})());
 
 // ── RECON_DB ──────────────────────────────────────────────────────────────────
