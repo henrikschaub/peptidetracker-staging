@@ -23,10 +23,12 @@ jobs:
           node -e "
             const fs = require('fs');
             const html = fs.readFileSync('index.html', 'utf8');
-            const script = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
-            fs.writeFileSync('/tmp/_ci_script.js', script);
+            const start = html.indexOf('<script>') + 8;
+            const end = html.indexOf('</script>');
+            fs.writeFileSync('/tmp/_ci_script.js', html.slice(start, end));
           "
           node --check /tmp/_ci_script.js
+          for f in tab-*.js; do [ -f "$f" ] && node --check "$f" && echo "$f OK"; done
 
       - name: Frontend tests
         run: node tests/test_frontend.js index.html
