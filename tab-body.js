@@ -16,6 +16,6 @@ function bcDrawChart(canvasId,values,labels,color,unit){const canvas=document.ge
 function bcDeleteEntry(date){const arr=bcLoad().filter(e=>e.date!==date);bcSave(arr);deleteBodyCompFromAgent(date);bcRender();}
 function bcClearAll(){if(!confirm('Delete all logged entries?'))return;localStorage.removeItem(BC_KEY);bcRender();}
 function initBodyComp(){
-  var wi=document.getElementById('bc-weight-in');var hi=document.getElementById('bc-height-in');
-  var sw=localStorage.getItem('user_weight');var sh=localStorage.getItem('user_height');
-  if(wi&&sw)wi.value=sw;if(hi&&sh)hi.value=sh;setBioSex(localStorage.getItem('user_sex')||'male');weights=getData('weight_log',[]);syncWeightsFromAgent().then(()=>bcRender());syncBodyCompFromAgent();document.getElementById('bc-date-badge').textContent=fmtDate(NOW).toUpperCase();bcRender();}
+  var wi=document.getElementById('bc-weight-in');var hi=document.getElementById('bc-height-in');var ai=document.getElementById('bc-age-in');
+  var sw=localStorage.getItem('user_weight');var sh=localStorage.getItem('user_height');var sa=localStorage.getItem('user_age');
+  if(wi&&sw)wi.value=sw;if(hi&&sh)hi.value=sh;if(ai&&sa)ai.value=sa;setBioSex(localStorage.getItem('user_sex')||'male');weights=getData('weight_log',[]);syncWeightsFromAgent().then(()=>bcRender());syncBodyCompFromAgent();document.getElementById('bc-date-badge').textContent=fmtDate(NOW).toUpperCase();bcRender();}
