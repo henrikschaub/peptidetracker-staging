@@ -454,12 +454,9 @@ function showPeptideCard(id){
   var sheet=document.createElement('div');
   sheet.className='pcard-sheet';
   sheet.innerHTML=
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">'
-    +'<div style="flex:1;padding-right:12px;">'
+    '<div style="margin-bottom:14px;">'
     +'<div class="pcard-name" style="color:'+dot+'">'+cat.name+'</div>'
     +'<div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;">'+cat.group+'</div>'
-    +'</div>'
-    +'<button onclick="this.closest(\'.pcard-overlay\').remove()" style="background:none;border:none;color:var(--muted2);font-size:26px;cursor:pointer;line-height:1;flex-shrink:0;">×</button>'
     +'</div>'
     +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">'
     +'<div style="height:2px;flex:1;background:'+dot+';border-radius:2px;opacity:0.5;"></div>'
@@ -476,6 +473,9 @@ function showPeptideCard(id){
     +(cat.dflt&&cat.dflt.dosePm?'<div class="pcard-stat"><div class="pcard-lbl">Typical PM dose</div><div class="pcard-val" style="color:'+dot+'">'+cat.dflt.dosePm+' '+cat.dflt.unitPm+'</div></div>':'')
     +(cat.dflt&&cat.dflt.times?'<div class="pcard-stat"><div class="pcard-lbl">Timing</div><div class="pcard-val">'+cat.dflt.times.join(' + ')+'</div></div>':'')
     +(cat.sku?'<div class="pcard-stat"><div class="pcard-lbl">SKU</div><div class="pcard-val">'+cat.sku+'</div></div>':'')
+    +'</div>'
+    +'<div style="position:sticky;bottom:0;background:var(--surface);padding:16px 0 28px;margin-top:20px;">'
+    +'<button onclick="this.closest(\'.pcard-overlay\').remove()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px;font-weight:700;padding:14px;border-radius:12px;cursor:pointer;font-family:inherit;letter-spacing:0.5px;">Done</button>'
     +'</div>';
   overlay.appendChild(sheet);
   document.body.appendChild(overlay);
@@ -526,7 +526,7 @@ function wizStepPeptides(body,footer){
     html+='<div class="wiz-section">'+grp+'</div>';
     groups[grp].forEach(function(p){
       var isSel=selIds.includes(p.id);
-      html+='<div class="pep-card'+(isSel?' sel':'')+'" onclick="wizTogglePep(\''+p.id+'\')"><div class="pep-dot-sm" style="background:'+p.dot+'"></div><div class="pep-info"><div class="pep-name">'+p.name+'</div><div class="pep-meta">'+p.desc+'</div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><button class="info-btn" onclick="event.stopPropagation();showPeptideCard(\''+p.id+'\')" style="margin-bottom:2px;">ℹ</button><div class="pep-chk">'+(isSel?'<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="#0a0a0a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')+'</div></div></div>';
+      html+='<div class="pep-card'+(isSel?' sel':'')+'" onclick="wizTogglePep(\''+p.id+'\')"><div class="pep-dot-sm" style="background:'+p.dot+'"></div><div class="pep-info"><div class="pep-name">'+p.name+'</div><div class="pep-meta">'+p.desc+'</div></div><div style="display:flex;align-items:center;gap:10px"><button class="info-btn" onclick="event.stopPropagation();showPeptideCard(\''+p.id+'\')">ℹ</button><div class="pep-chk">'+(isSel?'<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="#0a0a0a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')+'</div></div></div>';
     });
   });
   body.innerHTML=html;
