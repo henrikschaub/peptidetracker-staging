@@ -444,7 +444,7 @@ G.wizSave().then(async ()=>{
   // ── TRT compound end_date auto-migration ─────────────────────────────────────
   console.log('\n── TRT compound end_date auto-migration ─────────────────────');
   {
-    // Stack with testoviron TRT compound and no end_date → should be auto-populated from TESTO
+    // Stack with testoviron TRT compound and no end_date → end_date should NOT be auto-set (TESTO removed)
     const trtMigStack = {
       name: 'TRT Migration Test',
       cycle_start: '2026-05-01',
@@ -456,8 +456,8 @@ G.wizSave().then(async ()=>{
     G.fetch = async () => ({ ok: true, json: async () => ({ stacks: [JSON.parse(JSON.stringify(trtMigStack))], active_index: 0 }) });
     await G.loadUserStacks();
     const migC = G._userStacks[0].trt.compounds[0];
-    check('TRT migration: testoviron end_date auto-set',            !!migC.end_date,                `end_date not set`);
-    check('TRT migration: end_date matches last TESTO date',        migC.end_date === '2026-05-26', `got ${migC.end_date}`);
+    check('TRT migration: testoviron end_date NOT auto-set (configurable per stack)', !migC.end_date, `end_date was auto-set to ${migC.end_date}`);
+    check('TRT migration: no hardcoded TESTO date injected',        migC.end_date !== '2026-05-26', `got hardcoded date ${migC.end_date}`);
     // Existing end_date must not be overwritten
     const trtMigExistingEnd = {
       ...trtMigStack,

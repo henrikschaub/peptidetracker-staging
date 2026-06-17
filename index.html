@@ -56,11 +56,6 @@
   </div>
   <div class="content hidden" id="tab-schedule">
     <div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">WEEKLY PATTERN</div></div></div><div class="card-body" id="schedule-body"></div></div>
-    <div class="card">
-      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent4)"></div><div class="card-title">TESTOVIRON BRIDGE</div></div><span class="card-badge badge-upcoming" id="testo-badge">—</span></div>
-      <div class="checklist" id="testo-list"></div>
-      <div class="prog-wrap"><div class="prog-label"><span>Bridge progress</span><span id="testo-prog-txt">—</span></div><div class="prog-bar"><div class="prog-fill" id="testo-prog" style="background:var(--accent4);width:0%"></div></div></div>
-    </div>
   </div>
   <div class="content hidden" id="tab-macros">
     <div id="macros-body"></div>
@@ -202,13 +197,6 @@ const WEEKLY_DEFAULT=[
   {id:'glow-1',name:'GLOW Stack',detail:'0.09 ml (9 IU) — TB-500 300mcg / BPC-157 300mcg / GHK-Cu 1.5mg',dow:[0,1,2,3,4,5,6],time:'AM',dot:'#3b9eff'},
 ];
 let WEEKLY=WEEKLY_DEFAULT.slice();
-const TESTO=[
-  {date:new Date(2026,4,4), label:'Injection 1',dose:'250mg',route:'IM'},
-  {date:new Date(2026,4,11),label:'Injection 2',dose:'125mg',route:'SC'},
-  {date:new Date(2026,4,16),label:'Injection 3',dose:'125mg',route:'SC'},
-  {date:new Date(2026,4,21),label:'Injection 4',dose:'125mg',route:'SC'},
-  {date:new Date(2026,4,26),label:'Injection 5',dose:'125mg',route:'SC'},
-];
 const TRT_CAT=[
   {id:'nebido',     name:'Nebido',                sub:'Testosterone Undecanoate 1000mg/4ml',dot:'#e8a020',defaultDose:'1000',unit:'mg',freqVal:12,freqUnit:'weeks'},
   {id:'testoviron', name:'Testoviron Depot',       sub:'Testosterone Enanthate 250mg/ml',   dot:'#e05050',defaultDose:'125', unit:'mg',freqVal:1, freqUnit:'weeks'},
@@ -442,13 +430,6 @@ async function loadUserStacks(){
       // Glow dose was incorrectly defaulted to 0.2 ml before PR #13 fixed it to 0.09 ml (9 IU)
       if((p.id==='glow'||p.id==='glow-1')&&(parseFloat(p.dose_am)===0.2||(parseFloat(p.dose_am)===0.09&&p.unit_am!=='ml'))){p.dose_am='0.09';p.unit_am='ml';}
     });
-    // Auto-set end_date for testoviron TRT compound from the last TESTO bridge date
-    // so dynamic doses stop after the bridge schedule ends
-    if(stack.trt&&stack.trt.enabled&&Array.isArray(stack.trt.compounds)&&TESTO.length){
-      var _lastTesto=TESTO.reduce(function(m,t){return t.date>m?t.date:m;},TESTO[0].date);
-      var _lastTestoStr=_lastTesto.getFullYear()+'-'+String(_lastTesto.getMonth()+1).padStart(2,'0')+'-'+String(_lastTesto.getDate()).padStart(2,'0');
-      stack.trt.compounds.forEach(function(c){if(c.id==='testoviron'&&!c.end_date)c.end_date=_lastTestoStr;});
-    }
   });
   // In-memory correction: any peptide start_date >= May 2026 was auto-detected from
   // the 19-day log window and is wrong. Fix in memory every load (self-disabling once
