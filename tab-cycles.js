@@ -72,6 +72,32 @@ var CYCLE_TEMPLATES=[
    why:'',tip:'',
    compounds:[{name:'Testosterone',dose:500,unit:'mg/week',active:true,startWeek:0}]}
 ];
+var ENHANCEMENT_COMPOUNDS=[
+  {id:'test_e',name:'Testosterone Enanthate',group:'Base',dot:'#e05050',defaultDose:300,unit:'mg/week',
+   interaction:'The foundational compound — every cycle runs on it. Aromatizes to E2; your week-5 bloodwork determines your aromatizer phenotype and all downstream compound decisions.',
+   sides:'Hematocrit elevation, E2-driven water retention, HPTA suppression. All manageable with compound ratios and bloodwork-guided dose adjustments.'},
+  {id:'test_c',name:'Testosterone Cypionate',group:'Base',dot:'#e07070',defaultDose:300,unit:'mg/week',
+   interaction:'Functionally identical to Enanthate — slightly longer half-life (8 vs 7 days), otherwise interchangeable. Same aromatization profile; use whichever is available.',
+   sides:'Identical to Testosterone Enanthate. E2 monitoring, hematocrit checks required.'},
+  {id:'primo',name:'Primobolan (Metenolone Enanthate)',group:'DHT-Derived',dot:'#3cffa0',defaultDose:500,unit:'mg/week',
+   interaction:'DHT-derived — zero aromatization. Reduces total E2 load at equivalent androgen dose. Classic synergy compound for normal/high aromatizers. Evidence-based starting ratio: 1:1 Test:Primo.',
+   sides:'Very mild — primarily androgenic at high dose. Hair loss risk in susceptible individuals. Monitor for low-E2 symptoms (joint pain, flat affect, low libido) at high primo ratios.'},
+  {id:'mast_e',name:'Masteron Enanthate',group:'DHT-Derived',dot:'#a0e030',defaultDose:500,unit:'mg/week',
+   interaction:'Competitively inhibits aromatase — pseudo-AI effect without crashing cardioprotective E2 to zero. For confirmed low aromatizers only. 2:1 Test:Mast standard; 1:1 for aggressive dry look.',
+   sides:'Androgenic: acne, accelerated hair loss. Cosmetic benefit requires BF <12%. No liver toxicity.'},
+  {id:'npp',name:'NPP (Nandrolone Phenylpropionate)',group:'19-Nor',dot:'#60b0ff',defaultDose:250,unit:'mg/week',
+   interaction:'Synergistic with Test for collagen synthesis and joint recovery. Short ester (3-5 day clearance) — fast exit if sides appear. MED 200-300 mg/week; not a size compound at this dose.',
+   sides:'Libido suppression via progestin activity — if libido tanks, reduce NPP first. Prolactin elevation. Avoid without Cabergoline at higher doses.'},
+  {id:'deca',name:'Deca (Nandrolone Decanoate)',group:'19-Nor',dot:'#4090e0',defaultDose:300,unit:'mg/week',
+   interaction:'Same anabolic mechanism as NPP — stronger joint lubrication long-term. 3-week half-life means benefits and sides both persist after stopping.',
+   sides:'"Deca-dick" — progestin-driven libido suppression can last weeks post-cycle due to long washout. Only run if you\'ve tolerated NPP without issues. Cabergoline recommended.'},
+  {id:'hgh',name:'HGH (Somatropin)',group:'GH Axis',dot:'#e8a020',defaultDose:3,unit:'IU/day',
+   interaction:'Synergistic with androgens: Test drives protein synthesis, GH drives lipolysis and new muscle cell hyperplasia. Stop CJC/Ipamorelin when on exogenous HGH — they target the same axis (redundant). Minimum 6-month run for full recomp benefit.',
+   sides:'Dose-dependent water retention and carpal tunnel (reduce dose to resolve). Hyperglycemia risk >4 IU/day — monitor fasting glucose. Longevity dosing: 1-2 IU/day. Recomp: 3-4 IU/day.'},
+  {id:'anavar',name:'Anavar (Oxandrolone)',group:'Oral',dot:'#d060d0',defaultDose:50,unit:'mg/day',
+   interaction:'Mild DHT-derived oral. Enhances strength and hardness without significant mass. Clean synergy with Test at low doses — does not increase E2 load. SHBG suppression amplifies free testosterone effect.',
+   sides:'Liver stress (oral 17α-alkylated) — limit to 6-8 weeks. HDL reduction (lipid impact). Mildest oral overall; female-appropriate at 5-10 mg/day.'}
+];
 var _cwiz={step:1,tpl:null,phase:'foundational',weeks:20,startDate:'',compounds:[]};
 function cycleWizardOpen(){
   if(_cycle&&_cycle.id&&!confirm('Start a new cycle? Your current cycle stays saved on the backend.'))return;
