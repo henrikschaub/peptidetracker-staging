@@ -28,20 +28,21 @@ jobs:
           BRANCH="promote/staging-$(date +%Y%m%d%H%M%S)-${GITHUB_SHA::7}"
           git checkout -b "$BRANCH"
 
-          # Mirror staging's tracked files into prod, except files prod owns independently
-          rsync -a --delete \
-            --exclude='.git' \
-            --exclude='version.json' \
-            --exclude='.github/workflows/version-bump.yml' \
-            --exclude='CLAUDE.md' \
-            ../staging/ ./
+          # Copy index.html from staging — prod owns everything else
+          # (version.json, .github/workflows/, CLAUDE.md, assets, etc.)
+          cp ../staging/index.html ./index.html
+
+          # Copy tab JS files from staging
+          for f in ../staging/tab-*.js; do
+            [ -f "$f" ] && cp "$f" ./
+          done
 
           # Reset VERSION in the promoted index.html to prod's current version so
           # const VERSION and version.json stay in sync (staging has its own counter)
           PROD_VERSION=$(jq -r '.version' version.json)
           sed -i "s/const VERSION='[0-9.]*'/const VERSION='${PROD_VERSION}'/" index.html
 
-          if git diff --quiet; then
+          if git diff --quiet && git diff --staged --quiet && [ -z "$(git status --porcelain)" ]; then
             echo "No changes to promote"
             exit 0
           fi
@@ -56,18 +57,27 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PROMOTE_TOKEN }}
         run: |
-          cd prod
-          PR_URL=$(gh pr create \
-            --repo henrikschaub/peptidetracker \
-            --base main \
-            --head "$BRANCH" \
-            --title "Promote staging changes ($GITHUB_SHA)" \
-            --body "Auto-generated PR mirroring the diff on peptidetracker-staging@main (commit ${GITHUB_SHA}), triggered manually via the staging app's 'Push to Prod' button. Merges automatically once prod's required CI check passes.")
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/henrikschaub/peptidetracker/pulls \
+            -d "{\"title\":\"Promote staging changes (${GITHUB_SHA::7})\",\"head\":\"$BRANCH\",\"base\":\"main\",\"body\":\"Auto-generated PR from peptidetracker-staging@main (${GITHUB_SHA}), triggered via Push to Prod.\"}")
+          PR_URL=$(echo "$RESPONSE" | jq -r '.html_url')
+          PR_NODE_ID=$(echo "$RESPONSE" | jq -r '.node_id')
+          if [ "$PR_URL" = "null" ] || [ -z "$PR_URL" ]; then
+            echo "PR creation failed: $RESPONSE"
+            exit 1
+          fi
           echo "PR_URL=$PR_URL" >> "$GITHUB_ENV"
+          echo "PR_NODE_ID=$PR_NODE_ID" >> "$GITHUB_ENV"
 
       - name: Enable auto-merge on the PR
-        if: env.PR_URL != ''
+        if: env.PR_NODE_ID != ''
         env:
           GH_TOKEN: ${{ secrets.PROMOTE_TOKEN }}
         run: |
-          gh pr merge --repo henrikschaub/peptidetracker --auto --squash "$PR_URL"
+          curl -s -X POST \
+            -H "Authorization: bearer $GH_TOKEN" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/graphql \
+            -d "{\"query\":\"mutation { enablePullRequestAutoMerge(input: {pullRequestId: \\\"$PR_NODE_ID\\\", mergeMethod: SQUASH}) { pullRequest { autoMergeRequest { mergeMethod } } } }\"}"
