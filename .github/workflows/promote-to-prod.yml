@@ -37,10 +37,12 @@ jobs:
             [ -f "$f" ] && cp "$f" ./
           done
 
-          # Reset VERSION in the promoted index.html to prod's current version so
-          # const VERSION and version.json stay in sync (staging has its own counter)
+          # Reset VERSION and ?v= cache-bust strings to prod's current version so
+          # const VERSION, version.json, and tab script src tags all stay in sync
+          # (staging has its own independent version counter)
           PROD_VERSION=$(jq -r '.version' version.json)
           sed -i "s/const VERSION='[0-9.]*'/const VERSION='${PROD_VERSION}'/" index.html
+          sed -i "s/\.js?v=[0-9.]*/.js?v=${PROD_VERSION}/g" index.html
 
           if git diff --quiet && git diff --staged --quiet && [ -z "$(git status --porcelain)" ]; then
             echo "No changes to promote"
