@@ -1,5 +1,15 @@
 # Peptide Tracker Staging — Claude Instructions
 
+## ⚠️ LOCAL CLONE RULE — NEVER SKIP ⚠️
+Local clones at `/home/user/<repo>` are **NOT automatically up to date**. A
+session can be hours old and the remote may have moved on. **Before reading or
+copying any file from a local clone, always pull it fresh:**
+```
+git -C /home/user/<repo> fetch origin && git -C /home/user/<repo> checkout origin/main -- <path>
+```
+or `git -C /home/user/<repo> pull origin main` for the whole tree. Skipping
+this step has caused production regressions multiple times. No exceptions.
+
 ## This is the repo Claude works in
 `peptidetracker` (prod) is **READ-ONLY** for Claude — see its CLAUDE.md.
 All actual development (features, fixes, refactors) happens here on
