@@ -12,7 +12,7 @@ and merge on this repo following the workflow below.
 3. Create a PR, then **check its CI status before merging** — call `pull_request_read` with `method: get_check_runs` (or `get_status`) and confirm `conclusion`/`state` is `success`. If it's still running, wait and re-check; if it failed, fix the issue and push again. **Never merge a PR with a failing or pending check.**
 4. Once CI is green, merge it yourself — never stop and ask the user to merge, never push directly to main
 5. After merge the `version-bump` GitHub Action auto-increments the minor version in `version.json` and `const VERSION` in `index.html` and commits with `[skip ci]`
-6. **After merging, poll `https://henrikschaub.github.io/peptidetracker-staging/version.json` every 30 s until the new version appears, then tell the user "live as vX.XXX — test now"**
+6. **After merging, confirm the version-bump workflow run completed successfully via `mcp__github__actions_list` (method: list_workflow_runs, resource_id: version-bump.yml). Then tell the user "live as vX.XXX — test now" based on the bumped version from the commit message. DO NOT attempt to curl or WebFetch `henrikschaub.github.io` — outbound network access to that host is blocked in this remote environment and will always fail.**
 
 ## Promotion to prod — Claude must NOT do this directly
 Promotion only happens via **Henrik clicking "Push to Prod"** in the staging
@@ -41,7 +41,7 @@ tooling, never by end-user-facing apps.
 
 ## Deployment
 - GitHub Pages (staging URL) — deploys automatically on push to `main`
-- Monitor live version: `https://henrikschaub.github.io/peptidetracker-staging/version.json`
+- Monitor live version: `https://henrikschaub.github.io/peptidetracker-staging/version.json` — **CANNOT be fetched by Claude** (outbound network to `henrikschaub.github.io` is blocked in this remote environment). Use GitHub Actions status to confirm deployment instead.
 
 ## Environment-aware code — NEVER hardcode staging/prod URLs
 `index.html` is a single file that gets promoted from staging to prod verbatim.
