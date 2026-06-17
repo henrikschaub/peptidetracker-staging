@@ -28,14 +28,18 @@ jobs:
           BRANCH="promote/staging-$(date +%Y%m%d%H%M%S)-${GITHUB_SHA::7}"
           git checkout -b "$BRANCH"
 
-          # Copy index.html from staging — prod owns everything else
-          # (version.json, .github/workflows/, CLAUDE.md, assets, etc.)
+          # Copy index.html from staging
           cp ../staging/index.html ./index.html
 
           # Copy tab JS files from staging
           for f in ../staging/tab-*.js; do
             [ -f "$f" ] && cp "$f" ./
           done
+
+          # Copy CI workflow and test suite — they must stay in sync with the code
+          # (version-bump.yml, promote-to-prod.yml, version.json, CLAUDE.md are prod-owned)
+          cp ../staging/.github/workflows/ci.yml .github/workflows/ci.yml
+          cp -r ../staging/tests .
 
           # Reset VERSION and ?v= cache-bust strings to prod's current version so
           # const VERSION, version.json, and tab script src tags all stay in sync
