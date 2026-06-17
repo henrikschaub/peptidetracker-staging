@@ -70,12 +70,14 @@ jobs:
             -d "{\"title\":\"Promote staging changes (${GITHUB_SHA::7})\",\"head\":\"$BRANCH\",\"base\":\"main\",\"body\":\"Auto-generated PR from peptidetracker-staging@main (${GITHUB_SHA}), triggered via Push to Prod.\"}")
           PR_URL=$(echo "$RESPONSE" | jq -r '.html_url')
           PR_NODE_ID=$(echo "$RESPONSE" | jq -r '.node_id')
+          PR_NUMBER=$(echo "$RESPONSE" | jq -r '.number')
           if [ "$PR_URL" = "null" ] || [ -z "$PR_URL" ]; then
             echo "PR creation failed: $RESPONSE"
             exit 1
           fi
           echo "PR_URL=$PR_URL" >> "$GITHUB_ENV"
           echo "PR_NODE_ID=$PR_NODE_ID" >> "$GITHUB_ENV"
+          echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
 
       - name: Enable auto-merge on the PR
         if: env.PR_NODE_ID != ''
@@ -87,3 +89,27 @@ jobs:
             -H "Content-Type: application/json" \
             https://api.github.com/graphql \
             -d "{\"query\":\"mutation { enablePullRequestAutoMerge(input: {pullRequestId: \\\"$PR_NODE_ID\\\", mergeMethod: SQUASH}) { pullRequest { autoMergeRequest { mergeMethod } } } }\"}"
+
+      - name: Wait for prod PR to merge
+        if: env.PR_NUMBER != ''
+        env:
+          GH_TOKEN: ${{ secrets.PROMOTE_TOKEN }}
+        run: |
+          echo "Waiting for PR #$PR_NUMBER to merge on peptidetracker..."
+          for i in $(seq 1 60); do
+            RESULT=$(gh api repos/henrikschaub/peptidetracker/pulls/$PR_NUMBER \
+              --jq '{state: .state, merged: .merged}')
+            STATE=$(echo "$RESULT" | jq -r '.state')
+            MERGED=$(echo "$RESULT" | jq -r '.merged')
+            if [ "$MERGED" = "true" ]; then
+              echo "PR #$PR_NUMBER merged (attempt $i)"
+              exit 0
+            elif [ "$STATE" = "closed" ]; then
+              echo "PR #$PR_NUMBER closed without merging — CI failed on prod"
+              exit 1
+            fi
+            echo "Attempt $i: state=$STATE, waiting 10s..."
+            sleep 10
+          done
+          echo "Timeout: PR #$PR_NUMBER did not merge within 10 minutes"
+          exit 1
