@@ -316,6 +316,38 @@ const PEPTIDE_CAT=[
   {id:'nad',name:'NAD+',sku:'NJ100',group:'Anti-aging',goals:['antiaging','cognitive'],dot:'#ff6b2b',cg:[],desc:'Energy, DNA repair, sirtuin activation.',halfLife:'Utilised within hours; upstream effects are sustained',mechanism:'Nicotinamide Adenine Dinucleotide — the central redox coenzyme present in every cell. Serves as an electron carrier in mitochondrial energy production (ATP synthesis) and as a substrate for sirtuins (SIRT1–7, longevity regulators), PARP enzymes (DNA strand break repair), and CD38. NAD+ levels decline ~50% between age 20 and 60.',benefits:['ATP production and cellular energy restoration','DNA strand break repair via PARP activation','Sirtuin (SIRT1/SIRT3) activation — the primary longevity pathway','Neuroinflammation reduction and cognitive clarity','Mitochondrial biogenesis','Addictive cravings reduction (emerging clinical data)'],protocol:'100–500 mg SC 3× per week. SC is more practical than IV for ongoing protocols. IV offers faster CNS onset but requires slow infusion to avoid flushing. Oral NMN or NR are lower-cost precursor alternatives.',sideEffects:['Flushing and warmth — IV much more than SC','Nausea during rapid IV infusion','Transient chest tightness (IV only — slow the drip)','SC at ≤250 mg is generally well tolerated','High doses may accelerate cancer growth in pre-existing tumours — screen first'],dflt:{times:['AM'],days:[1,3,5],doseAm:'100',dosePm:'',unitAm:'mg',unitPm:'mg'}},
   {id:'hcg',name:'HCG',sku:'G5K',group:'TRT Support',goals:['trt'],dot:'#c084fc',cg:[],desc:'Testicular stimulation during TRT. Maintains fertility/size.',halfLife:'~33–36 h',mechanism:'Human Chorionic Gonadotropin — a glycoprotein hormone that mimics LH at the Leydig cell receptor in the testes. On exogenous testosterone, the HPG axis suppresses LH (which would normally drive the testes). HCG restores that LH signal, maintaining intratesticular testosterone production, testicular volume, and spermatogenesis.',benefits:['Prevents testicular atrophy during TRT','Maintains fertility and sperm count','Preserves intratesticular testosterone for mood and libido','Reduces the feeling of "shutdown" on TRT','Useful for fertility restart when discontinuing TRT'],protocol:'250–500 IU SC every 2–3 days (or 1,000 IU 3× per week for fertility). Inject abdomen or thigh. Use throughout TRT cycle and continue for 4–6 weeks post-cycle if fertility is the goal. Monitor oestradiol — HCG aromatises heavily.',sideEffects:['Elevated oestradiol (aromatisation) — may require an AI','Acne and oily skin','Water retention','Testicular discomfort or sensitivity (uncommon)','Mood fluctuations with oestrogen shifts'],dflt:{times:['AM'],days:[1,4],doseAm:'500',dosePm:'',unitAm:'IU',unitPm:'IU'}},
 ];
+// Dose guidance tiers per compound. Keys: l=label, d=dose string, n=note, b=1(optimal tier), r=risk text
+const DOSE_GUIDE={
+  'cjc-ipa':    [{l:'Conservative',d:'3 IU × 2/day',n:'Maintenance / older adults'},{l:'Optimal',d:'4–6 IU × 2/day',n:'GH pulse for muscle & recovery',b:1},{l:'High',d:'8 IU × 2/day',n:'Aggressive loading',r:'Receptor saturation possible; diminishing returns above 8 IU'}],
+  'cjc-nodac':  [{l:'Conservative',d:'100 mcg × 2/day',n:'Light GH pulse'},{l:'Optimal',d:'200 mcg × 2/day',n:'Best synergy with Ipamorelin',b:1},{l:'High',d:'300 mcg × 2/day',n:'No meaningful benefit above 200 mcg'}],
+  'ipamorelin': [{l:'Conservative',d:'100–150 mcg × 2/day',n:'Mild GH pulse'},{l:'Optimal',d:'200–300 mcg × 2/day',n:'Best GH release with minimal sides',b:1},{l:'High',d:'400+ mcg',n:'Diminishing returns above 300 mcg'}],
+  'sermorelin':  [{l:'Conservative',d:'200 mcg PM',n:'Mild nocturnal GH boost'},{l:'Optimal',d:'300–500 mcg PM',n:'Best nocturnal GH surge pre-sleep',b:1},{l:'High',d:'500 mcg',n:'Max effective dose — higher doses unstudied'}],
+  'tesamorelin': [{l:'Standard',d:'2 mg AM',n:'FDA-approved dose for visceral fat',b:1},{l:'Note',d:'Do not exceed 2 mg',n:'No evidence higher dose improves fat loss',r:'Glucose intolerance & IGF-1 elevation — monitor HbA1c every 12 weeks'}],
+  'hgh':         [{l:'Anti-aging',d:'1–2 IU AM',n:'Low-dose longevity & recovery'},{l:'Recomp',d:'3–4 IU AM',n:'Muscle growth + fat loss',b:1},{l:'Performance',d:'6–10 IU AM',n:'Elite athletes only',r:'Insulin resistance; IGF-1 elevation may promote cancer growth long-term; acromegaly risk'}],
+  'glow':        [{l:'Standard',d:'0.09 ml AM',n:'Daily collagen + systemic repair',b:1},{l:'High',d:'0.18 ml AM',n:'Loading phase / acute injury'},{l:'Note',d:'',n:'GHK-Cu may temporarily darken moles — resolves after cycle'}],
+  'klow':        [{l:'Standard',d:'0.2 ml AM',n:'Daily anti-inflammatory + gut repair',b:1},{l:'High',d:'0.3 ml AM',n:'Active IBD or severe inflammation only'}],
+  'bpc-tb':      [{l:'Acute',d:'1 mg ED',n:'First 2–4 weeks — injury phase',b:1},{l:'Maintenance',d:'1 mg EOD',n:'After initial phase'},{l:'High',d:'2 mg ED',n:'Severe injuries — no extra systemic benefit over 1 mg'}],
+  'bpc157':      [{l:'Conservative',d:'250 mcg ED',n:'Gut health + mild repair'},{l:'Optimal',d:'500 mcg ED',n:'Tendon, ligament & wound healing',b:1},{l:'High',d:'1000 mcg',n:'Local injection near injury only — no extra systemic benefit'}],
+  'tb500':       [{l:'Loading',d:'2–2.5 mg × 2/wk',n:'4–6 week loading phase',b:1},{l:'Maintenance',d:'2 mg × 1/wk',n:'Ongoing systemic repair after loading'},{l:'High',d:'5+ mg',n:'No added benefit',r:'Higher angiogenesis activity — caution with cancer history'}],
+  'ghkcu':       [{l:'Conservative',d:'1 mg ED',n:'Daily collagen support'},{l:'Optimal',d:'1.4–2 mg ED',n:'Strong collagen synthesis + antioxidant',b:1},{l:'High',d:'3+ mg',n:'Wound-care protocols — increases mole-darkening risk'}],
+  'retatrutide': [{l:'Start (weeks 1–4)',d:'0.5–1 mg/wk',n:'Mandatory tolerance build — never skip'},{l:'Therapeutic',d:'2–4 mg/wk',n:'Meaningful fat loss range'},{l:'Optimal',d:'4–8 mg/wk',n:'Target for maximum fat loss',b:1},{l:'Max (research)',d:'12 mg/wk',n:'Highest trial dose',r:'Severe GI sides; significant muscle loss — mandatory resistance training + protein ≥2 g/kg'}],
+  'tirzepatide': [{l:'Start (weeks 1–4)',d:'2.5 mg/wk',n:'Mandatory ramp — nausea management'},{l:'Therapeutic',d:'5–7.5 mg/wk',n:'Steady fat loss'},{l:'Optimal',d:'10–12.5 mg/wk',n:'Maximum approved dose',b:1},{l:'Max',d:'15 mg/wk',n:'Upper limit',r:'Nausea & vomiting common — slow meal pace; hydrate aggressively'}],
+  'semaglutide': [{l:'Start (weeks 1–4)',d:'0.25 mg/wk',n:'Mandatory ramp'},{l:'Therapeutic',d:'0.5–1 mg/wk',n:'Months 2–4'},{l:'Optimal',d:'1.7–2.4 mg/wk',n:'Full weight-loss effect',b:1},{l:'Note',d:'',n:'Muscle loss common — prioritise protein ≥2 g/kg + resistance training'}],
+  'aod9604':     [{l:'Standard',d:'300 mcg AM fasted',n:'Most studied dose',b:1},{l:'High',d:'500 mcg AM fasted',n:'Marginal extra benefit over 300 mcg'}],
+  'semax':       [{l:'Light',d:'200 mcg AM',n:'Focus + mild BDNF boost'},{l:'Optimal',d:'400–600 mcg AM',n:'Maximum cognitive + neuroprotective effect',b:1},{l:'High',d:'1000+ mcg',n:'Diminishing returns; irritability at very high doses'}],
+  'selank':      [{l:'Light',d:'250 mcg AM',n:'Mild anxiolysis'},{l:'Optimal',d:'500 mcg AM',n:'Full anxiolytic + cognitive benefit',b:1},{l:'High',d:'1000 mcg',n:'No clinical evidence of benefit above 500 mcg'}],
+  'epitalon':    [{l:'Standard',d:'5–10 mg ED × 10–20 days',n:'2–3 short cycles per year only',b:1},{l:'Note',d:'',n:'Evening injection preferred (pineal timing); no benefit to continuous use'}],
+  'motsc':       [{l:'Conservative',d:'5 mg × 3/wk',n:'AMPK activation'},{l:'Optimal',d:'10 mg × 3/wk',n:'Full metabolic + exercise mimetic effect',b:1},{l:'Note',d:'',n:'Inject 30–60 min before training for additive metabolic benefit'}],
+  'nad':         [{l:'Conservative',d:'100 mg SC × 3/wk',n:'Maintenance'},{l:'Optimal',d:'250 mg SC × 3/wk',n:'DNA repair + sirtuin activation',b:1},{l:'High',d:'500+ mg IV',n:'Faster CNS onset — IV protocol',r:'Malignancy contraindication at high doses — screen first; flushing & nausea common with IV infusion'}],
+  'hcg':         [{l:'Standard',d:'250–500 IU EOD',n:'Testicular maintenance on TRT',b:1},{l:'Fertility',d:'1000 IU × 3/wk',n:'Active fertility preservation'},{l:'Note',d:'',n:'Monitor E2 — HCG aromatises heavily; AI may be needed at higher doses'}],
+};
+// Default ramp phases for compounds that require titration. Keys: w=start week, d=dose, u=unit
+const DEFAULT_PHASES={
+  'retatrutide': [{w:0,d:'0.5',u:'mg'},{w:4,d:'1',u:'mg'},{w:8,d:'2',u:'mg'},{w:12,d:'3',u:'mg'}],
+  'tirzepatide': [{w:0,d:'2.5',u:'mg'},{w:4,d:'5',u:'mg'},{w:8,d:'7.5',u:'mg'},{w:12,d:'10',u:'mg'}],
+  'semaglutide': [{w:0,d:'0.25',u:'mg'},{w:4,d:'0.5',u:'mg'},{w:8,d:'1',u:'mg'},{w:16,d:'1.7',u:'mg'}],
+  'hgh':         [{w:0,d:'1',u:'IU'},{w:4,d:'2',u:'IU'},{w:8,d:'3',u:'IU'}],
+};
 const STACK_RULES=[
   {id:'ghrh-multi',check:function(p){return p.filter(function(x){return x.cg&&x.cg.includes('ghrh');}).length>1;},getConflicting:function(p){return p.filter(function(x){return x.cg&&x.cg.includes('ghrh');}).map(function(x){return x.id;});},level:'err',title:'Multiple GHRH analogs',msg:'CJC-1295, Sermorelin and Tesamorelin all act on the same GHRH receptor — stacking them causes receptor saturation with no added benefit and higher cost. Pick one.'},
   {id:'cjc-tesa',check:function(p){var ids=p.map(function(x){return x.id;});return (ids.includes('cjc-ipa')||ids.includes('cjc-nodac'))&&ids.includes('tesamorelin');},getConflicting:function(p){return p.filter(function(x){return['cjc-ipa','cjc-nodac','tesamorelin'].includes(x.id);}).map(function(x){return x.id;});},level:'err',title:'CJC-1295 + Tesamorelin',msg:'Tesamorelin is specifically indicated for visceral fat reduction — if that is your goal, use it alone. For general GH optimisation use CJC/IPA instead. Never full-dose both.'},
@@ -327,6 +359,8 @@ const STACK_RULES=[
   {id:'cjc-ipa-double',check:function(p){var ids=p.map(function(x){return x.id;});return ids.includes('cjc-ipa')&&ids.includes('ipamorelin');},getConflicting:function(p){return p.filter(function(x){return['cjc-ipa','ipamorelin'].includes(x.id);}).map(function(x){return x.id;});},level:'warn',title:'CJC/IPA blend + standalone Ipamorelin',msg:'The CJC/IPA blend already includes Ipamorelin. Adding it separately doubles your Ipamorelin dose with no benefit. Use the blend alone, or build the stack from CJC-1295 (no DAC) + Ipamorelin separately.'},
 ];
 function _doseLabel(pepId,doseVal,unit){var d=parseFloat(doseVal);if(!pepId||!doseVal||isNaN(d)||d<=0)return(doseVal||'')+(unit||'');if(unit==='IU'||unit==='mcg')return doseVal+(unit||'');var rec=RECON_DB[pepId];if(!rec||rec.unit==='IU')return doseVal+(unit||'');var vi=rec.defaultVi!==undefined?rec.defaultVi:0;var wi=rec.defaultWi!==undefined?rec.defaultWi:0;var conc=(rec.vials||[])[vi]/((rec.water||[])[wi]);if(!conc||isNaN(conc))return doseVal+(unit||'');var extra='';if(unit==='mg'){var iu=Math.round(d/conc*100);if(iu>0)extra=' ('+iu+' IU)';}else if(unit==='ml'){var mg=Math.round(d*conc);var iu=Math.round(d*100);var p=[];if(mg>0)p.push(mg+'mg');if(iu>0)p.push(iu+' IU');if(p.length)extra=' ('+p.join(' · ')+')';}return doseVal+(unit||'')+extra;}
+// Returns {dose, unit, phaseIdx, totalPhases} for today based on dose_phases + cycle_start, or null if no ramp
+function _effectiveDose(p,cycleStart){if(!p||!p.dose_phases||!p.dose_phases.length||!cycleStart)return null;var sd=parseLocalDate(cycleStart);var wk=Math.floor((NOW-sd)/604800000);if(wk<0)wk=0;var phases=p.dose_phases.slice().sort(function(a,b){return a.w-b.w;});var cur=phases[0];var curIdx=0;for(var i=1;i<phases.length;i++){if(wk>=phases[i].w){cur=phases[i];curIdx=i;}}return cur?{dose:cur.d,unit:cur.u,phaseIdx:curIdx,totalPhases:phases.length}:null;}
 // ── User protocol state ──────────────────────────────────────────────────────
 // ── Build WEEKLY from protocol ───────────────────────────────────────────────
 function buildWeeklyFromProtocol(proto){
@@ -339,17 +373,19 @@ function buildWeeklyFromProtocol(proto){
     var dot=p.dot||'#888';
     var startDate=p.start_date?parseLocalDate(p.start_date):null;
     var endDate=p.end_date?parseLocalDate(p.end_date):null;
+    var eff=_effectiveDose(p,proto.cycle_start);
+    var rampNote=eff&&eff.totalPhases>1?(eff.phaseIdx<eff.totalPhases-1?' ↑ wk '+(p.dose_phases.slice().sort(function(a,b){return a.w-b.w;})[eff.phaseIdx+1]||{w:'?'}).w+' escalates':''):'';
     if(times.includes('AM')&&times.includes('PM')){
-      var uAm=p.unit_am||'';var uPm=p.unit_pm||'';
-      var dAm=(p.dose_am||p.dose||'')+(uAm?' '+uAm:'');
-      var dPm=(p.dose_pm||p.dose||'')+(uPm?' '+uPm:'');
-      built.push({id:p.id+'-am',name:p.name,detail:dAm+(p.note_am?' — '+p.note_am:' — fasted AM'),dow:days,time:'AM',dot:dot,startDate:startDate,endDate:endDate});
-      built.push({id:p.id+'-pm',name:p.name,detail:dPm+(p.note_pm?' — '+p.note_pm:' — pre-sleep PM'),dow:days,time:'PM',dot:dot,startDate:startDate,endDate:endDate});
+      var uAm=eff?eff.unit:(p.unit_am||'');var uPm=eff?eff.unit:(p.unit_pm||'');
+      var dAm=(eff?eff.dose:(p.dose_am||p.dose||''))+(uAm?' '+uAm:'');
+      var dPm=(eff?eff.dose:(p.dose_pm||p.dose||''))+(uPm?' '+uPm:'');
+      built.push({id:p.id+'-am',name:p.name,detail:dAm+(p.note_am?' — '+p.note_am:' — fasted AM')+rampNote,dow:days,time:'AM',dot:dot,startDate:startDate,endDate:endDate});
+      built.push({id:p.id+'-pm',name:p.name,detail:dPm+(p.note_pm?' — '+p.note_pm:' — pre-sleep PM')+rampNote,dow:days,time:'PM',dot:dot,startDate:startDate,endDate:endDate});
     } else {
       var t=times[0]||'AM';
-      var u=t==='AM'?(p.unit_am||''):(p.unit_pm||'');
-      var dose=(t==='AM'?(p.dose_am||p.dose||''):(p.dose_pm||p.dose||''))+(u?' '+u:'');
-      built.push({id:p.id,name:p.name,detail:dose+(p.note?' — '+p.note:''),dow:days,time:t,dot:dot,startDate:startDate,endDate:endDate});
+      var u=eff?eff.unit:(t==='AM'?(p.unit_am||''):(p.unit_pm||''));
+      var dose=(eff?eff.dose:(t==='AM'?(p.dose_am||p.dose||''):(p.dose_pm||p.dose||'')))+(u?' '+u:'');
+      built.push({id:p.id,name:p.name,detail:dose+(p.note?' — '+p.note:'')+rampNote,dow:days,time:t,dot:dot,startDate:startDate,endDate:endDate});
     }
   });
   return built;
