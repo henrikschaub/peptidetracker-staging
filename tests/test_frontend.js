@@ -24,7 +24,7 @@ const patchedScript = rawScript
   .replace('let WEEKLY=',             'var WEEKLY=')
   .replace('let _wiz=',               'var _wiz=')
   .replace('let _userStacks=',        'var _userStacks=')
-  .replace('let _activeStackIndex=',  'var _activeStackIndex=')
+  .replace('let _activeStackIndices=', 'var _activeStackIndices=')
   .replace('let _stacksLoaded=',      'var _stacksLoaded=')
   .replace('let _userWeight=',        'var _userWeight=')
   .replace('var _wizOverlay=',        'var _wizOverlay=')
@@ -180,7 +180,7 @@ check('synth: permanent+timed entry → has AM+PM times',
 // ── Stack Store state & functions ─────────────────────────────────────────────
 console.log('\n── Stack Store ────────────────────────────────────────────');
 check('_userStacks defined',               Array.isArray(G._userStacks));
-check('_activeStackIndex defined',         typeof G._activeStackIndex==='number');
+check('_activeStackIndices defined',        Array.isArray(G._activeStackIndices));
 check('_stacksLoaded defined',             typeof G._stacksLoaded!=='undefined');
 check('loadUserStacks defined',            typeof G.loadUserStacks==='function');
 check('saveStacksToBackend defined',       typeof G.saveStacksToBackend==='function');
@@ -215,7 +215,7 @@ const testStack = {
   ],
   trt:{enabled:true,compound:'Nebido',injections:[{date:'2026-06-01',label:'Inj 1',dose:'250mg'}]}
 };
-G._userStacks=[testStack];G._activeStackIndex=0;
+G._userStacks=[testStack];G._activeStackIndices=[0];
 G.editStackWithCycle(0);
 check('editStack: editMode=true',          G._wiz.editMode===true);
 check('editStack: stackIndex=0',           G._wiz.stackIndex===0);
@@ -251,7 +251,7 @@ check('wizSetStackName updates _wiz', G._wiz.stackName==='My New Stack');
 
 // ── updateWEEKLY from active stack ────────────────────────────────────────────
 console.log('\n── updateWEEKLY ───────────────────────────────────────────');
-G._userStacks=[testStack];G._activeStackIndex=0;
+G._userStacks=[testStack];G._activeStackIndices=[0];
 G.updateWEEKLY();
 check('updateWEEKLY builds WEEKLY',   G.WEEKLY.length>0,                        `got ${G.WEEKLY.length}`);
 check('WEEKLY contains cjc-am',       G.WEEKLY.some(w=>w.id==='cjc-am'));
@@ -281,7 +281,7 @@ var SAT=new Date(2026,5,13); // Saturday  (dow 6)
 const retaStack={name:'Reta Only',peptides:[
   {id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0,3],times:['AM'],dose_am:'3',unit_am:'mg',active:true},
 ]};
-G._userStacks=[retaStack];G._activeStackIndex=0;G.updateWEEKLY();
+G._userStacks=[retaStack];G._activeStackIndices=[0];G.updateWEEKLY();
 check('reta: WEEKLY entry present',           G.WEEKLY.some(w=>w.id==='retatrutide'));
 check('reta: shows on Sunday (dow 0)',        dosesForDate(SUN,G.WEEKLY).some(d=>d.name==='Retatrutide'));
 check('reta: shows on Wednesday (dow 3)',     dosesForDate(WED,G.WEEKLY).some(d=>d.name==='Retatrutide'));
@@ -294,7 +294,7 @@ check('reta: dose id format YYYY-MM-DD',       dosesForDate(SUN,G.WEEKLY)[0]?.id
 const cjcStack={name:'CJC Stack',peptides:[
   {id:'cjc-ipa',name:'CJC-1295 / IPA',dot:'#3cffa0',days:[0,1,2,3,4,5,6],times:['AM','PM'],dose_am:'4',dose_pm:'5',unit_am:'IU',unit_pm:'IU',active:true},
 ]};
-G._userStacks=[cjcStack];G._activeStackIndex=0;G.updateWEEKLY();
+G._userStacks=[cjcStack];G._activeStackIndices=[0];G.updateWEEKLY();
 check('cjc: 2 WEEKLY entries (AM+PM)',        G.WEEKLY.filter(w=>w.name.includes('CJC')).length===2);
 check('cjc-am: appears every day',           [SUN,MON,WED,SAT].every(d=>dosesForDate(d,G.WEEKLY).some(x=>x.id.startsWith('cjc-ipa-am'))));
 check('cjc-pm: appears every day',           [SUN,MON,WED,SAT].every(d=>dosesForDate(d,G.WEEKLY).some(x=>x.id.startsWith('cjc-ipa-pm'))));
@@ -306,7 +306,7 @@ const mixedStack={name:'Mixed',peptides:[
   {id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0,3],times:['AM'],dose_am:'3',unit_am:'mg',active:true},
   {id:'ipamorelin', name:'Ipamorelin', dot:'#3cffa0',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'200',unit_am:'mcg',active:false},
 ]};
-G._userStacks=[mixedStack];G._activeStackIndex=0;G.updateWEEKLY();
+G._userStacks=[mixedStack];G._activeStackIndices=[0];G.updateWEEKLY();
 check('inactive peptide excluded from WEEKLY',!G.WEEKLY.some(w=>w.name==='Ipamorelin'));
 check('active peptide still in WEEKLY',       G.WEEKLY.some(w=>w.name==='Retatrutide'));
 
@@ -315,7 +315,7 @@ var FUTURE=new Date(2026,11,1); // far future
 const futureStack={name:'Future',peptides:[
   {id:'semaglutide',name:'Semaglutide',dot:'#e8ff3c',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'0.5',unit_am:'mg',start_date:'2026-12-01',active:true},
 ]};
-G._userStacks=[futureStack];G._activeStackIndex=0;G.updateWEEKLY();
+G._userStacks=[futureStack];G._activeStackIndices=[0];G.updateWEEKLY();
 check('future startDate: absent today (June)',!dosesForDate(SUN,G.WEEKLY).some(d=>d.name==='Semaglutide'));
 check('future startDate: shows on start day', dosesForDate(FUTURE,G.WEEKLY).some(d=>d.name==='Semaglutide'));
 
@@ -323,7 +323,7 @@ check('future startDate: shows on start day', dosesForDate(FUTURE,G.WEEKLY).some
 const expiredStack={name:'Expired',peptides:[
   {id:'aod9604',name:'AOD9604',dot:'#e8ff3c',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'300',unit_am:'mcg',end_date:'2026-05-31',active:true},
 ]};
-G._userStacks=[expiredStack];G._activeStackIndex=0;G.updateWEEKLY();
+G._userStacks=[expiredStack];G._activeStackIndices=[0];G.updateWEEKLY();
 check('expired endDate: absent on June 7',   !dosesForDate(SUN,G.WEEKLY).some(d=>d.name==='AOD9604'));
 check('expired endDate: present on May 30',  dosesForDate(new Date(2026,4,30),G.WEEKLY).some(d=>d.name==='AOD9604'));
 
@@ -331,10 +331,10 @@ check('expired endDate: present on May 30',  dosesForDate(new Date(2026,4,30),G.
 const stackA={name:'Stack A',peptides:[{id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0],times:['AM'],dose_am:'3',unit_am:'mg',active:true}]};
 const stackB={name:'Stack B',peptides:[{id:'semaglutide', name:'Semaglutide',dot:'#f59e0b',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'0.5',unit_am:'mg',active:true}]};
 G._userStacks=[stackA,stackB];
-G._activeStackIndex=0;G.updateWEEKLY();
+G._activeStackIndices=[0];G.updateWEEKLY();
 check('active stack A: shows Reta on Sunday', dosesForDate(SUN,G.WEEKLY).some(d=>d.name==='Retatrutide'));
 check('active stack A: no Sema',              !dosesForDate(SUN,G.WEEKLY).some(d=>d.name==='Semaglutide'));
-G._activeStackIndex=1;G.updateWEEKLY();
+G._activeStackIndices=[1];G.updateWEEKLY();
 check('active stack B: shows Sema on Sunday', dosesForDate(SUN,G.WEEKLY).some(d=>d.name==='Semaglutide'));
 check('active stack B: no Reta',              !dosesForDate(SUN,G.WEEKLY).some(d=>d.name==='Retatrutide'));
 
@@ -632,7 +632,7 @@ G.wizSave().then(async ()=>{
   console.log('\n── _getDynamicTRTDoses: cycle_length end-date guard ────────');
   {
     const savedStacks  = G._userStacks;
-    const savedIdx     = G._activeStackIndex;
+    const savedIdx     = G._activeStackIndices.slice();
     // Stack with 8-week cycle starting May 1 → cycle ends June 26
     const trtStack = {
       name: 'TRT Test',
@@ -642,7 +642,7 @@ G.wizSave().then(async ()=>{
       peptides: []
     };
     G._userStacks = [trtStack];
-    G._activeStackIndex = 0;
+    G._activeStackIndices = [0];
 
     // Day 0: cycle start → should inject (0 % 7 === 0)
     const d0 = new Date(2026, 4, 1);
@@ -703,7 +703,7 @@ G.wizSave().then(async ()=>{
     check('TRT: trt.enabled=false → no doses',            rOff.length === 0, `got ${rOff.length} doses`);
 
     G._userStacks       = savedStacks;
-    G._activeStackIndex = savedIdx;
+    G._activeStackIndices = savedIdx;
   }
 
   // ── loadUserStacks: WEEKLY updated (post-load re-render coverage) ─────────────
