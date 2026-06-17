@@ -175,6 +175,7 @@ function renderStackEditor(){
         });
       }
     }
+    html+=_buildEnhancementCycleSection();
     html+='<div style="display:flex;gap:10px;margin-top:24px;padding-bottom:40px;">';
     html+='<button onclick="buildStackStore()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted2);border-radius:8px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Close</button>';
     html+='<button onclick="_editReadOnly=false;renderStackEditor()" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Edit</button>';
@@ -669,6 +670,137 @@ function _renderTRTViewTab(st){
 }
 function setStackViewTab(t){_stackViewTab=t;renderStackEditor();}
 function setEditInnerTab(t){_collectEditInputs();_editInnerTab=t;renderStackEditor();}
+function _buildEnhancementCycleSection(){
+  var c=_cycle;
+  var h='<div class="wiz-section" style="margin-top:24px;">Enhancement Cycle</div>';
+  if(!c||!c.startDate){
+    h+='<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:20px;text-align:center;margin-bottom:16px;">';
+    h+='<div style="font-size:13px;color:var(--muted2);margin-bottom:10px;">No enhancement cycle active</div>';
+    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.5;margin-bottom:14px;">Track AAS compounds, bloodwork schedule and E2 management alongside your peptide stack.</div>';
+    h+='<button onclick="cycleWizardOpen()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Start Enhancement Cycle</button>';
+    h+='</div>';
+    return h;
+  }
+  var startD=parseLocalDate(c.startDate);
+  var wksOn=Math.max(0,Math.floor((NOW-startD)/604800000));
+  var phases=[['foundational','Foundational'],['synergy','Synergy'],['progression','Progression']];
+  var phaseCol={foundational:'var(--accent)',synergy:'var(--accent3)',progression:'var(--accent2)'};
+  var curPhase=c.phase||'foundational';
+  h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px;">';
+  h+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);margin-bottom:8px;">Phase</div>';
+  h+='<div style="display:flex;gap:6px;margin-bottom:10px;">';
+  phases.forEach(function(ph){
+    var sel=curPhase===ph[0];var col=phaseCol[ph[0]];
+    h+='<button onclick="stackSetCyclePhase(\''+ph[0]+'\')" style="flex:1;padding:7px 4px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid '+(sel?col:'var(--border)')+';background:'+(sel?'rgba(255,255,255,0.07)':'transparent')+';color:'+(sel?col:'var(--muted2)')+';">'+ph[1]+'</button>';
+  });
+  h+='</div>';
+  h+='<div style="font-size:12px;color:var(--muted2);">Week '+wksOn+' of '+(c.cycleLengthWeeks||20)+' · Started '+fmtDate(startD)+'</div>';
+  h+='</div>';
+  var bw=c.bloodwork||[];
+  if(bw.length){
+    h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px;">';
+    h+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);margin-bottom:10px;">Bloodwork Schedule</div>';
+    bw.forEach(function(entry,bi){
+      var d=new Date(startD.getTime());d.setDate(d.getDate()+entry.week*7);
+      var past=d<NOW;var today=d.toDateString()===NOW.toDateString();
+      var dotCol=entry.done?'var(--muted2)':today?'var(--accent)':past?'rgba(255,255,255,0.15)':'var(--accent4)';
+      var nameCol=entry.done?'var(--muted2)':today?'var(--accent)':'var(--text)';
+      var last=bi===bw.length-1;
+      h+='<div style="display:flex;align-items:center;gap:10px;padding:5px 0;'+(last?'':'border-bottom:1px solid var(--border);')+'">';
+      h+='<div style="width:8px;height:8px;border-radius:50%;background:'+dotCol+';flex-shrink:0;"></div>';
+      h+='<div style="flex:1;font-size:12px;font-weight:600;color:'+nameCol+';">'+(entry.done?'<s>':'')+entry.label+(entry.done?'</s>':'')+(today?' · TODAY':'')+(entry.done?' ✓':'')+'</div>';
+      h+='<span style="font-size:11px;color:var(--muted2);white-space:nowrap;">Wk '+entry.week+' — '+fmtDate(d)+'</span>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  var cmps=c.compounds||[];
+  h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px;">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+  h+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);">AAS Compounds</div>';
+  h+='<button onclick="stackAddAASCompound()" style="background:none;border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">+ Add</button>';
+  h+='</div>';
+  if(!cmps.length){
+    h+='<div style="font-size:12px;color:var(--muted2);">No compounds — tap + Add to get started.</div>';
+  }else{
+    cmps.forEach(function(x,xi){
+      var last=xi===cmps.length-1;
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'+(last?'':'border-bottom:1px solid var(--border);')+'">';
+      h+='<div style="flex:1;font-size:13px;font-weight:600;color:var(--text);">'+_esc(x.name)+'</div>';
+      h+='<span style="font-size:12px;color:var(--accent);font-weight:700;white-space:nowrap;">'+x.dose+' '+_esc(x.unit)+'</span>';
+      h+='<button onclick="stackRemoveAASCompound('+xi+')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:0 0 0 4px;line-height:1;">&#x2715;</button>';
+      h+='</div>';
+    });
+  }
+  h+='</div>';
+  var hasMast=cmps.some(function(x){return x.name&&x.name.toLowerCase().indexOf('masteron')>=0;});
+  var hasPrimo=cmps.some(function(x){return x.name&&(x.name.toLowerCase().indexOf('primobolan')>=0||x.name.toLowerCase().indexOf('primo')>=0);});
+  h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px;">';
+  h+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);margin-bottom:8px;">E2 Management</div>';
+  if(hasMast){
+    h+='<div style="font-size:12px;font-weight:700;color:var(--accent3);margin-bottom:4px;">Test + Masteron</div>';
+    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;">Masteron blocks aromatase competitively — pseudo-AI effect. Maintains cardioprotective E2 while reducing water retention.</div>';
+  }else if(hasPrimo){
+    h+='<div style="font-size:12px;font-weight:700;color:var(--accent3);margin-bottom:4px;">Test + Primo</div>';
+    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;">Primobolan (DHT-derived) does not aromatize. Monitor for low-E2 symptoms — joint pain, flat affect, low libido.</div>';
+  }else if(cmps.length){
+    h+='<div style="font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:4px;">Test-only — monitor E2</div>';
+    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;">Target 20-40 pg/mL. Bloat + mood swings = high E2. Flat libido + joint ache = low E2. Adjust compound ratios, not AIs.</div>';
+  }else{
+    h+='<div style="font-size:12px;color:var(--muted2);">Add compounds above to see E2 strategy.</div>';
+  }
+  h+='</div>';
+  return h;
+}
+async function stackSetCyclePhase(phase){
+  var c=_cycle;if(!c||!c.id)return;
+  c.phase=phase;cycleCacheSave(c);renderStackEditor();
+  try{await fetch(AGENT_URL+'/cycles/'+c.id,{method:'PATCH',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({phase:phase})});}catch(e){}
+}
+function stackAddAASCompound(){
+  var c=_cycle;if(!c||!c.id){alert('No active enhancement cycle');return;}
+  var ins='padding:10px 12px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:14px;width:100%;box-sizing:border-box;font-family:inherit;outline:none;';
+  var overlay=document.createElement('div');
+  overlay.id='aas-add-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
+  var sheet=document.createElement('div');
+  sheet.style.cssText='background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px;';
+  sheet.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--accent);">ADD COMPOUND</div><button onclick="document.getElementById(\'aas-add-overlay\').remove()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1;">&#x2715;</button></div>'
+    +'<div style="display:grid;gap:10px;">'
+    +'<input id="aas-name" type="text" placeholder="Compound name (e.g. Testosterone Enanthate)" style="'+ins+'">'
+    +'<div style="display:flex;gap:8px;">'
+    +'<input id="aas-dose" type="number" min="0" step="25" placeholder="Dose" style="flex:1;padding:10px 12px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:14px;font-family:inherit;outline:none;">'
+    +'<select id="aas-unit" style="flex:1;padding:10px 8px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:13px;font-family:inherit;"><option>mg/week</option><option>mg/day</option><option>mg/EOD</option></select>'
+    +'</div>'
+    +'<button onclick="stackConfirmAddAAS()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Add Compound</button>'
+    +'</div>';
+  overlay.appendChild(sheet);document.body.appendChild(overlay);
+  var nameIn=document.getElementById('aas-name');if(nameIn)nameIn.focus();
+}
+async function stackConfirmAddAAS(){
+  var c=_cycle;if(!c||!c.id)return;
+  var nameEl=document.getElementById('aas-name');
+  var doseEl=document.getElementById('aas-dose');
+  var unitEl=document.getElementById('aas-unit');
+  if(!nameEl)return;
+  var name=(nameEl.value||'').trim();
+  if(!name){nameEl.style.borderColor='var(--danger)';return;}
+  var dose=parseFloat(doseEl?doseEl.value:0)||0;
+  var unit=(unitEl?unitEl.value:'')||'mg/week';
+  var overlay=document.getElementById('aas-add-overlay');if(overlay)overlay.remove();
+  c.compounds=(c.compounds||[]).concat([{name:name,dose:dose,unit:unit,active:true,startWeek:0}]);
+  cycleCacheSave(c);renderStackEditor();
+  try{await fetch(AGENT_URL+'/cycles/'+c.id,{method:'PATCH',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({compounds:c.compounds})});}catch(e){}
+}
+async function stackRemoveAASCompound(idx){
+  var c=_cycle;if(!c||!c.id)return;
+  var name=(c.compounds&&c.compounds[idx])?c.compounds[idx].name:'this compound';
+  if(!confirm('Remove '+name+'?'))return;
+  c.compounds=(c.compounds||[]).filter(function(_,i){return i!==idx;});
+  cycleCacheSave(c);renderStackEditor();
+  try{await fetch(AGENT_URL+'/cycles/'+c.id,{method:'PATCH',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({compounds:c.compounds})});}catch(e){}
+}
 // Generate TRT dose items for a given date from the active stack's TRT config
 function _getDynamicTRTDoses(d,withIds){
   var result=[];
