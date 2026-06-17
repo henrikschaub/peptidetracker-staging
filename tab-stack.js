@@ -63,7 +63,7 @@ async function wizSave(){
   } else {
     _userStacks.push(proto);
     _wiz.stackIndex=_userStacks.length-1; // prevent double-push on retry
-    if(_userStacks.length===1)_activeStackIndex=0;
+    if(_userStacks.length===1)_activeStackIndices=[0];
   }
   _userStacks=_userStacks.slice(0,4);
   var res=await saveStacksToBackend();
@@ -125,7 +125,7 @@ function _deriveEarliestStartDate(peptides){
 function renderStackEditor(){
   var body=document.getElementById('stack-body');if(!body)return;
   var st=_editBuf;var cycle=st.cycle_length||12;
-  var isActive=_editIdx===_activeStackIndex;
+  var isActive=_isActiveStack(_editIdx);
   var _effCs=(function(){var _ec=_deriveEarliestStartDate(st.peptides);var _sc=st.cycle_start||'';if(_ec&&(!_sc||_ec<_sc))_sc=_ec;if(_sc){var _csp=_sc.split('-');_sc=_csp[0]+'-'+(_csp[1]||'1').padStart(2,'0')+'-'+(_csp[2]||'1').padStart(2,'0');}return _sc;})();
   var html='';
 
@@ -179,7 +179,7 @@ function renderStackEditor(){
     html+='<div style="display:flex;gap:10px;margin-top:24px;padding-bottom:40px;">';
     html+='<button onclick="buildStackStore()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted2);border-radius:8px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Close</button>';
     html+='<button onclick="_editReadOnly=false;renderStackEditor()" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Edit</button>';
-    if(!isActive)html+='<button onclick="useStack('+_editIdx+')" style="flex:1;background:var(--accent);border:none;color:#000;border-radius:8px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Use Stack</button>';
+    html+='<button onclick="toggleStack('+_editIdx+');renderStackEditor()" style="flex:1;background:'+(isActive?'var(--surface2)':'var(--accent)')+';border:'+(isActive?'1px solid var(--border)':'none')+';color:'+(isActive?'var(--danger)':'#000')+';border-radius:8px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">'+(isActive?'Deactivate':'Activate')+'</button>';
     html+='</div>';
     html+='<div style="padding-bottom:20px;">';
     html+='<button onclick="deleteStack('+_editIdx+')" style="width:100%;background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;opacity:0.7;">Delete Stack</button>';
@@ -311,7 +311,7 @@ function editPickPeptide(id){
 async function saveEditBuf(){
   _collectEditInputs();
   _userStacks[_editIdx]=_editBuf;
-  if(_editIdx===_activeStackIndex){updateWEEKLY();buildWeekStrip();buildToday();}
+  if(_isActiveStack(_editIdx)){updateWEEKLY();buildWeekStrip();buildToday();}
   await saveStacksToBackend();
   buildStackStore();
   buildTimeline();
@@ -814,20 +814,26 @@ async function stackRemoveAASCompound(idx){
 // Generate TRT dose items for a given date from the active stack's TRT config
 function _getDynamicTRTDoses(d,withIds){
   var result=[];
-  var st=_userStacks[_activeStackIndex];
-  if(!st||!st.trt||!st.trt.enabled||!st.cycle_start)return result;
-  var start=parseLocalDate(st.cycle_start);
-  var days=Math.floor((d-start)/86400000);
-  if(days<0)return result;
-  if(st.cycle_length&&days>=st.cycle_length*7)return result;
-  (st.trt.compounds||[]).forEach(function(c){
-    if(c.end_date&&d>parseLocalDate(c.end_date))return;
-    var cat=TRT_CAT.find(function(t){return t.id===c.id;});
-    var freqDays=c.freqUnit==='weeks'?(c.freqVal||1)*7:(c.freqVal||1);
-    if(freqDays<=0||days%freqDays!==0)return;
-    var entry={name:c.name+(c.dose?' '+c.dose+(c.unit||'mg'):''),detail:'TRT injection — IM',time:null,dot:cat?cat.dot:'#e8a020'};
-    if(withIds)entry.id=c.id+'_'+dateKey(d);
-    result.push(entry);
+  var seenIds={};
+  _activeStackIndices.forEach(function(si){
+    var st=_userStacks[si];
+    if(!st||!st.trt||!st.trt.enabled||!st.cycle_start)return;
+    var start=parseLocalDate(st.cycle_start);
+    var days=Math.floor((d-start)/86400000);
+    if(days<0)return;
+    if(st.cycle_length&&days>=st.cycle_length*7)return;
+    (st.trt.compounds||[]).forEach(function(c){
+      if(c.end_date&&d>parseLocalDate(c.end_date))return;
+      var cat=TRT_CAT.find(function(t){return t.id===c.id;});
+      var freqDays=c.freqUnit==='weeks'?(c.freqVal||1)*7:(c.freqVal||1);
+      if(freqDays<=0||days%freqDays!==0)return;
+      var key=c.id+'_'+si;
+      if(seenIds[key])return;
+      seenIds[key]=true;
+      var entry={name:c.name+(c.dose?' '+c.dose+(c.unit||'mg'):''),detail:'TRT injection — IM',time:null,dot:cat?cat.dot:'#e8a020'};
+      if(withIds)entry.id=c.id+'_'+si+'_'+dateKey(d);
+      result.push(entry);
+    });
   });
   return result;
 }

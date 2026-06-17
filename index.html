@@ -237,7 +237,8 @@ let _userProtocol=null;
 let _protocolLoaded=false;
 let _wiz={step:0,goals:[],peptides:[],trt:{enabled:false,compounds:[]},editMode:false};
 var _wizOverlay=null;
-let _userStacks=[];let _activeStackIndex=0;let _stacksLoaded=false;
+let _userStacks=[];let _activeStackIndices=[0];let _stacksLoaded=false;
+function _isActiveStack(i){return _activeStackIndices.indexOf(i)>=0;}
 let _stackViewTab='peptides';let _editInnerTab='peptides';
 let _reconStackIdx=0;let _reconState={};
 const TAB_LABELS={today:'Today',stacks:'Stacks',recon:'Recon',schedule:'Schedule',macros:'Macros',timeline:'Timeline',body:'Body Comp'};
@@ -358,9 +359,9 @@ async function loadUserStacks(){
     if(r.ok){
       var data=await r.json();
       _userStacks=data.stacks||[];
-      _activeStackIndex=data.active_index||0;
+      _activeStackIndices=data.active_indices||(data.active_index!=null?[data.active_index]:[0]);
       // Cache to localStorage for offline fallback
-      try{localStorage.setItem('stacks_cache',JSON.stringify({stacks:_userStacks,active_index:_activeStackIndex}));}catch(e){}
+      try{localStorage.setItem('stacks_cache',JSON.stringify({stacks:_userStacks,active_indices:_activeStackIndices}));}catch(e){}
     } else {
       throw new Error('Endpoint unavailable');
     }
@@ -368,14 +369,14 @@ async function loadUserStacks(){
     // Try localStorage cache before falling back to synthesized stack
     try{
       var cached=JSON.parse(localStorage.getItem('stacks_cache')||'null');
-      if(cached&&cached.stacks&&cached.stacks.length){_userStacks=cached.stacks;_activeStackIndex=cached.active_index||0;}
-      else{_userStacks=[];_activeStackIndex=0;}
-    }catch(e2){_userStacks=[];_activeStackIndex=0;}
+      if(cached&&cached.stacks&&cached.stacks.length){_userStacks=cached.stacks;_activeStackIndices=cached.active_indices||(cached.active_index!=null?[cached.active_index]:[0]);}
+      else{_userStacks=[];_activeStackIndices=[0];}
+    }catch(e2){_userStacks=[];_activeStackIndices=[0];}
   }
   if(!_userStacks.length){
     _userStacks=[_synthesizeProtocol(WEEKLY_DEFAULT)];
     _userStacks[0].name='My Stack';
-    _activeStackIndex=0;
+    _activeStackIndices=[0];
   }
   _userStacks.forEach(function(stack){
     if(stack.cycle_start){var _csp=stack.cycle_start.split('-');stack.cycle_start=_csp[0]+'-'+(_csp[1]||'1').padStart(2,'0')+'-'+(_csp[2]||'1').padStart(2,'0');}
@@ -422,15 +423,20 @@ async function loadUserStacks(){
 }
 // ── Update WEEKLY from active stack ──────────────────────────────────────────
 function updateWEEKLY(){
-  if(_userStacks.length&&_activeStackIndex<_userStacks.length){
-    WEEKLY=buildWeeklyFromProtocol(_userStacks[_activeStackIndex]);
-  } else {
-    WEEKLY=WEEKLY_DEFAULT.slice();
-  }
+  var active=_activeStackIndices.filter(function(i){return i>=0&&i<_userStacks.length;});
+  if(!active.length){WEEKLY=WEEKLY_DEFAULT.slice();return;}
+  if(active.length===1){WEEKLY=buildWeeklyFromProtocol(_userStacks[active[0]]);return;}
+  var seen={};WEEKLY=[];
+  active.forEach(function(i){
+    buildWeeklyFromProtocol(_userStacks[i]).forEach(function(item){
+      var key=item.id||item.name;
+      if(!seen[key]){seen[key]=true;WEEKLY.push(item);}
+    });
+  });
 }
 // ── Save all stacks to backend ───────────────────────────────────────────────
 async function saveStacksToBackend(){
-  var payload={stacks:_userStacks,active_index:_activeStackIndex};
+  var payload={stacks:_userStacks,active_index:_activeStackIndices[0]||0,active_indices:_activeStackIndices};
   var body=JSON.stringify(payload);
   // localStorage is the primary store — always write first so data is never lost
   try{localStorage.setItem('stacks_cache',body);}catch(e){}
@@ -448,10 +454,26 @@ async function saveStacksToBackend(){
   // Backend unavailable but data is safe in localStorage
   return {ok:true,synced:false,code:lastCode};
 }
-// ── Switch active stack ──────────────────────────────────────────────────────
+// ── Toggle a stack in/out of the active set ──────────────────────────────────
+async function toggleStack(idx){
+  if(idx<0||idx>=_userStacks.length)return;
+  var pos=_activeStackIndices.indexOf(idx);
+  if(pos===-1){
+    _activeStackIndices.push(idx);
+  } else {
+    if(_activeStackIndices.length===1)return; // keep at least one active
+    _activeStackIndices.splice(pos,1);
+  }
+  updateWEEKLY();
+  await saveStacksToBackend();
+  buildWeekStrip();
+  buildToday();
+  buildStackStore();
+}
+// ── Activate a single stack exclusively (used from detail view header) ───────
 async function useStack(idx){
   if(idx>=0&&idx<_userStacks.length){
-    _activeStackIndex=idx;
+    _activeStackIndices=[idx];
     updateWEEKLY();
     await saveStacksToBackend();
     buildWeekStrip();
@@ -464,7 +486,9 @@ async function deleteStack(idx){
   if(!confirm('Delete this stack? This cannot be undone.'))return;
   if(idx>=0&&idx<_userStacks.length){
     _userStacks.splice(idx,1);
-    if(_activeStackIndex>=_userStacks.length){_activeStackIndex=Math.max(0,_userStacks.length-1);}
+    _activeStackIndices=_activeStackIndices.filter(function(i){return i!==idx;}).map(function(i){return i>idx?i-1:i;});
+    if(!_activeStackIndices.length)_activeStackIndices=[0];
+    if(_activeStackIndices[0]>=_userStacks.length)_activeStackIndices=[Math.max(0,_userStacks.length-1)];
     await saveStacksToBackend();
     updateWEEKLY();
     buildWeekStrip();
@@ -486,11 +510,11 @@ function buildStackStore(){
     var st=_userStacks[i];
     var pCount=st.peptides?st.peptides.length:0;
     var hasTrt=st.trt&&(st.trt.compound||(st.trt.compounds&&st.trt.compounds.length));
-    var isActive=i===_activeStackIndex;
+    var isActive=_isActiveStack(i);
     html+='<div class="stack-card'+(isActive?' active':'')+'" onclick="viewStack('+i+')">';
     html+='<div class="stack-card-header">';
     html+='<div style="flex:1;min-width:0;">';
-    html+='<button onclick="event.stopPropagation();useStack('+i+')" style="background:'+(isActive?'var(--accent)':'#444')+';color:'+(isActive?'#000':'#aaa')+';border:none;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700;text-transform:uppercase;cursor:pointer;font-family:inherit;display:inline-block;margin-bottom:3px;letter-spacing:0.5px;">'+(isActive?'Active':'Inactive')+'</button>';
+    html+='<button onclick="event.stopPropagation();toggleStack('+i+')" style="background:'+(isActive?'var(--accent)':'#444')+';color:'+(isActive?'#000':'#aaa')+';border:none;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700;text-transform:uppercase;cursor:pointer;font-family:inherit;display:inline-block;margin-bottom:3px;letter-spacing:0.5px;">'+(isActive?'Active':'Inactive')+'</button>';
     html+='<div class="stack-card-name">'+_esc(st.name||'Stack '+(i+1))+'</div>';
     html+='</div>';
     html+='</div>';
