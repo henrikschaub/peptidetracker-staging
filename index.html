@@ -30,7 +30,7 @@
   <div style="height:4px"></div>
   <div class="tabs">
     <div class="tab active" id="tab-btn-today"    onclick="switchTab('today',this)">Today</div>
-    <div class="tab"        id="tab-btn-cycles"   onclick="switchTab('cycles',this)">Cycles</div>
+    <div class="tab"        id="tab-btn-stacks"   onclick="switchTab('stacks',this)">Stacks</div>
     <div class="tab"        id="tab-btn-recon"    onclick="switchTab('recon',this)">Recon</div>
     <div class="tab"        id="tab-btn-schedule" onclick="switchTab('schedule',this)">Schedule</div>
     <div class="tab"        id="tab-btn-macros"   onclick="switchTab('macros',this)">Macros</div>
@@ -51,46 +51,32 @@
       <div id="today-checkin-body" style="display:none"><div class="checklist" id="today-bf-list"></div></div>
     </div>
   </div>
-  <div class="content hidden" id="tab-cycles">
-    <div style="display:flex;gap:6px;padding:4px 20px 8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch">
-      <button id="cycsub-btn-overview" onclick="switchCycSubTab('overview')" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:6px 16px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;letter-spacing:0.5px;flex-shrink:0">Overview</button>
-      <button id="cycsub-btn-peptides" onclick="switchCycSubTab('peptides')" style="background:var(--surface2);color:var(--muted2);border:1px solid var(--border);border-radius:20px;padding:6px 16px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;letter-spacing:0.5px;flex-shrink:0">Peptides</button>
-      <button id="cycsub-btn-steroids" onclick="switchCycSubTab('steroids')" style="background:var(--surface2);color:var(--muted2);border:1px solid var(--border);border-radius:20px;padding:6px 16px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;letter-spacing:0.5px;flex-shrink:0">Steroids</button>
-      <button id="cycsub-btn-hgh" onclick="switchCycSubTab('hgh')" style="background:var(--surface2);color:var(--muted2);border:1px solid var(--border);border-radius:20px;padding:6px 16px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;letter-spacing:0.5px;flex-shrink:0">HGH</button>
-    </div>
-    <div id="cycsub-overview" style="display:flex;flex-direction:column;gap:14px">
-      <div class="card">
-        <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent)"></div><div class="card-title">CYCLE STATUS</div></div><span class="card-badge badge-today" id="cycle-status-badge">—</span></div>
-        <div class="card-body">
-          <div class="info-row"><span class="info-label">Current Phase</span><span class="info-val" id="cycle-phase" style="color:var(--accent)">—</span></div>
-          <div class="divider"></div>
-          <div class="info-row"><span class="info-label">Cycle Start</span><span class="info-val" id="cycle-start">—</span></div>
-          <div class="info-row"><span class="info-label">Weeks Elapsed</span><span class="info-val" id="cycle-weeks" style="color:var(--accent)">—</span></div>
-          <div class="info-row"><span class="info-label">Duration Target</span><span class="info-val" id="cycle-duration">—</span></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">BLOODWORK SCHEDULE</div></div></div>
-        <div class="timeline" id="cycle-bloodwork-body"></div>
-      </div>
-      <button class="reset-btn" onclick="cycleWizardOpen()">Start New Cycle</button>
-    </div>
-    <div id="cycsub-peptides" style="display:none;flex-direction:column;gap:14px">
-      <div id="stack-body"></div>
-    </div>
-    <div id="cycsub-steroids" style="display:none;flex-direction:column;gap:14px">
-      <div class="card">
-        <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3)"></div><div class="card-title">ACTIVE COMPOUNDS</div></div></div>
-        <div class="card-body" id="cycle-compounds-body"></div>
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">E2 MANAGEMENT</div></div></div>
-        <div class="card-body" id="cyc-e2-body"></div>
+  <div class="content hidden" id="tab-stacks">
+    <div id="stack-body"></div>
+    <div class="card">
+      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent)"></div><div class="card-title">CYCLE STATUS</div></div><span class="card-badge badge-today" id="cycle-status-badge">—</span></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-label">Current Phase</span><span class="info-val" id="cycle-phase" style="color:var(--accent)">—</span></div>
+        <div class="divider"></div>
+        <div class="info-row"><span class="info-label">Cycle Start</span><span class="info-val" id="cycle-start">—</span></div>
+        <div class="info-row"><span class="info-label">Weeks Elapsed</span><span class="info-val" id="cycle-weeks" style="color:var(--accent)">—</span></div>
+        <div class="info-row"><span class="info-label">Duration Target</span><span class="info-val" id="cycle-duration">—</span></div>
       </div>
     </div>
-    <div id="cycsub-hgh" style="display:none;flex-direction:column;gap:14px">
-      <div id="cyc-hgh-body"></div>
+    <div class="card">
+      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">BLOODWORK SCHEDULE</div></div></div>
+      <div class="timeline" id="cycle-bloodwork-body"></div>
     </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3)"></div><div class="card-title">ACTIVE COMPOUNDS</div></div></div>
+      <div class="card-body" id="cycle-compounds-body"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">E2 MANAGEMENT</div></div></div>
+      <div class="card-body" id="cyc-e2-body"></div>
+    </div>
+    <div id="cyc-hgh-body"></div>
+    <button class="reset-btn" onclick="cycleWizardOpen()">Start New Cycle</button>
   </div>
   <div class="content hidden" id="tab-schedule">
     <div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">WEEKLY PATTERN</div></div></div><div class="card-body" id="schedule-body"></div></div>
@@ -278,8 +264,8 @@ var _wizOverlay=null;
 let _userStacks=[];let _activeStackIndex=0;let _stacksLoaded=false;
 let _stackViewTab='peptides';let _editInnerTab='peptides';
 let _reconStackIdx=0;let _reconState={};
-const TAB_LABELS={today:'Today',cycles:'Cycles',recon:'Recon',schedule:'Schedule',macros:'Macros',timeline:'Timeline',body:'Body Comp'};
-const TAB_DEFAULTS={today:true,cycles:true,recon:true,schedule:false,macros:false,timeline:true,body:true};
+const TAB_LABELS={today:'Today',stacks:'Stacks',recon:'Recon',schedule:'Schedule',macros:'Macros',timeline:'Timeline',body:'Body Comp'};
+const TAB_DEFAULTS={today:true,stacks:true,recon:true,schedule:false,macros:false,timeline:true,body:true};
 let _tabVis={};let _currentTab='today';
 const GOOGLE_CLIENT_ID='580935445116-sovhqu5i940pjvb3co63af3tm0ekjds8.apps.googleusercontent.com';let _googleToken=localStorage.getItem('google_token')||'';function authHeaders(extra){const h={};if(_googleToken)h['Authorization']='Bearer '+_googleToken;return extra?Object.assign({},h,extra):h;}function unlockApp(){document.getElementById('signin-screen').classList.add('hidden');document.body.classList.remove('locked');document.getElementById('app').classList.add('visible');init();}function onGoogleSignIn(resp){_googleToken=resp.credential;localStorage.setItem('google_token',_googleToken);unlockApp();}function initGoogleAuth(){google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:onGoogleSignIn,auto_select:true,cancel_on_tap_outside:false,locale:'en'});google.accounts.id.renderButton(document.getElementById('g_signin_container'),{theme:'filled_black',size:'large',shape:'pill',text:'sign_in_with',width:260});google.accounts.id.prompt();}const _gsiScript=document.createElement('script');_gsiScript.src='https://accounts.google.com/gsi/client?hl=en';_gsiScript.onload=initGoogleAuth;document.head.appendChild(_gsiScript);
 
@@ -304,7 +290,7 @@ async function syncBodyCompFromAgent(){try{const r=await fetch(AGENT_URL+"/bodyc
 async function pushBodyCompToAgent(entry){try{await fetch(AGENT_URL+"/bodycomp",{method:"POST",headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(entry)});}catch(e){}}
 async function deleteBodyCompFromAgent(date){try{await fetch(AGENT_URL+"/bodycomp/"+date,{method:"DELETE",headers:authHeaders()});}catch(e){}}
 function getWeightForDate(dateStr){if(!weights.length)return null;const target=new Date(dateStr.replace(/-/g,'/'));let best=null,bestDiff=Infinity;for(const w of weights){const diff=Math.abs(target-new Date(w.date.replace(/-/g,'/')));if(diff<bestDiff){bestDiff=diff;best=w.weight;}}return bestDiff<=7*86400000?best:null;}
-function switchTab(id,el){_currentTab=id;localStorage.setItem('pep-last-tab',id);document.querySelectorAll('.content').forEach(c=>c.classList.add('hidden'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).classList.remove('hidden');el.classList.add('active');if(id==='body')setTimeout(bcRender,50);if(id==='settings')loadSettings();if(id==='macros')loadMacros();if(id==='timeline')buildTimeline();if(id==='recon')renderRecon();if(id==='cycles')openCyclesTab();if(id==='body'){var wi=document.getElementById('bc-weight-in');var hi=document.getElementById('bc-height-in');if(wi){var sw=localStorage.getItem('user_weight');var sh=localStorage.getItem('user_height');if(sw)wi.value=sw;if(sh)hi.value=sh;}setBioSex(localStorage.getItem('user_sex')||'male');}}
+function switchTab(id,el){_currentTab=id;localStorage.setItem('pep-last-tab',id);document.querySelectorAll('.content').forEach(c=>c.classList.add('hidden'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).classList.remove('hidden');el.classList.add('active');if(id==='body')setTimeout(bcRender,50);if(id==='settings')loadSettings();if(id==='macros')loadMacros();if(id==='timeline')buildTimeline();if(id==='recon')renderRecon();if(id==='stacks'){buildStackStore();openCyclesTab();}if(id==='body'){var wi=document.getElementById('bc-weight-in');var hi=document.getElementById('bc-height-in');if(wi){var sw=localStorage.getItem('user_weight');var sh=localStorage.getItem('user_height');if(sw)wi.value=sw;if(sh)hi.value=sh;}setBioSex(localStorage.getItem('user_sex')||'male');}}
 function logout(){_googleToken='';localStorage.removeItem('google_token');if(window.google&&google.accounts)google.accounts.id.disableAutoSelect();document.getElementById('app').classList.remove('visible');document.getElementById('signin-screen').classList.remove('hidden');}
 async function loadSettings(){document.getElementById('s-version').textContent='v'+VERSION;try{const p=JSON.parse(atob(_googleToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));document.getElementById('s-email').textContent=p.email||'—';}catch{}const localDoseKeys=Object.keys(localStorage).filter(k=>k.startsWith('proto-chk-'));const localDoseCount=localDoseKeys.reduce((n,k)=>{try{return n+(JSON.parse(localStorage.getItem(k)||'[]').length);}catch{return n;}},0);document.getElementById('s-local-doses').textContent=localDoseCount+' doses ('+localDoseKeys.length+' days)';const bcData=getData('bc_log',[]);document.getElementById('s-local-bc').textContent=bcData.length+' entries';const aDot=document.getElementById('s-agent-dot');const sDot=document.getElementById('s-sync-dot');try{const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),5000);const r=await fetch(AGENT_URL+'/health',{signal:ctrl.signal});aDot.className='agent-dot '+(r.ok?'up':'down');document.getElementById('s-agent-label').textContent=r.ok?'Online':'Offline';}catch(e){aDot.className='agent-dot down';document.getElementById('s-agent-label').textContent='Offline';}try{const ctrl2=new AbortController();setTimeout(()=>ctrl2.abort(),5000);const r=await fetch(AGENT_URL+'/peptide-log',{headers:authHeaders(),signal:ctrl2.signal});if(r.ok){const remote=await r.json();document.getElementById('s-remote-doses').textContent=remote.length+' entries';const remoteDates=new Set(remote.map(e=>e.date));const unsynced=localDoseKeys.filter(k=>{const date=k.replace('proto-chk-','');const doses=JSON.parse(localStorage.getItem(k)||'[]');return doses.length>0&&!remoteDates.has(date);}).length;sDot.className='agent-dot '+(unsynced===0?'up':'warn');document.getElementById('s-sync-label').textContent=unsynced===0?'All synced':unsynced+' day(s) not on backend';}else{sDot.className='agent-dot down';document.getElementById('s-sync-label').textContent='Backend error';}}catch(e){sDot.className='agent-dot down';document.getElementById('s-sync-label').textContent='Check failed';}buildTabsSettingsCard();buildAppearanceCard();checkForUpdate();const _mEl=document.getElementById('s-milestones-count');if(_mEl&&_mEl.textContent==='—')_mEl.textContent=MILESTONES.length+' events';}
 const PROMOTE_STEPS=['Checkout staging','Checkout prod','Sync files into prod branch','Open PR on prod','Enable auto-merge on the PR'];let _prodVer=null;function pushToProd(){const btn=document.getElementById('push-to-prod-btn');const statusEl=document.getElementById('push-to-prod-status');if(btn){btn.textContent='Pushing...';btn.disabled=true;}_prodVer=null;renderPromoteStatus({status:'queued',steps:PROMOTE_STEPS.map(n=>({name:n,status:'queued',conclusion:null}))},statusEl);fetch(AGENT_URL+'/promote-to-prod',{method:'POST',headers:authHeaders()}).then(r=>{if(!r.ok)return r.json().catch(()=>({})).then(j=>{throw new Error('HTTP '+r.status+(j.detail?' — '+j.detail:''));});return r.json();}).then(data=>{pollPromoteStatus(0,data.dispatched_at||new Date().toISOString().replace(/\.\d{3}Z$/,'Z'));}).catch(e=>{if(btn){btn.textContent='Push to Prod';btn.disabled=false;}if(statusEl)statusEl.textContent='Failed: '+e.message;});}

@@ -1,6 +1,5 @@
 /* ── CYCLES — enhancement-cycle tracking (backend-synced, offline-first) ── */
 var _cycle=null;
-var _cycSubTab='overview';
 var CYCLE_BF_FIELDS=[
   {id:'hydration_liters',label:'💧 Hydration (liters)',kind:'float',min:0,step:0.5,ph:'3.5'},
   {id:'sleep_hours',label:'😴 Sleep (hours)',kind:'float',min:0,max:24,step:0.5,ph:'8'},
@@ -18,22 +17,10 @@ var CYCLE_BF_RATED=['hydration_liters','sleep_hours','sleep_quality','recovery_r
 function _cycEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function cycleCacheLoad(){return getData('pep-cycle',null);}
 function cycleCacheSave(c){_cycle=c;setData('pep-cycle',c);}
-function openCyclesTab(){_cycle=cycleCacheLoad();switchCycSubTab(_cycSubTab);renderCyclesTab();syncCyclesFromAgent();}
+function openCyclesTab(){_cycle=cycleCacheLoad();renderCyclesTab();syncCyclesFromAgent();}
 async function syncCyclesFromAgent(){try{var r=await fetch(AGENT_URL+'/cycles',{headers:authHeaders()});if(!r.ok)return;var list=await r.json();if(!Array.isArray(list)||!list.length)return;list.sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));});cycleCacheSave(list[0]);renderCyclesTab();}catch(e){}}
 function cycleWeeks(c){if(!c||!c.startDate)return 0;return Math.max(0,Math.floor((NOW-parseLocalDate(c.startDate))/604800000));}
-function renderCyclesTab(){var c=_cycle;cycleRenderStatus(c);cycleRenderBloodwork(c);if(_cycSubTab==='steroids'){cycleRenderCompounds(c);cycleRenderE2(c);}else{cycleRenderCompounds(c);}if(_cycSubTab==='hgh')cycleRenderHgh(c);cycleUpdateBFBadge();}
-function switchCycSubTab(id){
-  _cycSubTab=id;
-  var subs=['overview','peptides','steroids','hgh'];
-  subs.forEach(function(s){
-    var el=document.getElementById('cycsub-'+s);if(el)el.style.display=s===id?'flex':'none';
-    var btn=document.getElementById('cycsub-btn-'+s);
-    if(btn){if(s===id){btn.style.background='var(--accent)';btn.style.color='#000';btn.style.border='none';}else{btn.style.background='var(--surface2)';btn.style.color='var(--muted2)';btn.style.border='1px solid var(--border)';}}
-  });
-  if(id==='peptides')buildStackStore();
-  if(id==='steroids'){cycleRenderCompounds(_cycle);cycleRenderE2(_cycle);}
-  if(id==='hgh')cycleRenderHgh(_cycle);
-}
+function renderCyclesTab(){var c=_cycle;cycleRenderStatus(c);cycleRenderBloodwork(c);cycleRenderCompounds(c);cycleRenderE2(c);cycleRenderHgh(c);cycleUpdateBFBadge();}
 function cycleRenderStatus(c){var badge=document.getElementById('cycle-status-badge');if(!badge)return;var ph=document.getElementById('cycle-phase'),st=document.getElementById('cycle-start'),wk=document.getElementById('cycle-weeks'),dur=document.getElementById('cycle-duration');if(!c||!c.startDate){badge.textContent='NO CYCLE';badge.className='card-badge badge-today';ph.textContent='—';st.textContent='—';wk.textContent='—';if(dur)dur.textContent='—';return;}badge.textContent=String(c.phase||'').toUpperCase();badge.className='card-badge badge-today';ph.textContent=String(c.phase||'').toUpperCase();st.textContent=fmtDate(parseLocalDate(c.startDate));wk.textContent=cycleWeeks(c)+' weeks';if(dur)dur.textContent=(c.cycleLengthWeeks||20)+' weeks';}
 function cycleRenderCompounds(c){var b=document.getElementById('cycle-compounds-body');if(!b)return;if(!c||!c.compounds||!c.compounds.length){b.innerHTML='<div class="empty">No active cycle</div>';return;}var h='';c.compounds.forEach(function(x){h+='<div class="info-row"><span class="info-label">'+_cycEsc(x.name)+'</span><span class="info-val" style="color:'+(x.active?'var(--accent)':'var(--muted2)')+'">'+x.dose+' '+_cycEsc(x.unit)+'</span></div>';});b.innerHTML=h;}
 function _cycleBwDesc(t){return t==='baseline'?'Pre-cycle bloodwork — establish baseline':t==='response'?'Assess test response & aromatization':t==='midcycle'?'Full panel — adjust if needed':t==='eoc'?'Final check before offramp':'';}
