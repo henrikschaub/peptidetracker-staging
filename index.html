@@ -53,29 +53,31 @@
   </div>
   <div class="content hidden" id="tab-stacks">
     <div id="stack-body"></div>
-    <div class="card">
-      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent)"></div><div class="card-title">CYCLE STATUS</div></div><span class="card-badge badge-today" id="cycle-status-badge">—</span></div>
-      <div class="card-body">
-        <div class="info-row"><span class="info-label">Current Phase</span><span class="info-val" id="cycle-phase" style="color:var(--accent)">—</span></div>
-        <div class="divider"></div>
-        <div class="info-row"><span class="info-label">Cycle Start</span><span class="info-val" id="cycle-start">—</span></div>
-        <div class="info-row"><span class="info-label">Weeks Elapsed</span><span class="info-val" id="cycle-weeks" style="color:var(--accent)">—</span></div>
-        <div class="info-row"><span class="info-label">Duration Target</span><span class="info-val" id="cycle-duration">—</span></div>
+    <div id="cycle-section" style="display:none">
+      <div class="card">
+        <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent)"></div><div class="card-title">CYCLE STATUS</div></div><span class="card-badge badge-today" id="cycle-status-badge">—</span></div>
+        <div class="card-body">
+          <div class="info-row"><span class="info-label">Current Phase</span><span class="info-val" id="cycle-phase" style="color:var(--accent)">—</span></div>
+          <div class="divider"></div>
+          <div class="info-row"><span class="info-label">Cycle Start</span><span class="info-val" id="cycle-start">—</span></div>
+          <div class="info-row"><span class="info-label">Weeks Elapsed</span><span class="info-val" id="cycle-weeks" style="color:var(--accent)">—</span></div>
+          <div class="info-row"><span class="info-label">Duration Target</span><span class="info-val" id="cycle-duration">—</span></div>
+        </div>
       </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">BLOODWORK SCHEDULE</div></div></div>
+        <div class="timeline" id="cycle-bloodwork-body"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3)"></div><div class="card-title">ACTIVE COMPOUNDS</div></div></div>
+        <div class="card-body" id="cycle-compounds-body"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">E2 MANAGEMENT</div></div></div>
+        <div class="card-body" id="cyc-e2-body"></div>
+      </div>
+      <div id="cyc-hgh-body"></div>
     </div>
-    <div class="card">
-      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">BLOODWORK SCHEDULE</div></div></div>
-      <div class="timeline" id="cycle-bloodwork-body"></div>
-    </div>
-    <div class="card">
-      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3)"></div><div class="card-title">ACTIVE COMPOUNDS</div></div></div>
-      <div class="card-body" id="cycle-compounds-body"></div>
-    </div>
-    <div class="card">
-      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">E2 MANAGEMENT</div></div></div>
-      <div class="card-body" id="cyc-e2-body"></div>
-    </div>
-    <div id="cyc-hgh-body"></div>
     <button class="reset-btn" onclick="cycleWizardOpen()">Start New Cycle</button>
   </div>
   <div class="content hidden" id="tab-schedule">
