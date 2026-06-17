@@ -72,3 +72,13 @@ The `IS_STAGING` constant is already declared at the top of the `<script>` block
 - `version.json` — current version, read by the update-checker in the app
 - `const VERSION='x.xx'` in index.html must match `version.json`
 - Version bump workflow auto-increments both on merge to main
+
+## Day-of-week display — ALWAYS Monday-first
+**Weeks start on Monday** throughout the app. Every day-chip grid, schedule view,
+and weekly label must display Mon → Sun (not Sun → Sat).
+
+- `DAYS_SHORT=['S','M','T','W','T','F','S']` — indexed by JS `getDay()` (0=Sun)
+- `DAYS_ORDER=[1,2,3,4,5,6,0]` — iteration order for all day-chip renders (Mon first)
+- `tab-schedule.js` uses `dowMap=[1,2,3,4,5,6,0]` — same pattern, keep in sync
+- **Never** iterate `DAYS_SHORT` by natural index (0→6) for display — always use `DAYS_ORDER`
+- Internal `days[]` arrays still use JS dow values (0=Sun, 1=Mon, …, 6=Sat) — display order only
