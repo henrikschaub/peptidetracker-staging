@@ -498,7 +498,13 @@ function wizStepGoals(body,footer){
 
 function wizToggleGoal(id){
   var i=_wiz.goals.indexOf(id);
-  if(i===-1)_wiz.goals.push(id);else _wiz.goals.splice(i,1);
+  if(i===-1){
+    _wiz.goals.push(id);
+    if(id==='trt'){_wiz.trt.enabled=true;if(!_wiz.trt.compounds)_wiz.trt.compounds=[];}
+  } else {
+    _wiz.goals.splice(i,1);
+    if(id==='trt'){_wiz.trt.enabled=false;_wiz.trt.compounds=[];}
+  }
   wizStepGoals(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
 }
 
@@ -570,6 +576,39 @@ function wizStepCheck(body,footer){
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
 }
+function _renderDoseGuide(pepId){
+  var tiers=DOSE_GUIDE&&DOSE_GUIDE[pepId];
+  if(!tiers||!tiers.length)return'';
+  var rows=tiers.map(function(t){
+    var bg=t.b?'background:rgba(var(--accent-rgb,60,255,160),0.08);border:1px solid rgba(var(--accent-rgb,60,255,160),0.3);':'background:var(--surface2);border:1px solid var(--border);';
+    var doseHtml=t.d?('<span style="font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap">'+t.d+'</span>'):'';
+    var note=t.n?('<span style="font-size:11px;color:var(--muted2);flex:1">'+t.n+'</span>'):'';
+    var risk=t.r?('<div style="font-size:11px;color:#f59e0b;padding:2px 0 0 0">⚠ '+t.r+'</div>'):'';
+    return'<div style="'+bg+'border-radius:6px;padding:5px 8px;margin-bottom:3px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;font-weight:700;color:'+(t.b?'var(--accent)':'var(--muted2)')+';text-transform:uppercase;min-width:62px">'+t.l+'</span>'+doseHtml+'</div>'+note+risk+'</div>';
+  });
+  return'<div class="cfg-row" style="display:block"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px">Recommended Doses</div>'+rows.join('')+'</div>';
+}
+function _renderRampSection(p,pi){
+  var hasRamp=!!(p.dose_phases&&p.dose_phases.length);
+  var btn='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:'+(hasRamp?'8px':'0')+'"><span style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase">Dose Escalation</span><div onclick="wizToggleRamp('+pi+')" style="cursor:pointer"><div class="toggle-sw'+(hasRamp?' on':'')+'"></div></div></div>';
+  if(!hasRamp)return'<div class="cfg-row" style="display:block">'+btn+'</div>';
+  var phases=(p.dose_phases||[]).slice().sort(function(a,b){return a.w-b.w;});
+  var rows=phases.map(function(ph,phi){
+    var uOpts=UNITS.map(function(u){return'<option value="'+u+'"'+(u===(ph.u||'mg')?' selected':'')+'>'+(UNIT_LABELS[u]||u)+'</option>';}).join('');
+    return'<div style="display:flex;align-items:center;gap:5px;margin-bottom:5px">'
+      +'<span style="font-size:11px;color:var(--muted2);white-space:nowrap;min-width:30px">Wk</span>'
+      +'<input class="dose-in" type="number" min="0" value="'+ph.w+'" oninput="wizSetPhase('+pi+','+phi+',\'w\',+this.value)" style="width:44px;text-align:center;">'
+      +'<input class="dose-in" type="text" value="'+String(ph.d||'')+'" oninput="wizSetPhase('+pi+','+phi+',\'d\',this.value)" placeholder="dose" style="width:60px;">'
+      +'<select class="unit-sel" onchange="wizSetPhase('+pi+','+phi+',\'u\',this.value)">'+uOpts+'</select>'
+      +'<button onclick="wizRemovePhase('+pi+','+phi+')" style="background:none;border:none;color:var(--muted2);font-size:16px;cursor:pointer;padding:0 4px;line-height:1">×</button>'
+      +'</div>';
+  }).join('');
+  return'<div class="cfg-row" style="display:block">'+btn
+    +'<div style="font-size:11px;color:var(--muted2);margin-bottom:8px">Dose auto-updates each day based on cycle week</div>'
+    +rows
+    +'<button onclick="wizAddPhase('+pi+')" style="font-size:11px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:6px;padding:3px 10px;cursor:pointer;font-family:inherit;margin-top:2px">+ Add phase</button>'
+    +'</div>';
+}
 function wizStepConfig(body,footer){
   if(!_wiz.peptides.length){body.innerHTML='<div style="padding:40px 20px;text-align:center;color:var(--muted2);">No peptides selected. Go back and add some.</div>';footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';return;}
   var html='<div style="font-size:12px;color:var(--muted2);margin-bottom:14px;">Configure dose, timing and frequency for each peptide.</div>';
@@ -584,7 +623,10 @@ function wizStepConfig(body,footer){
     if(p.times&&p.times.includes('PM')){html+='<div class="cfg-row"><div class="cfg-lbl">PM Dose</div><div class="dose-row"><input class="dose-in" type="text" value="'+String(p.dose_pm||'')+'" oninput="wizSetDose('+pi+',\'pm\',this.value)" placeholder="0"><select class="unit-sel" onchange="wizSetUnit('+pi+',\'pm\',this.value)">'+UNITS.map(function(u){return'<option value="'+u+'"'+(u===(p.unit_pm||'mg')?' selected':'')+'>'+(UNIT_LABELS[u]||u)+'</option>';}).join('')+'</select></div></div>';}
     html+='<div class="cfg-row"><div class="cfg-lbl">Days</div><div class="day-chips">';
     DAYS_SHORT.forEach(function(d,di){html+='<div class="day-chip'+(p.days&&p.days.includes(di)?' sel':'')+'" onclick="wizToggleDay('+pi+','+di+')">'+d+'</div>';});
-    html+='</div></div><div class="cfg-row"><div class="cfg-lbl">Note (optional)</div><input class="note-in" type="text" value="'+String(p.note||'')+'" oninput="wizSetNote('+pi+',this.value)" placeholder="e.g. fasted, pre-sleep..."></div></div>';
+    html+='</div></div><div class="cfg-row"><div class="cfg-lbl">Note (optional)</div><input class="note-in" type="text" value="'+String(p.note||'')+'" oninput="wizSetNote('+pi+',this.value)" placeholder="e.g. fasted, pre-sleep..."></div>';
+    html+=_renderDoseGuide(p.id);
+    html+=_renderRampSection(p,pi);
+    html+='</div>';
   });
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
@@ -595,6 +637,36 @@ function wizToggleDay(pi,di){var p=_wiz.peptides[pi];if(!p)return;if(!p.days)p.d
 function wizSetDose(pi,slot,val){var p=_wiz.peptides[pi];if(!p)return;if(slot==='am')p.dose_am=val;else p.dose_pm=val;}
 function wizSetUnit(pi,slot,val){var p=_wiz.peptides[pi];if(!p)return;if(slot==='am')p.unit_am=val;else p.unit_pm=val;}
 function wizSetNote(pi,val){var p=_wiz.peptides[pi];if(!p)return;p.note=val;}
+function wizToggleRamp(pi){
+  var p=_wiz.peptides[pi];if(!p)return;
+  if(p.dose_phases&&p.dose_phases.length){
+    delete p.dose_phases;
+  } else {
+    // Pre-populate with DEFAULT_PHASES for this compound, or a single phase at current dose
+    var def=DEFAULT_PHASES&&DEFAULT_PHASES[p.id];
+    if(def){p.dose_phases=def.map(function(ph){return{w:ph.w,d:ph.d,u:ph.u};});}
+    else{var u=p.unit_am||p.unit_pm||'mg';p.dose_phases=[{w:0,d:p.dose_am||p.dose_pm||'',u:u}];}
+  }
+  wizStepConfig(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
+}
+function wizAddPhase(pi){
+  var p=_wiz.peptides[pi];if(!p)return;
+  if(!p.dose_phases)p.dose_phases=[];
+  var lastW=p.dose_phases.length?Math.max.apply(null,p.dose_phases.map(function(ph){return ph.w||0;})):0;
+  var u=p.dose_phases.length?p.dose_phases[p.dose_phases.length-1].u:(p.unit_am||'mg');
+  p.dose_phases.push({w:lastW+4,d:'',u:u});
+  wizStepConfig(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
+}
+function wizRemovePhase(pi,phi){
+  var p=_wiz.peptides[pi];if(!p||!p.dose_phases)return;
+  p.dose_phases.splice(phi,1);
+  if(!p.dose_phases.length)delete p.dose_phases;
+  wizStepConfig(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
+}
+function wizSetPhase(pi,phi,field,val){
+  var p=_wiz.peptides[pi];if(!p||!p.dose_phases||!p.dose_phases[phi])return;
+  p.dose_phases[phi][field]=val;
+}
 
 // Returns a normalised array of compound objects from any trt shape (new or legacy)
 function _trtCompounds(trt){
