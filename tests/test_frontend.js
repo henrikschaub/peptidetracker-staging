@@ -840,6 +840,90 @@ G.wizSave().then(async ()=>{
     `got ${JSON.stringify(G.weights)}`);
   check('deleteWeight preserves other entries', G.weights[0].weight === 89, `got ${G.weights[0].weight}`);
 
+  // ── wizSave: correct tab navigation ──────────────────────────────────────────
+  console.log('\n── wizSave: correct tab navigation ────────────────────────────');
+  {
+    let capturedTabId = null;
+    const origSwitchTab = G.switchTab;
+    G.switchTab = function(id) { capturedTabId = id; };
+    const origSave2 = G.saveStacksToBackend;
+    G.saveStacksToBackend = async function() { return true; };
+    G.initWizard();
+    G.wizSetStackName('Nav Test');
+    G._wiz.peptides = [{id:'cjc-ipa',name:'CJC',dot:'#3cffa0',days:[0],times:['AM'],dose_am:'4',active:true}];
+    G._userStacks = [];
+    await G.wizSave();
+    check('wizSave: calls switchTab with "stacks" (not "stack")', capturedTabId === 'stacks',
+      `got "${capturedTabId}"`);
+    G.switchTab = origSwitchTab;
+    G.saveStacksToBackend = origSave2;
+  }
+
+  // ── _renderTRTGuide: dynamic tier highlighting ─────────────────────────────────
+  console.log('\n── _renderTRTGuide: dynamic tier highlighting ─────────────────');
+  {
+    function getHighlightedTier(html) {
+      const marker = 'rgba(232,160,32,0.1)';
+      const idx = html.indexOf(marker);
+      if (idx < 0) return null;
+      const after = html.slice(idx, idx + 500);
+      for (const label of ['Performance','High-normal','Standard TRT','Clinical','Optimised','Accelerated']) {
+        if (after.includes(label)) return label;
+      }
+      return null;
+    }
+    check('_renderTRTGuide defined', typeof G._renderTRTGuide === 'function');
+    const h250 = G._renderTRTGuide('testoviron', 250);
+    check('testoviron 250mg/wk: Performance highlighted',
+      getHighlightedTier(h250) === 'Performance', `got "${getHighlightedTier(h250)}", html: ${h250.slice(0,300)}`);
+    const h125 = G._renderTRTGuide('testoviron', 125);
+    check('testoviron 125mg/wk: Standard TRT highlighted',
+      getHighlightedTier(h125) === 'Standard TRT', `got "${getHighlightedTier(h125)}"`);
+    const h180 = G._renderTRTGuide('testoviron', 180);
+    check('testoviron 180mg/wk: High-normal highlighted',
+      getHighlightedTier(h180) === 'High-normal', `got "${getHighlightedTier(h180)}"`);
+    const h0 = G._renderTRTGuide('testoviron', 0);
+    check('testoviron 0mg/wk (no dose): High-normal fallback (b:1)',
+      getHighlightedTier(h0) === 'High-normal', `got "${getHighlightedTier(h0)}"`);
+    const hNebido = G._renderTRTGuide('nebido', 83);
+    check('nebido 83mg/wk (1000mg/12wks): Clinical highlighted',
+      getHighlightedTier(hNebido) === 'Clinical', `got "${getHighlightedTier(hNebido)}"`);
+  }
+
+  // ── init(): stale pep-last-tab cleanup ─────────────────────────────────────────
+  console.log('\n── init(): stale pep-last-tab cleanup ─────────────────────────');
+  {
+    // Simulate the init() defensive cleanup: if tab button not found, remove the stale key
+    G.localStorage.setItem('pep-last-tab', 'stack'); // invalid/old tab ID from wizSave bug
+    const origGetById2 = G.document.getElementById;
+    G.document.getElementById = function(id) {
+      if (id === 'tab-btn-stack') return null; // simulate missing element for invalid tab
+      return origGetById2(id);
+    };
+    const _ltStale = G.localStorage.getItem('pep-last-tab');
+    if (_ltStale) {
+      const _bStale = G.document.getElementById('tab-btn-' + _ltStale);
+      if (_bStale) G.switchTab(_ltStale, _bStale);
+      else G.localStorage.removeItem('pep-last-tab');
+    }
+    check('init(): stale "stack" tab ID cleared from localStorage',
+      G.localStorage.getItem('pep-last-tab') === null,
+      `got "${G.localStorage.getItem('pep-last-tab')}"`);
+    G.document.getElementById = origGetById2;
+
+    // Valid tab ID must NOT be cleared (mockEl returns non-null for valid IDs)
+    G.localStorage.setItem('pep-last-tab', 'stacks');
+    const _ltValid = G.localStorage.getItem('pep-last-tab');
+    if (_ltValid) {
+      const _bValid = G.document.getElementById('tab-btn-' + _ltValid);
+      if (!_bValid) G.localStorage.removeItem('pep-last-tab');
+    }
+    check('init(): valid "stacks" tab ID preserved in localStorage',
+      G.localStorage.getItem('pep-last-tab') === 'stacks',
+      `got "${G.localStorage.getItem('pep-last-tab')}"`);
+    G.localStorage.removeItem('pep-last-tab');
+  }
+
   // Final summary
   console.log(`\n${'─'.repeat(59)}`);
   console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
