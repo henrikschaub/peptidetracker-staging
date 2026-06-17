@@ -641,15 +641,24 @@ function _renderTRTViewTab(st){
     });
   }
   html+='<div class="wiz-section" style="margin-top:16px;margin-bottom:10px;">Injection Log</div>';
+  var _effCsLog=(function(){var _ec=_deriveEarliestStartDate(st.peptides);var _sc=st.cycle_start||'';if(_ec&&(!_sc||_ec<_sc))_sc=_ec;if(_sc){var _csp=_sc.split('-');_sc=_csp[0]+'-'+(_csp[1]||'1').padStart(2,'0')+'-'+(_csp[2]||'1').padStart(2,'0');}return _sc;})();
+  if(!_effCsLog){
+    html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">Set a start date to see the injection log for this stack.</div>';
+  }else{
+  var _logStart=parseLocalDate(_effCsLog);
+  var _logEnd=new Date(_logStart.getTime()+(st.cycle_length||12)*7*86400000);
   var log=window._peptideLog||[];
   var entries=[];
   log.forEach(function(e){
     var trtDoses=(e.doses||[]).filter(function(id){return _isTRTDoseId(id);});
-    if(trtDoses.length)entries.push({date:e.date,doses:trtDoses});
+    if(!trtDoses.length)return;
+    var dp=e.date.split('-');var dObj=new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]));
+    if(dObj<_logStart||dObj>_logEnd)return;
+    entries.push({date:e.date,doses:trtDoses});
   });
   entries.sort(function(a,b){return b.date.localeCompare(a.date);});
   if(!entries.length){
-    html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">No TRT injections logged yet.</div>';
+    html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">No TRT injections logged during this stack.</div>';
   }else{
     entries.forEach(function(e){
       var dp=e.date.split('-');var dObj=new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]));
@@ -666,6 +675,7 @@ function _renderTRTViewTab(st){
       html+='</div></div>';
     });
   }
+  } // end _effCsLog else
   return html;
 }
 function setStackViewTab(t){_stackViewTab=t;renderStackEditor();}
