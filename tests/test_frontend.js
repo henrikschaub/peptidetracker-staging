@@ -8,7 +8,7 @@ const path = require('path');
 
 const htmlPath = process.argv[2] || '/tmp/pt_live.html';
 const html = fs.readFileSync(htmlPath, 'utf8');
-const rawScript = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
+const rawScript = html.slice(html.indexOf('<script>') + 8, html.indexOf('</script>'));
 
 const patchedScript = rawScript
   .replace('const PEPTIDE_CAT=',      'var PEPTIDE_CAT=')
@@ -58,6 +58,18 @@ const sandbox = vm.createContext({
   google:undefined,confirm:()=>false,alert:noop,Image:function(){},setTimeout:noop,clearTimeout:noop,setInterval:noop,console,
 });
 vm.runInContext(patchedScript, sandbox);
+// Load tab files so their functions/vars are available in the same sandbox
+const tabFiles = ['tab-cycles.js','tab-macros.js','tab-stack.js','tab-today.js',
+                  'tab-schedule.js','tab-timeline.js','tab-body.js','tab-recon.js'];
+const dir = path.dirname(path.resolve(htmlPath));
+tabFiles.forEach(f => {
+  const tabPath = path.join(dir, f);
+  if (fs.existsSync(tabPath)) {
+    let src = fs.readFileSync(tabPath, 'utf8');
+    src = src.replace('const RECON_DB=', 'var RECON_DB=');
+    vm.runInContext(src, sandbox);
+  }
+});
 const G = sandbox;
 
 let passed=0, failed=0;
