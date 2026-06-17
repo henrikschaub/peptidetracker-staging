@@ -1,6 +1,6 @@
 function buildTimeline(){
   const body=document.getElementById('timeline-body');body.innerHTML='';
-  const active=_userStacks&&_userStacks[_activeStackIndex];
+  const active=_userStacks&&_userStacks[_activeStackIndices[0]];
   if(active&&active.cycle_start&&active.cycle_length){
     const sd=parseLocalDate(active.cycle_start);
     const ed=new Date(sd.getTime()+active.cycle_length*7*86400000);
