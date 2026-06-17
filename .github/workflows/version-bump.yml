@@ -31,6 +31,7 @@ jobs:
 
           echo "{\"version\": \"${NEW}\"}" > version.json
           sed -i "s/const VERSION='[0-9.]*'/const VERSION='${NEW}'/" index.html
+          sed -i "s/\.js?v=[0-9.]*/.js?v=${NEW}/g" index.html
 
           echo "NEW=${NEW}" >> $GITHUB_ENV
 
