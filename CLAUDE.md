@@ -32,6 +32,18 @@ Shared infrastructure (non-exhaustive):
 When you fix or change any of the above in one app, immediately check the other
 app for the same issue and fix it before closing the session.
 
+## ⚠️ ONLY FIX WHAT WAS ASKED — NO UNSOLICITED CHANGES ⚠️
+Fix exactly what Henrik asked. **Never change anything else**, even if it looks
+like an improvement. This applies especially to:
+- Visual appearance: colors, gradients, opacity, fills, chart styling
+- Layout or spacing
+- Unrelated logic or data handling
+
+If you notice something that could be improved while fixing a bug, mention it
+in your reply — do NOT silently change it. Unsolicited "improvements" cause
+confusion, break things Henrik didn't intend to change, and waste debugging
+time. **One PR = one explicitly requested change.**
+
 ## Git workflow — ALWAYS follow this
 1. Make changes on a feature branch
 2. Before opening the PR, locally extract the `<script>` block from `index.html` and run `node --check` on it — catch syntax errors before they ever hit CI
