@@ -109,12 +109,10 @@
       <div style="padding:16px;display:flex;flex-direction:column;gap:20px;">
         <div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Body Fat %</div><canvas id="chart-bf" height="120" style="width:100%;display:block;"></canvas></div>
         <div style="height:1px;background:var(--border);"></div>
-        <div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Lean Mass (kg)</div><canvas id="chart-lean" height="120" style="width:100%;display:block;"></canvas></div>
-        <div style="height:1px;background:var(--border);"></div>
         <div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">BMI</div><canvas id="chart-bmi" height="120" style="width:100%;display:block;"></canvas></div>
         <div style="height:1px;background:var(--border);"></div>
         <div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;">Body Weight (kg)</div><div style="display:flex;gap:4px"><button onclick="setBcWeightWindow(30)" id="bcw-btn-30" class="bcw-btn">30d</button><button onclick="setBcWeightWindow(60)" id="bcw-btn-60" class="bcw-btn">60d</button><button onclick="setBcWeightWindow(90)" id="bcw-btn-90" class="bcw-btn active">90d</button></div></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;">Weight &amp; Lean Mass (kg)</div><div style="display:flex;gap:4px"><button onclick="setBcWeightWindow(30)" id="bcw-btn-30" class="bcw-btn">30d</button><button onclick="setBcWeightWindow(60)" id="bcw-btn-60" class="bcw-btn">60d</button><button onclick="setBcWeightWindow(90)" id="bcw-btn-90" class="bcw-btn active">90d</button><span style="width:1px;background:var(--border);margin:0 2px;display:inline-block;align-self:stretch;"></span><button onclick="setBcWeightScale('zoom')" id="bcw-scale-zoom" class="bcw-btn bcw-scale-btn active">Zoom</button><button onclick="setBcWeightScale('abs')" id="bcw-scale-abs" class="bcw-btn bcw-scale-btn">Abs</button></div></div>
           <canvas id="chart-weight-trend" height="120" style="width:100%;display:block;"></canvas>
         </div>
       </div>
