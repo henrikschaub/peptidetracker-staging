@@ -759,7 +759,7 @@ G.wizSave().then(async ()=>{
   console.log('\n── Weight history sort (newest first) ─────────────────────');
   check('sortWeightHistory defined',    typeof G.sortWeightHistory === 'function');
   check('bcRenderWeightHistory defined',typeof G.bcRenderWeightHistory === 'function');
-  check('bcDrawWeightChart defined',    typeof G.bcDrawWeightChart === 'function');
+  check('bcDrawWeightLeanChart defined', typeof G.bcDrawWeightLeanChart === 'function');
   check('setBcWeightWindow defined',    typeof G.setBcWeightWindow === 'function');
   check('toggleBcWeightHist defined',   typeof G.toggleBcWeightHist === 'function');
   check('deleteWeight defined',         typeof G.deleteWeight === 'function');
@@ -807,19 +807,19 @@ G.wizSave().then(async ()=>{
   check('default _bcWeightWindow is 90', G._bcWeightWindow === 90, `got ${G._bcWeightWindow}`);
 
   const _origBCW = G._bcWeightWindow;
-  const _origBcDraw = G.bcDrawWeightChart;
+  const _origBcDraw = G.bcDrawWeightLeanChart;
   let _bcDrawCalls = 0;
-  G.bcDrawWeightChart = () => { _bcDrawCalls++; };
+  G.bcDrawWeightLeanChart = () => { _bcDrawCalls++; };
 
   G.setBcWeightWindow(30);
   check('setBcWeightWindow(30) sets _bcWeightWindow=30', G._bcWeightWindow === 30, `got ${G._bcWeightWindow}`);
-  check('setBcWeightWindow(30) calls bcDrawWeightChart',  _bcDrawCalls === 1, `got ${_bcDrawCalls}`);
+  check('setBcWeightWindow(30) calls bcDrawWeightLeanChart', _bcDrawCalls === 1, `got ${_bcDrawCalls}`);
   G.setBcWeightWindow(60);
   check('setBcWeightWindow(60) sets _bcWeightWindow=60', G._bcWeightWindow === 60, `got ${G._bcWeightWindow}`);
   G.setBcWeightWindow(90);
   check('setBcWeightWindow(90) sets _bcWeightWindow=90', G._bcWeightWindow === 90, `got ${G._bcWeightWindow}`);
 
-  G.bcDrawWeightChart = _origBcDraw;
+  G.bcDrawWeightLeanChart = _origBcDraw;
   G._bcWeightWindow = _origBCW;
 
   // toggleBcWeightHist toggles state without throwing
