@@ -10,7 +10,7 @@ function calcMacros(bw,phase){
   var carbs=Math.max(0,Math.round((kcal-protein*4-fat*9)/4));
   return {protein:protein,carbs:carbs,fat:fat,kcal:kcal};
 }
-function saveMacrosTrainTime(val){localStorage.setItem('macros-train-time',val);loadMacros();}
+function saveMacrosTrainTime(val){localStorage.setItem('macros-train-time',val);pushPepSettingsToAgent({'macros-train-time':val});loadMacros();}
 function renderMacros(bw){
   var body=document.getElementById('macros-body');if(!body)return;
   var m=calcMacros(bw||92,_macrosPhase);
