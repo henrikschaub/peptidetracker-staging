@@ -79,28 +79,18 @@ jobs:
           echo "PR_NODE_ID=$PR_NODE_ID" >> "$GITHUB_ENV"
           echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
 
-      - name: Enable auto-merge on the PR
-        if: env.PR_NODE_ID != ''
-        env:
-          GH_TOKEN: ${{ secrets.PROMOTE_TOKEN }}
-        run: |
-          curl -s -X POST \
-            -H "Authorization: bearer $GH_TOKEN" \
-            -H "Content-Type: application/json" \
-            https://api.github.com/graphql \
-            -d "{\"query\":\"mutation { enablePullRequestAutoMerge(input: {pullRequestId: \\\"$PR_NODE_ID\\\", mergeMethod: SQUASH}) { pullRequest { autoMergeRequest { mergeMethod } } } }\"}"
-
-      - name: Wait for prod PR to merge
+      - name: Wait for CI and merge prod PR
         if: env.PR_NUMBER != ''
         env:
           GH_TOKEN: ${{ secrets.PROMOTE_TOKEN }}
         run: |
-          echo "Waiting for PR #$PR_NUMBER to merge on peptidetracker..."
+          REPO="henrikschaub/peptidetracker"
+          echo "Waiting for CI on PR #$PR_NUMBER then merging..."
           for i in $(seq 1 60); do
-            RESULT=$(gh api repos/henrikschaub/peptidetracker/pulls/$PR_NUMBER \
-              --jq '{state: .state, merged: .merged}')
-            STATE=$(echo "$RESULT" | jq -r '.state')
-            MERGED=$(echo "$RESULT" | jq -r '.merged')
+            PR_DATA=$(gh api repos/$REPO/pulls/$PR_NUMBER --jq '{merged: .merged, state: .state, sha: .head.sha}')
+            MERGED=$(echo "$PR_DATA" | jq -r '.merged')
+            STATE=$(echo "$PR_DATA" | jq -r '.state')
+            SHA=$(echo "$PR_DATA" | jq -r '.sha')
             if [ "$MERGED" = "true" ]; then
               echo "PR #$PR_NUMBER merged (attempt $i)"
               exit 0
@@ -108,7 +98,25 @@ jobs:
               echo "PR #$PR_NUMBER closed without merging — CI failed on prod"
               exit 1
             fi
-            echo "Attempt $i: state=$STATE, waiting 10s..."
+            RUNS=$(gh api repos/$REPO/commits/$SHA/check-runs)
+            TOTAL=$(echo "$RUNS" | jq '.total_count')
+            if [ "$TOTAL" = "0" ]; then
+              echo "Attempt $i: no CI checks yet, waiting 10s..."
+              sleep 10
+              continue
+            fi
+            FAILED=$(echo "$RUNS" | jq '[.check_runs[] | select(.conclusion == "failure" or .conclusion == "cancelled")] | length')
+            PENDING=$(echo "$RUNS" | jq '[.check_runs[] | select(.status != "completed")] | length')
+            if [ "$FAILED" -gt "0" ]; then
+              echo "CI failed on prod PR #$PR_NUMBER ($FAILED failed checks)"
+              exit 1
+            fi
+            if [ "$PENDING" = "0" ]; then
+              echo "All CI checks passed (attempt $i). Merging PR #$PR_NUMBER..."
+              gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch
+              exit 0
+            fi
+            echo "Attempt $i: $PENDING CI check(s) still running, waiting 10s..."
             sleep 10
           done
           echo "Timeout: PR #$PR_NUMBER did not merge within 10 minutes"
