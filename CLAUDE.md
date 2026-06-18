@@ -16,6 +16,22 @@ All actual development (features, fixes, refactors) happens here on
 `peptidetracker-staging`. Claude may freely branch, commit, push, open PRs,
 and merge on this repo following the workflow below.
 
+## ⚠️ CROSS-APP PARITY — SHARED INFRASTRUCTURE ⚠️
+`peptidetracker-staging` and `workout-staging` share large swaths of
+infrastructure code. **Any bug fix or change to shared infrastructure must be
+applied to BOTH apps in the same session — never fix one and leave the other.**
+
+Shared infrastructure (non-exhaustive):
+- **Push to Prod** — `pushToProd()`, `pollPromoteStatus()`, `pollProdVersion()`, `renderPromoteStatus()`
+- **Settings sync** — `syncSettingsFromAgent()` / `syncPepSettingsFromAgent()`, `pushSettingsToAgent()`, theme/prefs persistence
+- **Update checker** — `checkForUpdate()`, `checkAppVersion()`, version banner
+- **Auth flow** — Google Sign-In, token handling, `authHeaders()`
+- **Backend API calls** — `AGENT_URL`, endpoint patterns, error handling
+- **IS_STAGING pattern** — any environment-branching logic
+
+When you fix or change any of the above in one app, immediately check the other
+app for the same issue and fix it before closing the session.
+
 ## Git workflow — ALWAYS follow this
 1. Make changes on a feature branch
 2. Before opening the PR, locally extract the `<script>` block from `index.html` and run `node --check` on it — catch syntax errors before they ever hit CI
