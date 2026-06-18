@@ -96,10 +96,11 @@
     </div>
     <div class="card" id="bc-results-card" style="display:none;">
       <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3)"></div><div class="card-title">LATEST RESULTS</div></div></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--border);">
-        <div style="padding:16px;text-align:center;border-right:1px solid var(--border);"><div style="font-family:'Bebas Neue',sans-serif;font-size:36px;line-height:1;color:var(--accent2)" id="res-bf">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">% BF</div></div>
-        <div style="padding:16px;text-align:center;border-right:1px solid var(--border);"><div style="font-family:'Bebas Neue',sans-serif;font-size:36px;line-height:1;color:var(--accent3)" id="res-bmi">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">BMI</div></div>
-        <div style="padding:16px;text-align:center;"><div style="font-family:'Bebas Neue',sans-serif;font-size:36px;line-height:1;color:var(--accent)" id="res-weight">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">kg</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--border);">
+        <div style="padding:12px 8px;text-align:center;border-right:1px solid var(--border);"><div style="font-family:'Bebas Neue',sans-serif;font-size:30px;line-height:1;color:var(--accent2)" id="res-bf">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">% BF</div></div>
+        <div style="padding:12px 8px;text-align:center;border-right:1px solid var(--border);"><div style="font-family:'Bebas Neue',sans-serif;font-size:30px;line-height:1;color:var(--accent4)" id="res-lean">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">lean kg</div></div>
+        <div style="padding:12px 8px;text-align:center;border-right:1px solid var(--border);"><div style="font-family:'Bebas Neue',sans-serif;font-size:30px;line-height:1;color:var(--accent3)" id="res-bmi">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">BMI</div></div>
+        <div style="padding:12px 8px;text-align:center;"><div style="font-family:'Bebas Neue',sans-serif;font-size:30px;line-height:1;color:var(--accent)" id="res-weight">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">kg</div></div>
       </div>
       <div style="padding:10px 16px;font-size:11px;color:var(--muted2);text-align:center;" id="res-neck-belly">—</div>
     </div>
@@ -107,6 +108,8 @@
       <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent4)"></div><div class="card-title">TRENDS</div></div><span class="card-badge badge-upcoming" id="bc-entries-badge">0 entries</span></div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:20px;">
         <div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Body Fat %</div><canvas id="chart-bf" height="120" style="width:100%;display:block;"></canvas></div>
+        <div style="height:1px;background:var(--border);"></div>
+        <div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Lean Mass (kg)</div><canvas id="chart-lean" height="120" style="width:100%;display:block;"></canvas></div>
         <div style="height:1px;background:var(--border);"></div>
         <div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">BMI</div><canvas id="chart-bmi" height="120" style="width:100%;display:block;"></canvas></div>
         <div style="height:1px;background:var(--border);"></div>
