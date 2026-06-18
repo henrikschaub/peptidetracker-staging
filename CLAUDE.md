@@ -50,7 +50,10 @@ time. **One PR = one explicitly requested change.**
 3. Create a PR, then **check its CI status before merging** — call `pull_request_read` with `method: get_check_runs` (or `get_status`) and confirm `conclusion`/`state` is `success`. If it's still running, wait and re-check; if it failed, fix the issue and push again. **Never merge a PR with a failing or pending check.**
 4. Once CI is green, merge it yourself — never stop and ask the user to merge, never push directly to main
 5. After merge the `version-bump` GitHub Action auto-increments the minor version in `version.json` and `const VERSION` in `index.html` and commits with `[skip ci]`
-6. **After merging, confirm the version-bump workflow run completed successfully via `mcp__github__actions_list` (method: list_workflow_runs, resource_id: version-bump.yml). Then tell the user "live as vX.XXX — test now" based on the bumped version from the commit message. DO NOT attempt to curl or WebFetch `henrikschaub.github.io` — outbound network access to that host is blocked in this remote environment and will always fail.**
+6. **After merging, you must confirm BOTH of these before telling the user it's live:**
+   - `mcp__github__actions_list` (method: list_workflow_runs, resource_id: version-bump.yml) → confirm `conclusion: success` and read the bumped version from the commit message
+   - `mcp__github__actions_list` (method: list_workflow_runs, resource_id: pages-build-deployment) → confirm the latest run has `conclusion: success` and its `head_sha` matches the bump commit SHA
+   Only once pages-build-deployment is complete say "live as vX.XXX — test now". DO NOT say "live" after just the version-bump — that only commits the bump, it does not deploy. DO NOT attempt to curl or WebFetch `henrikschaub.github.io` — outbound network access to that host is blocked in this remote environment and will always fail.
 
 ## Promotion to prod — Claude must NOT do this directly
 Promotion only happens via **Henrik clicking "Push to Prod"** in the staging
