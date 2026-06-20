@@ -924,6 +924,17 @@ G.wizSave().then(async ()=>{
     G.localStorage.removeItem('pep-last-tab');
   }
 
+  // ── Promotion workflow covers static assets ───────────────────────────────
+  {
+    const wf = fs.readFileSync(path.join(__dirname, '../.github/workflows/promote-to-prod.yml'), 'utf8');
+    check('promote-to-prod.yml copies manifest.json',
+      wf.includes('manifest.json'));
+    check('promote-to-prod.yml copies icon files (glob or named)',
+      wf.includes('*-icon.png') || wf.includes('protocol-icon.png'));
+    check('promote-to-prod.yml copies css directory',
+      wf.includes('css'));
+  }
+
   // Final summary
   console.log(`\n${'─'.repeat(59)}`);
   console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
