@@ -19,6 +19,17 @@ Rules that are NOT negotiable:
 This rule applies to dose logs, body comp, weights, settings — **everything**.
 Violating this has caused repeated data loss incidents.
 
+## ⚠️ NO CROSS-APP LOCALSTORAGE READS — EVER ⚠️
+Each app owns its localStorage keys exclusively. **NEVER read another app's
+localStorage keys** (e.g., peptidetracker must not read `bf_log` which belongs
+to workout; workout must not read `proto-bodycomp-v2` which belongs to
+peptidetracker). Both apps run on the same origin (`henrikschaub.github.io`)
+and can technically read each other's keys, but doing so is categorically
+forbidden.
+
+The backend is the ONLY cross-app source of truth. If data must flow between
+apps, it goes through the backend — never through shared localStorage.
+
 ## ⚠️ LOCAL CLONE RULE — NEVER SKIP ⚠️
 Local clones at `/home/user/<repo>` are **NOT automatically up to date**. A
 session can be hours old and the remote may have moved on. **Before reading or
