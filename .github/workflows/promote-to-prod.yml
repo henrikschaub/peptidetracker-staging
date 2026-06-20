@@ -41,6 +41,11 @@ jobs:
           cp ../staging/.github/workflows/ci.yml .github/workflows/ci.yml
           cp -r ../staging/tests .
 
+          # Copy web app manifest, icons, and CSS
+          [ -f ../staging/manifest.json ] && cp ../staging/manifest.json ./
+          for f in ../staging/*-icon.png; do [ -f "$f" ] && cp "$f" ./; done
+          [ -d ../staging/css ] && cp -r ../staging/css ./
+
           # Reset VERSION and ?v= cache-bust strings to prod's current version so
           # const VERSION, version.json, and tab script src tags all stay in sync
           # (staging has its own independent version counter)
