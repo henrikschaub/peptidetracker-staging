@@ -1244,6 +1244,6 @@ console.log('\n── syncBodyCompFromAgent: pushes all local entries to backend
   const fnBody = fnStart >= 0 ? src.slice(fnStart, src.indexOf('}catch(e){}', fnStart) + 11) : '';
   check('syncBodyCompFromAgent fetches remote and merges with local',
     fnBody.includes('fetch(AGENT_URL+"/bodycomp"') && fnBody.includes('bcLoad()'));
-  check('syncBodyCompFromAgent pushes ALL local entries (not just missing) via Promise.all',
-    fnBody.includes('local.map(e=>pushBodyCompToAgent(e))'));
+  check('syncBodyCompFromAgent pushes ALL local entries with zero-padded dates via Promise.all',
+    fnBody.includes('local.map(e=>') && fnBody.includes('padStart(2,') && fnBody.includes('pushBodyCompToAgent('));
 }
