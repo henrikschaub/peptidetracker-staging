@@ -872,22 +872,25 @@ G.wizSave().then(async ()=>{
       }
       return null;
     }
-    check('_renderTRTGuide defined', typeof G._renderTRTGuide === 'function');
-    const h250 = G._renderTRTGuide('testoviron', 250);
-    check('testoviron 250mg/wk: Performance highlighted',
-      getHighlightedTier(h250) === 'Performance', `got "${getHighlightedTier(h250)}", html: ${h250.slice(0,300)}`);
-    const h125 = G._renderTRTGuide('testoviron', 125);
-    check('testoviron 125mg/wk: Standard TRT highlighted',
-      getHighlightedTier(h125) === 'Standard TRT', `got "${getHighlightedTier(h125)}"`);
-    const h180 = G._renderTRTGuide('testoviron', 180);
-    check('testoviron 180mg/wk: High-normal highlighted',
-      getHighlightedTier(h180) === 'High-normal', `got "${getHighlightedTier(h180)}"`);
-    const h0 = G._renderTRTGuide('testoviron', 0);
-    check('testoviron 0mg/wk (no dose): High-normal fallback (b:1)',
-      getHighlightedTier(h0) === 'High-normal', `got "${getHighlightedTier(h0)}"`);
-    const hNebido = G._renderTRTGuide('nebido', 83);
-    check('nebido 83mg/wk (1000mg/12wks): Clinical highlighted',
-      getHighlightedTier(hNebido) === 'Clinical', `got "${getHighlightedTier(hNebido)}"`);
+    const _trtDefined = typeof G._renderTRTGuide === 'function';
+    check('_renderTRTGuide defined', _trtDefined);
+    if (_trtDefined) {
+      const h250 = G._renderTRTGuide('testoviron', 250);
+      check('testoviron 250mg/wk: Performance highlighted',
+        getHighlightedTier(h250) === 'Performance', `got "${getHighlightedTier(h250)}", html: ${h250.slice(0,300)}`);
+      const h125 = G._renderTRTGuide('testoviron', 125);
+      check('testoviron 125mg/wk: Standard TRT highlighted',
+        getHighlightedTier(h125) === 'Standard TRT', `got "${getHighlightedTier(h125)}"`);
+      const h180 = G._renderTRTGuide('testoviron', 180);
+      check('testoviron 180mg/wk: High-normal highlighted',
+        getHighlightedTier(h180) === 'High-normal', `got "${getHighlightedTier(h180)}"`);
+      const h0 = G._renderTRTGuide('testoviron', 0);
+      check('testoviron 0mg/wk (no dose): High-normal fallback (b:1)',
+        getHighlightedTier(h0) === 'High-normal', `got "${getHighlightedTier(h0)}"`);
+      const hNebido = G._renderTRTGuide('nebido', 83);
+      check('nebido 83mg/wk (1000mg/12wks): Clinical highlighted',
+        getHighlightedTier(hNebido) === 'Clinical', `got "${getHighlightedTier(hNebido)}"`);
+    }
   }
 
   // ── init(): stale pep-last-tab cleanup ─────────────────────────────────────────
@@ -1246,4 +1249,45 @@ console.log('\n── syncBodyCompFromAgent: pushes all local entries to backend
     fnBody.includes('fetch(AGENT_URL+"/bodycomp"') && fnBody.includes('bcLoad()'));
   check('syncBodyCompFromAgent pushes ALL local entries with zero-padded dates via Promise.all',
     fnBody.includes('local.map(e=>') && fnBody.includes('padStart(2,') && fnBody.includes('pushBodyCompToAgent('));
+}
+
+// ── dose dedup migration ─────────────────────────────────────────────────────
+console.log('\n── dose dedup migration ────────────────────────────────────────');
+{
+  const src = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  // Migration IIFE must be present in init()
+  check('dose-dedup migration IIFE present in init()',
+    src.includes('pep-dose-dedup-v1') && src.includes('proto-chk-'));
+  // Normaliser function _ndi must be defined inside the IIFE
+  check('normaliser _ndi defined in migration IIFE',
+    src.includes('function _ndi(id)') && src.includes('zfill') === false);
+  // Regex handles non-padded month/day
+  check('_ndi regex matches non-padded dates',
+    src.includes('\\d{4}-\\d{1,2}-\\d{1,2}'));
+  // Migration runs before buildWeekStrip/buildToday
+  // Verify the migration IIFE immediately precedes buildWeekStrip() inside init()
+  check('migration immediately precedes buildWeekStrip() in init()',
+    src.includes("'pep-dose-dedup-v1','1');})();buildWeekStrip()"));
+  // Idempotency: guard on migration flag
+  check('migration is idempotent (skips if flag set)',
+    src.includes("localStorage.getItem('pep-dose-dedup-v1'"));
+  // Migration sets flag after running
+  check('migration sets pep-dose-dedup-v1 flag',
+    src.includes("localStorage.setItem('pep-dose-dedup-v1','1')"));
+
+  // Unit-test the normaliser logic in isolation
+  function _ndi(id){var _m=id.match(/^(.+)_(\d{4}-\d{1,2}-\d{1,2})$/);if(!_m)return id;var _p=_m[2].split('-');return _m[1]+'_'+_p[0]+'-'+('0'+_p[1]).slice(-2)+'-'+('0'+_p[2]).slice(-2);}
+  check('_ndi pads single-digit month and day',    _ndi('cjc-am_2026-5-2')     === 'cjc-am_2026-05-02');
+  check('_ndi leaves already-padded IDs unchanged', _ndi('cjc-am_2026-05-02')  === 'cjc-am_2026-05-02');
+  check('_ndi handles compound with underscores',   _ndi('testo_3_2026-3-9')   === 'testo_3_2026-03-09');
+  check('_ndi returns ID unchanged if no date suffix', _ndi('no-date-here')     === 'no-date-here');
+
+  // Dedup logic: array with padded+non-padded → only padded remains
+  (function(){
+    var seen=new Set();var dd=[];
+    ['cjc-am_2026-5-22','cjc-am_2026-05-22'].forEach(function(id){
+      var n=_ndi(id);if(!seen.has(n)){seen.add(n);dd.push(n);}
+    });
+    check('dedup collapses padded+non-padded into single entry', dd.length===1 && dd[0]==='cjc-am_2026-05-22');
+  })();
 }
