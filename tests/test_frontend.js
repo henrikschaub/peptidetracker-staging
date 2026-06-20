@@ -1235,3 +1235,14 @@ if(fs.existsSync(plPath)){
       bad.length?`vials [${bad.join(',')}] not in pricelist (available: ${[...available].join(',')})`:'');
   }
 }
+
+// ── initBodyComp: force-push all local BC entries to backend ─────────────────
+console.log('\n── initBodyComp: force-pushes all body comp to backend ─────────');
+{
+  const tbSrc = fs.readFileSync(path.join(__dirname, '../tab-body.js'), 'utf8');
+  const icBody = tbSrc.slice(tbSrc.indexOf('function initBodyComp('));
+  check('initBodyComp calls syncBodyCompFromAgent (merge + upload missing)',
+    icBody.includes('syncBodyCompFromAgent()'));
+  check('initBodyComp force-pushes ALL local entries via Promise.all + pushBodyCompToAgent',
+    icBody.includes('pushBodyCompToAgent') && icBody.includes('bcLoad') && icBody.includes('Promise.all'));
+}
