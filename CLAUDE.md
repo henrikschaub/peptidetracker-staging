@@ -1,5 +1,19 @@
 # Peptide Tracker Staging — Claude Instructions
 
+## ⚠️ localStorage IS A CACHE — NEVER THE SOURCE OF TRUTH ⚠️
+localStorage is a read cache for performance only. It is NEVER the source of truth.
+
+**Every single localStorage write MUST be paired with a backend push in the same code path — no exceptions.**
+
+This means:
+- `setData(key, value)` alone → WRONG
+- `localStorage.setItem(key, value)` alone → WRONG  
+- `setData(key, value)` + `push*ToAgent(...)` in the same call → CORRECT
+
+A "Wipe local cache" button exists in Settings specifically to verify this: after wiping, ALL user data must come back from the backend on next load. If anything is lost after a wipe, that data was relying on localStorage as its source of truth — which is a bug.
+
+This rule was violated multiple times (wk-db-*, wk-gear-* were localStorage-only). Any new data type must have a backend endpoint AND be included in the startup sync before it can be written to localStorage.
+
 ## ⚠️ BACKEND IS THE SOURCE OF TRUTH — EVERY SAVE MUST HIT THE BACKEND ⚠️
 **Every user-facing data operation (save, update, delete) MUST be persisted to
 the backend immediately — no exceptions, ever.** localStorage is only a local
