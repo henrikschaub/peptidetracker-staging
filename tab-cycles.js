@@ -66,11 +66,17 @@ var CYCLE_TEMPLATES=[
    why:'NPP at 200-300 mg/week is not about size — it is about recovery quality. Short ester (3-5 day clearance) means you pull it fast if sides appear. Only add after assessing test and primo individually.',
    tip:'Watch libido closely when adding NPP. Tanks early = reduce NPP first. Deca-dick is real at higher doses — stay at MED. HGH optional at 3-4 IU/day from week 1.',
    compounds:[{name:'Testosterone Enanthate',dose:600,unit:'mg/week',active:true,startWeek:0},{name:'Primobolan (Metenolone Enanthate)',dose:500,unit:'mg/week',active:true,startWeek:0},{name:'NPP (Nandrolone Phenylpropionate)',dose:250,unit:'mg/week',active:true,startWeek:0}]},
+  {id:'tren',phase:'progression',weeks:16,badge:'CYCLE 3 (ADVANCED)',badgeColor:'var(--accent2)',
+   name:'Test + Tren — Progression',
+   desc:'Advanced cycle. Trenbolone at minimum effective dose for rapid body recomposition. Not a first or second cycle compound — requires prior 19-nor experience and an established bloodwork baseline.',
+   why:'Tren delivers ~5× androgenic potency with zero aromatisation: simultaneous fat loss and lean mass. Cardiovascular cost is significant — only justified after proving tolerability on test-only and a secondary compound.',
+   tip:'Lower Test when adding Tren (300-400 mg/wk) — high Test amplifies androgenic sides. Acetate ester preferred for first run: faster pullout if sides hit. MED: 175-200 mg/wk. Mandatory bloodwork: baseline + Week 5 (full lipids, HCT, LFTs).',
+   compounds:[{name:'Testosterone Enanthate',dose:400,unit:'mg/week',active:true,startWeek:0},{name:'Trenbolone Acetate',dose:175,unit:'mg/week',active:true,startWeek:0}]},
   {id:'custom',phase:'foundational',weeks:20,badge:'CUSTOM',badgeColor:'var(--muted2)',
    name:'Custom Cycle',
    desc:'Full control. Build your own compound stack from scratch with any phase, compounds and doses.',
    why:'',tip:'',
-   compounds:[{name:'Testosterone',dose:500,unit:'mg/week',active:true,startWeek:0}]}
+   compounds:[{name:'Testosterone Enanthate',dose:500,unit:'mg/week',active:true,startWeek:0}]}
 ];
 var ENHANCEMENT_COMPOUNDS=[
   {id:'test_e',name:'Testosterone Enanthate',group:'Base',dot:'#e05050',defaultDose:300,unit:'mg/week',
@@ -96,7 +102,13 @@ var ENHANCEMENT_COMPOUNDS=[
    sides:'Dose-dependent water retention and carpal tunnel (reduce dose to resolve). Hyperglycemia risk >4 IU/day — monitor fasting glucose. Longevity dosing: 1-2 IU/day. Recomp: 3-4 IU/day.'},
   {id:'anavar',name:'Anavar (Oxandrolone)',group:'Oral',dot:'#d060d0',defaultDose:50,unit:'mg/day',
    interaction:'Mild DHT-derived oral. Enhances strength and hardness without significant mass. Clean synergy with Test at low doses — does not increase E2 load. SHBG suppression amplifies free testosterone effect.',
-   sides:'Liver stress (oral 17α-alkylated) — limit to 6-8 weeks. HDL reduction (lipid impact). Mildest oral overall; female-appropriate at 5-10 mg/day.'}
+   sides:'Liver stress (oral 17α-alkylated) — limit to 6-8 weeks. HDL reduction (lipid impact). Mildest oral overall; female-appropriate at 5-10 mg/day.'},
+  {id:'tren_e',name:'Trenbolone Enanthate',group:'19-Nor',dot:'#ff8c00',defaultDose:200,unit:'mg/week',
+   interaction:'Advanced 19-nor — ~5× more androgenic than testosterone, does not aromatise. Rapid simultaneous fat loss and lean mass gain. Pair with reduced Test (300-400 mg/wk) — high Test amplifies androgenic sides via the same receptor pathway. Only add after confirmed tolerance to a prior 19-nor (NPP or Deca).',
+   sides:'Significant HDL suppression and LV hypertrophy risk. Night sweats, tren cough. Progestin-driven prolactin elevation and libido suppression. Neuropsychological effects (aggression, insomnia, anxiety) are dose-dependent and real. Mandatory: full lipids, HCT, LFTs at baseline and Week 5.'},
+  {id:'tren_a',name:'Trenbolone Acetate',group:'19-Nor',dot:'#ff6b00',defaultDose:175,unit:'mg/week',
+   interaction:'Short-ester Trenbolone (3-day half-life) — preferred for a first tren run due to faster washout if sides become unmanageable. Same anabolic/androgenic potency as Enanthate. EOD injection protocol for stable blood levels. Reduce Test to 300-400 mg/wk when adding Tren.',
+   sides:'Identical side profile to Trenbolone Enanthate. Short ester = rapid onset but also rapid clearance on stopping. Tren cough more pronounced vs. Enanthate. Run Acetate until tren response is fully characterised before switching to longer ester.'}
 ];
 var _cwiz={step:1,tpl:null,phase:'foundational',weeks:20,startDate:'',compounds:[]};
 function cycleWizardOpen(){
@@ -178,16 +190,34 @@ function _cwizStep2(){
   h+='</div>';
   h+='<div style="font-size:12px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Compounds</div>';
   _cwiz.compounds.forEach(function(c,i){
+    var ec=ENHANCEMENT_COMPOUNDS.find(function(x){return x.name===c.name;});
+    var isCustom=!ec&&(!!c.name||!!c._custom);
+    var _ss='flex:3;min-width:140px;padding:9px 4px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:13px;font-family:inherit;';
     h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">';
-    h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">';
-    h+='<input id="cwiz-cn-'+i+'" type="text" value="'+_cycEsc(c.name)+'" placeholder="Compound name" oninput="_cwiz.compounds['+i+'].name=this.value" style="flex:3;min-width:140px;'+ins+'">';
+    h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:'+(ec||isCustom?'8':'0')+'px">';
+    h+='<select onchange="_cwizSetCmpd('+i+',this.value)" style="'+_ss+'">';
+    h+='<option value="">— Choose compound —</option>';
+    var _cgrps=['Base','DHT-Derived','19-Nor','GH Axis','Oral'];
+    _cgrps.forEach(function(g){var _ge=ENHANCEMENT_COMPOUNDS.filter(function(e){return e.group===g;});if(!_ge.length)return;h+='<optgroup label="'+g+'">'; _ge.forEach(function(e){h+='<option value="'+e.id+'"'+(ec&&ec.id===e.id?' selected':'')+'>'+e.name+'</option>';});h+='</optgroup>';});
+    h+='<option value="__custom__"'+(isCustom?' selected':'')+'>Custom…</option>';
+    h+='</select>';
     h+='<input id="cwiz-cd-'+i+'" type="number" min="0" step="25" value="'+c.dose+'" oninput="_cwiz.compounds['+i+'].dose=parseFloat(this.value)||0" style="flex:1;min-width:70px;'+ins+'">';
     h+='<select id="cwiz-cu-'+i+'" onchange="_cwiz.compounds['+i+'].unit=this.value" style="flex:1;min-width:90px;padding:9px 4px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:13px;font-family:inherit">';
     var units=['mg/week','mg/day','mg/EOD'];
     units.forEach(function(u){h+='<option value="'+u+'"'+(c.unit===u?' selected':'')+'>'+u+'</option>';});
     h+='</select>';
+    if(ec)h+='<button onclick="_cwizToggleInfo('+i+')" style="background:transparent;border:1px solid var(--border);color:var(--muted2);border-radius:6px;padding:7px 9px;cursor:pointer;font-size:13px;line-height:1;flex-shrink:0" title="Usage &amp; risks">ⓘ</button>';
     if(_cwiz.compounds.length>1)h+='<button onclick="_cwizDelCmpd('+i+')" style="background:transparent;border:1px solid rgba(255,60,60,0.4);color:var(--danger);border-radius:6px;padding:8px;cursor:pointer;font-size:13px;line-height:1;flex-shrink:0">&#x2715;</button>';
     h+='</div>';
+    if(isCustom)h+='<input id="cwiz-cn-'+i+'" type="text" value="'+_cycEsc(c.name)+'" placeholder="Enter compound name…" oninput="_cwiz.compounds['+i+'].name=this.value" style="'+ins+'">';
+    if(ec){
+      h+='<div id="cwiz-info-'+i+'" style="display:none;margin-top:4px;padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border)">';
+      h+='<div style="font-size:11px;font-weight:700;color:var(--accent3);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:5px">How it works</div>';
+      h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;margin-bottom:10px">'+ec.interaction+'</div>';
+      h+='<div style="font-size:11px;font-weight:700;color:var(--accent2);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:5px">Sides &amp; monitoring</div>';
+      h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6">'+ec.sides+'</div>';
+      h+='</div>';
+    }
     h+='</div>';
   });
   h+='<button onclick="_cwizAddCmpd()" style="width:100%;background:var(--surface2);color:var(--muted2);border:1px dashed var(--border);border-radius:8px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:20px">+ Add Compound</button>';
@@ -198,8 +228,15 @@ function _cwizStep2(){
   h+='</div>';
   return h;
 }
-function _cwizAddCmpd(){_cwiz.compounds.push({name:'',dose:250,unit:'mg/week',active:true,startWeek:0});cycleWizRender();}
+function _cwizAddCmpd(){_cwiz.compounds.push({name:'',dose:250,unit:'mg/week',active:true,startWeek:0,_custom:false});cycleWizRender();}
 function _cwizDelCmpd(i){_cwiz.compounds.splice(i,1);cycleWizRender();}
+function _cwizSetCmpd(i,val){
+  if(val==='__custom__'){_cwiz.compounds[i]._custom=true;_cwiz.compounds[i].name='';}
+  else if(!val){_cwiz.compounds[i]._custom=false;_cwiz.compounds[i].name='';}
+  else{var ec=ENHANCEMENT_COMPOUNDS.find(function(x){return x.id===val;});if(ec){_cwiz.compounds[i].name=ec.name;_cwiz.compounds[i].dose=ec.defaultDose;_cwiz.compounds[i].unit=ec.unit;}_cwiz.compounds[i]._custom=false;}
+  cycleWizRender();
+}
+function _cwizToggleInfo(i){var el=document.getElementById('cwiz-info-'+i);if(el)el.style.display=el.style.display==='none'?'':'none';}
 function _cwizCapture(){
   var s=document.getElementById('cwiz-start');if(s&&s.value)_cwiz.startDate=s.value;
   var w=document.getElementById('cwiz-weeks');if(w&&w.value)_cwiz.weeks=parseInt(w.value)||20;

@@ -1403,3 +1403,32 @@ console.log('\n── dose dedup migration ────────────�
       return i >= 0 && !after.includes('tab-btn-storage');
     })());
 }
+
+// ── Cycle wizard — compound dropdown + Tren template ─────────────────────────
+{
+  const tabCyclesJs = fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'tab-cycles.js'),'utf8');
+  check('ENHANCEMENT_COMPOUNDS has Trenbolone Enanthate',
+    G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.some(function(c){return c.id==='tren_e';}));
+  check('ENHANCEMENT_COMPOUNDS has Trenbolone Acetate',
+    G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.some(function(c){return c.id==='tren_a';}));
+  check('Trenbolone Enanthate has interaction and sides text',
+    (function(){var c=G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.find(function(x){return x.id==='tren_e';});return c&&c.interaction&&c.sides&&c.interaction.length>20&&c.sides.length>20;})());
+  check('CYCLE_TEMPLATES has Tren template (id: tren)',
+    G.CYCLE_TEMPLATES&&G.CYCLE_TEMPLATES.some(function(t){return t.id==='tren';}));
+  check('Tren template has Trenbolone Acetate compound',
+    (function(){var t=G.CYCLE_TEMPLATES&&G.CYCLE_TEMPLATES.find(function(x){return x.id==='tren';});return t&&t.compounds&&t.compounds.some(function(c){return c.name==='Trenbolone Acetate';});})());
+  check('_cwizSetCmpd function defined',typeof G._cwizSetCmpd==='function');
+  check('_cwizToggleInfo function defined',typeof G._cwizToggleInfo==='function');
+  check('wizard step 2 uses compound dropdown (select with _cwizSetCmpd)',
+    tabCyclesJs.includes('_cwizSetCmpd')&&tabCyclesJs.includes('Choose compound'));
+  check('wizard step 2 shows ⓘ info button for known compounds',
+    tabCyclesJs.includes('_cwizToggleInfo')&&tabCyclesJs.includes('cwiz-info-'));
+  check('wizard step 2 shows Custom option in compound select',
+    tabCyclesJs.includes('__custom__')&&tabCyclesJs.includes('Custom…'));
+  check('_cwizSetCmpd auto-fills dose and unit from ENHANCEMENT_COMPOUNDS',
+    tabCyclesJs.includes('ec.defaultDose')&&tabCyclesJs.includes('ec.unit'));
+  check('Custom Cycle template uses Testosterone Enanthate (not bare Testosterone)',
+    (function(){var t=G.CYCLE_TEMPLATES&&G.CYCLE_TEMPLATES.find(function(x){return x.id==='custom';});return t&&t.compounds&&t.compounds[0]&&t.compounds[0].name==='Testosterone Enanthate';})());
+  check('optgroup labels used in compound dropdown (Base, DHT-Derived, 19-Nor)',
+    tabCyclesJs.includes('optgroup label=')&&tabCyclesJs.includes('19-Nor'));
+}
