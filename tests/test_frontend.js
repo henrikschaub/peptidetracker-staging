@@ -1379,10 +1379,10 @@ console.log('\n── dose dedup migration ────────────�
     todayJs.includes('getDosesForDate(d).forEach'));
   check('buildWeekStrip uses getPastDoses + _findWeeklyItemInfo for past dots',
     todayJs.includes('getPastDoses(d)') && todayJs.includes('_findWeeklyItemInfo(bid)'));
-  check('tab-stack.js edit view has Cycle End date input',
-    tabStackJs.includes("id='edit-cycle-end'")||tabStackJs.includes('id="edit-cycle-end"'));
-  check('_collectEditInputs reads end_date from edit-cycle-end',
-    tabStackJs.includes("'edit-cycle-end'")&&tabStackJs.includes('_editBuf.end_date'));
+  check('tab-stack.js edit view has no Cycle End field (removed — use cycle length instead)',
+    !tabStackJs.includes("id='edit-cycle-end'")&&!tabStackJs.includes('id="edit-cycle-end"'));
+  check('tab-stack.js Cycle Length select has No end date option (value 0)',
+    tabStackJs.includes("value=\"0\"")&&tabStackJs.includes('No end date'));
 }
 
 // ── Storage tab hideable via Settings ─────────────────────────────────────────
