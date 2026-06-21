@@ -594,7 +594,7 @@ function buildStackStore(){
     html+='<div onclick="event.stopPropagation();toggleStack('+i+')" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-bottom:5px;"><div style="width:34px;height:18px;border-radius:9px;background:'+(isActive?'var(--accent)':'rgba(255,255,255,0.15)')+';position:relative;flex-shrink:0;"><div style="position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:'+(isActive?'18px':'2px')+';box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div></div><span style="font-size:10px;font-weight:600;color:'+(isActive?'var(--accent)':'var(--muted2)')+';letter-spacing:0.3px;">'+(isActive?'Active':'Inactive')+'</span></div>';
     html+='<div class="stack-card-name">'+_esc(st.name||'Stack '+(i+1))+'</div>';
     var _csDisp=st.cycle_start||'';
-    if(_csDisp){var _csdD=parseLocalDate(_csDisp);var _cedD=st.end_date?parseLocalDate(st.end_date):new Date(_csdD.getTime()+(st.cycle_length||12)*7*86400000);html+='<div style="font-size:10px;color:var(--muted2);margin-top:2px;">'+fmtDate(_csdD)+' → '+fmtDate(_cedD)+'</div>';}
+    if(_csDisp){var _csdD=parseLocalDate(_csDisp);if(st.cycle_length){var _cedD=new Date(_csdD.getTime()+st.cycle_length*7*86400000);html+='<div style="font-size:10px;color:var(--muted2);margin-top:2px;">'+fmtDate(_csdD)+' → '+fmtDate(_cedD)+'</div>';}else{html+='<div style="font-size:10px;color:var(--muted2);margin-top:2px;">'+fmtDate(_csdD)+' → ongoing</div>';}}
     html+='</div>';
     html+='</div>';
     html+='<div class="stack-card-meta">';
