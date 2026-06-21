@@ -563,7 +563,7 @@ function buildStackStore(){
     html+='<div class="stack-card'+(isActive?' active':'')+'" onclick="viewStack('+i+')">';
     html+='<div class="stack-card-header">';
     html+='<div style="flex:1;min-width:0;">';
-    html+='<button onclick="event.stopPropagation();toggleStack('+i+')" style="background:'+(isActive?'var(--accent)':'#444')+';color:'+(isActive?'#000':'#aaa')+';border:none;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700;text-transform:uppercase;cursor:pointer;font-family:inherit;display:inline-block;margin-bottom:3px;letter-spacing:0.5px;">'+(isActive?'Active':'Inactive')+'</button>';
+    html+='<div onclick="event.stopPropagation();toggleStack('+i+')" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-bottom:5px;"><div style="width:34px;height:18px;border-radius:9px;background:'+(isActive?'var(--accent)':'rgba(255,255,255,0.15)')+';position:relative;flex-shrink:0;"><div style="position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:'+(isActive?'18px':'2px')+';box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div></div><span style="font-size:10px;font-weight:600;color:'+(isActive?'var(--accent)':'var(--muted2)')+';letter-spacing:0.3px;">'+(isActive?'Active':'Inactive')+'</span></div>';
     html+='<div class="stack-card-name">'+_esc(st.name||'Stack '+(i+1))+'</div>';
     html+='</div>';
     html+='</div>';
