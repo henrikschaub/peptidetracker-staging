@@ -257,7 +257,7 @@ check('updateWEEKLY builds WEEKLY',   G.WEEKLY.length>0,                        
 check('WEEKLY contains cjc-am',       G.WEEKLY.some(w=>w.id==='cjc-am'));
 check('WEEKLY contains glow-1',       G.WEEKLY.some(w=>w.id==='glow-1'));
 G._userStacks=[];G.updateWEEKLY();
-check('empty stacks → WEEKLY_DEFAULT',G.WEEKLY.length===G.WEEKLY_DEFAULT.length);
+check('empty active indices → empty WEEKLY (not WEEKLY_DEFAULT)',G.WEEKLY.length===0);
 
 // ── Stack → daily schedule ────────────────────────────────────────────────────
 console.log('\n── Stack → daily schedule ─────────────────────────────────');
@@ -1290,6 +1290,46 @@ console.log('\n── dose dedup migration ────────────�
     });
     check('dedup collapses padded+non-padded into single entry', dd.length===1 && dd[0]==='cjc-am_2026-05-22');
   })();
+}
+
+// ── No active stack (on-break support) ───────────────────────────────────────
+{
+  console.log('\n── No active stack ────────────────────────────────────────');
+  const sA={name:'Stack A',peptides:[{id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0],times:['AM'],dose_am:'3',unit_am:'mg',active:true}]};
+  const sB={name:'Stack B',peptides:[{id:'semaglutide', name:'Semaglutide',dot:'#f59e0b',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'0.5',unit_am:'mg',active:true}]};
+
+  // updateWEEKLY with empty activeStackIndices → empty WEEKLY
+  G._userStacks=[sA,sB];G._activeStackIndices=[];G.updateWEEKLY();
+  check('no active stacks → WEEKLY is empty array',G.WEEKLY.length===0);
+
+  // Array.isArray guard prevents [] from being treated as falsy
+  check('toggleStack guard removed: can deactivate last active stack',
+    (function(){
+      var src=rawScript;
+      // The old guard "if(_activeStackIndices.length===1)return;" must not exist
+      return !src.includes('_activeStackIndices.length===1)return;');
+    })()
+  );
+
+  // updateWEEKLY uses WEEKLY=[] not WEEKLY_DEFAULT.slice() for empty active
+  check('updateWEEKLY uses WEEKLY=[] for empty active (not WEEKLY_DEFAULT)',
+    rawScript.includes('if(!active.length){WEEKLY=[];return;}'));
+
+  // active_index sent as null when no active stacks
+  check('saveStacksToBackend sends active_index null when no active stacks',
+    rawScript.includes('_activeStackIndices.length?_activeStackIndices[0]:null'));
+
+  // Array.isArray guard on loading from backend
+  check('loadStacks uses Array.isArray guard (not ||) for active_indices from backend',
+    rawScript.includes('Array.isArray(data.active_indices)?data.active_indices:'));
+
+  // Array.isArray guard on loading from localStorage cache
+  check('loadStacks uses Array.isArray guard (not ||) for active_indices from cache',
+    rawScript.includes('Array.isArray(cached.active_indices)?cached.active_indices:'));
+
+  // deleteStack no longer forces [0] when result is empty
+  check('deleteStack does not force _activeStackIndices=[0] after removal',
+    !rawScript.includes("if(!_activeStackIndices.length)_activeStackIndices=[0];"));
 }
 
 // ── Storage tab hideable via Settings ─────────────────────────────────────────

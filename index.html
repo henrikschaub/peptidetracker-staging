@@ -415,7 +415,7 @@ async function loadUserStacks(){
     if(r.ok){
       var data=await r.json();
       _userStacks=data.stacks||[];
-      _activeStackIndices=data.active_indices||(data.active_index!=null?[data.active_index]:[0]);
+      _activeStackIndices=Array.isArray(data.active_indices)?data.active_indices:(data.active_index!=null?[data.active_index]:[0]);
       // Cache to localStorage for offline fallback
       try{localStorage.setItem('stacks_cache',JSON.stringify({stacks:_userStacks,active_indices:_activeStackIndices}));}catch(e){}
     } else {
@@ -425,7 +425,7 @@ async function loadUserStacks(){
     // Try localStorage cache before falling back to synthesized stack
     try{
       var cached=JSON.parse(localStorage.getItem('stacks_cache')||'null');
-      if(cached&&cached.stacks&&cached.stacks.length){_userStacks=cached.stacks;_activeStackIndices=cached.active_indices||(cached.active_index!=null?[cached.active_index]:[0]);}
+      if(cached&&cached.stacks&&cached.stacks.length){_userStacks=cached.stacks;_activeStackIndices=Array.isArray(cached.active_indices)?cached.active_indices:(cached.active_index!=null?[cached.active_index]:[0]);}
       else{_userStacks=[];_activeStackIndices=[0];}
     }catch(e2){_userStacks=[];_activeStackIndices=[0];}
   }
@@ -473,7 +473,7 @@ async function loadUserStacks(){
 // ── Update WEEKLY from active stack ──────────────────────────────────────────
 function updateWEEKLY(){
   var active=_activeStackIndices.filter(function(i){return i>=0&&i<_userStacks.length;});
-  if(!active.length){WEEKLY=WEEKLY_DEFAULT.slice();return;}
+  if(!active.length){WEEKLY=[];return;}
   if(active.length===1){WEEKLY=buildWeeklyFromProtocol(_userStacks[active[0]]);return;}
   var seen={};WEEKLY=[];
   active.forEach(function(i){
@@ -485,7 +485,7 @@ function updateWEEKLY(){
 }
 // ── Save all stacks to backend ───────────────────────────────────────────────
 async function saveStacksToBackend(){
-  var payload={stacks:_userStacks,active_index:_activeStackIndices[0]||0,active_indices:_activeStackIndices};
+  var payload={stacks:_userStacks,active_index:_activeStackIndices.length?_activeStackIndices[0]:null,active_indices:_activeStackIndices};
   var body=JSON.stringify(payload);
   // localStorage is the primary store — always write first so data is never lost
   try{localStorage.setItem('stacks_cache',body);}catch(e){}
@@ -510,7 +510,6 @@ async function toggleStack(idx){
   if(pos===-1){
     _activeStackIndices.push(idx);
   } else {
-    if(_activeStackIndices.length===1)return; // keep at least one active
     _activeStackIndices.splice(pos,1);
   }
   updateWEEKLY();
@@ -536,8 +535,7 @@ async function deleteStack(idx){
   if(idx>=0&&idx<_userStacks.length){
     _userStacks.splice(idx,1);
     _activeStackIndices=_activeStackIndices.filter(function(i){return i!==idx;}).map(function(i){return i>idx?i-1:i;});
-    if(!_activeStackIndices.length)_activeStackIndices=[0];
-    if(_activeStackIndices[0]>=_userStacks.length)_activeStackIndices=[Math.max(0,_userStacks.length-1)];
+    if(_activeStackIndices.length&&_activeStackIndices[0]>=_userStacks.length)_activeStackIndices=[Math.max(0,_userStacks.length-1)];
     await saveStacksToBackend();
     updateWEEKLY();
     buildWeekStrip();
