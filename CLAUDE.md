@@ -1,5 +1,14 @@
 # Peptide Tracker Staging — Claude Instructions
 
+## ⚠️ NO PRICES IN THE APP — NEVER ⚠️
+Supplier pricing is commercially sensitive and must **NEVER** appear in any app UI, rendered HTML, or user-facing output. The `PRICELIST` const in `index.html` (and `tests/pricelist.csv`) contains only vial sizes and quantities (`q`, `unit`, `n` fields) — **no `usd` or price fields**.
+
+Rules:
+- **Never add a `usd`, `price`, or any cost field** to `PRICELIST` entries
+- **Never display US$ amounts, per-box prices, or grand totals** in the Shopping List modal or anywhere else
+- `PRICELIST` is used **exclusively** for quantity calculations (how many vials/boxes needed per cycle)
+- `pricelist.csv` must have only 3 columns: `SKU Code;Products Name;Mg*vials` — no price column ever
+
 ## ⚠️ localStorage IS A CACHE — NEVER THE SOURCE OF TRUTH ⚠️
 localStorage is a read cache for performance only. It is NEVER the source of truth.
 
