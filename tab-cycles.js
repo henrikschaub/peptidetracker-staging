@@ -259,7 +259,9 @@ async function cycleWizConfirm(){
   if(btn){btn.textContent='Creating…';btn.disabled=true;}
   var payload={startDate:_cwiz.startDate,phase:_cwiz.phase||'foundational',cycleLengthWeeks:_cwiz.weeks,compounds:_cwiz.compounds.filter(function(c){return c.name;})};
   try{
+    await _ensureValidToken();
     var r=await fetch(AGENT_URL+'/cycles',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(payload)});
+    if(r.status===401){await _ensureValidToken();r=await fetch(AGENT_URL+'/cycles',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(payload)});}
     if(!r.ok)throw new Error('HTTP '+r.status);
     var res=await r.json();
     var c=res.cycle||res;
@@ -268,7 +270,7 @@ async function cycleWizConfirm(){
     renderCyclesTab();
   }catch(e){
     if(btn){btn.textContent='Start Cycle';btn.disabled=false;}
-    alert('Could not create cycle: '+e.message);
+    alert('Could not create cycle: '+(e.message==='HTTP 401'?'Session expired — please re-sign in and try again':e.message));
   }
 }
 /* ── TODAY CHECK-IN ── */
