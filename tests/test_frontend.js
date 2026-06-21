@@ -1376,8 +1376,12 @@ console.log('\n── dose dedup migration ────────────�
     todayJs.includes('getDosesForDate(NOW)') && !todayJs.includes('WEEKLY.forEach(d=>'));
   check('showDayInline uses getDosesForDate for future days',
     todayJs.includes('doses=getDosesForDate(d)'));
-  check('showDayInline uses getPastDoses for past days',
+  check('showDayInline past days: getDosesForDate used inside isPast branch',
+    /if\(isPast\)[\s\S]{0,200}getDosesForDate\(d\)/.test(todayJs));
+  check('showDayInline past days: getPastDoses used to surface orphaned logged doses',
     todayJs.includes('isPast') && todayJs.includes('getPastDoses(d)') && todayJs.includes('_findWeeklyItemInfo(bid)'));
+  check('showDayInline past days: isChk does not use _pastChecked shortcut',
+    !todayJs.includes('_pastChecked||checked') && !todayJs.includes('dose._pastChecked'));
   check('buildWeekStrip uses getDosesForDate for future/today dots',
     todayJs.includes('getDosesForDate(d).forEach'));
   check('buildWeekStrip uses getPastDoses + _findWeeklyItemInfo for past dots',

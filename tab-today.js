@@ -62,11 +62,16 @@ function showDayInline(date,tileEl){
   if(isToday){_viewDate=null;document.querySelectorAll('.week-day').forEach(e=>e.classList.remove('selected-day'));buildToday();return;}
   var doses=[];
   if(isPast){
-    var _pastIds=getPastDoses(d)||[];
-    _pastIds.forEach(function(doseId){
-      var bid=doseId.substring(0,doseId.lastIndexOf('_'));
-      var inf=_findWeeklyItemInfo(bid);
-      doses.push({id:doseId,name:inf?inf.name:bid,detail:inf?inf.detail:'',time:inf?inf.time:null,dot:inf?inf.dot:'#888',_pastChecked:true});
+    doses=getDosesForDate(d);
+    _getDynamicTRTDoses(d,true).forEach(function(x){if(!doses.some(function(y){return y.id===x.id;}))doses.push(x);});
+    // Also surface logged doses no longer in the current schedule (renamed/removed peptide)
+    var _logged=getPastDoses(d)||[];
+    _logged.forEach(function(doseId){
+      if(!doses.some(function(x){return x.id===doseId;})){
+        var bid=doseId.substring(0,doseId.lastIndexOf('_'));
+        var inf=_findWeeklyItemInfo(bid);
+        doses.push({id:doseId,name:inf?inf.name:bid,detail:inf?inf.detail:'',time:inf?inf.time:null,dot:inf?inf.dot:'#888'});
+      }
     });
   }else{
     doses=getDosesForDate(d);
@@ -75,7 +80,7 @@ function showDayInline(date,tileEl){
   const list=document.getElementById('today-checklist');
   const badge=document.getElementById('today-badge');
   const label=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}).toUpperCase();
-  if(!doses.length){list.innerHTML='<div class="empty"><div class="empty-icon">✓</div>'+(isPast?'Nothing logged':'Nothing scheduled')+'</div>';badge.textContent=label;return;}
+  if(!doses.length){list.innerHTML='<div class="empty"><div class="empty-icon">✓</div>Nothing scheduled</div>';badge.textContent=label;return;}
   _viewDate=d;
   const order={'AM':0,'null':1,'PM':2};
   doses.sort((a,b)=>(order[a.time]??1)-(order[b.time]??1));
@@ -83,7 +88,7 @@ function showDayInline(date,tileEl){
   if(_syncPending){list.innerHTML='<div class="today-spinner"><div class="today-spinner-dot"></div></div>';badge.textContent=label;badge.className='card-badge badge-today';document.querySelectorAll('.week-day').forEach(function(e){e.classList.remove('selected-day');});if(tileEl)tileEl.classList.add('selected-day');_viewDate=d;return;}if(isPast){var _lk='proto-chk-'+dateKey(d);if(!localStorage.getItem(_lk)){var _bd=getPastDoses(d);if(_bd)localStorage.setItem(_lk,JSON.stringify(_bd));}}var checked=getChecked();
   doses.forEach(function(dose){
     var realId=dose.id;
-    var isChk=dose._pastChecked||checked.includes(realId);
+    var isChk=checked.includes(realId);
     var item=document.createElement('div');item.className='check-item'+(isChk?' checked-item':'');
     item.onclick=function(){toggle(realId);};
     var box=document.createElement('div');box.className='check-box'+(isChk?' checked':'');
