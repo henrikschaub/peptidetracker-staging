@@ -34,7 +34,10 @@ const patchedScript = rawScript
   .replace('let _reconState=',        'var _reconState=')
   .replace('let weights=',            'var weights=')
   .replace('var _bcWeightWindow=',    'var _bcWeightWindow=')
-  .replace('var _bcWeightHistOpen=',  'var _bcWeightHistOpen=');
+  .replace('var _bcWeightHistOpen=',  'var _bcWeightHistOpen=')
+  .replace('const PRICELIST=',        'var PRICELIST=')
+  .replace('const DOSE_GUIDE=',       'var DOSE_GUIDE=')
+  .replace('const DEFAULT_PHASES=',   'var DEFAULT_PHASES=');
 
 const noop = () => {};
 const mockCtx = {scale:noop,beginPath:noop,moveTo:noop,lineTo:noop,arc:noop,fill:noop,stroke:noop,fillText:noop,closePath:noop,createLinearGradient:()=>({addColorStop:noop}),save:noop,restore:noop,fillRect:noop};
@@ -1431,4 +1434,57 @@ console.log('\n── dose dedup migration ────────────�
     (function(){var t=G.CYCLE_TEMPLATES&&G.CYCLE_TEMPLATES.find(function(x){return x.id==='custom';});return t&&t.compounds&&t.compounds[0]&&t.compounds[0].name==='Testosterone Enanthate';})());
   check('optgroup labels used in compound dropdown (Base, DHT-Derived, 19-Nor)',
     tabCyclesJs.includes('optgroup label=')&&tabCyclesJs.includes('19-Nor'));
+  check('ENHANCEMENT_COMPOUNDS has pack specs for injectables (test_e)',
+    G.ENHANCEMENT_COMPOUNDS&&(function(){var e=G.ENHANCEMENT_COMPOUNDS.find(function(x){return x.id==='test_e';});return e&&e.pack&&e.pack.type==='vial'&&e.pack.conc_mg_ml===250&&e.pack.vol_ml===10;})());
+  check('ENHANCEMENT_COMPOUNDS has pack specs for tablets (anavar)',
+    G.ENHANCEMENT_COMPOUNDS&&(function(){var e=G.ENHANCEMENT_COMPOUNDS.find(function(x){return x.id==='anavar';});return e&&e.pack&&e.pack.type==='tablet'&&e.pack.mg_per_tab===10&&e.pack.tabs_per_pack===100;})());
+  check('ENHANCEMENT_COMPOUNDS tren_e has pack (200mg/mL × 10mL)',
+    G.ENHANCEMENT_COMPOUNDS&&(function(){var e=G.ENHANCEMENT_COMPOUNDS.find(function(x){return x.id==='tren_e';});return e&&e.pack&&e.pack.conc_mg_ml===200;})());
+  check('ENHANCEMENT_COMPOUNDS hgh pack is null (bridged to pricelist)',
+    G.ENHANCEMENT_COMPOUNDS&&(function(){var e=G.ENHANCEMENT_COMPOUNDS.find(function(x){return x.id==='hgh';});return e&&e.pack===null;})());
+}
+{
+  // ── PRICELIST & Cart functions ───────────────────────────────────────────
+  const G=sandbox;
+  check('PRICELIST is defined',typeof G.PRICELIST==='object'&&G.PRICELIST!==null);
+  check('PRICELIST CP10 = 10mg/vial × 10 vials × $120',
+    G.PRICELIST&&G.PRICELIST['CP10']&&G.PRICELIST['CP10'].q===10&&G.PRICELIST['CP10'].n===10&&G.PRICELIST['CP10'].usd===120);
+  check('PRICELIST H24 = 24 IU/vial × 10 vials × $118',
+    G.PRICELIST&&G.PRICELIST['H24']&&G.PRICELIST['H24'].q===24&&G.PRICELIST['H24'].unit==='iu'&&G.PRICELIST['H24'].usd===118);
+  check('PRICELIST RT5 = 5mg × 10 × $95',
+    G.PRICELIST&&G.PRICELIST['RT5']&&G.PRICELIST['RT5'].q===5&&G.PRICELIST['RT5'].usd===95);
+  check('openCartModal function defined',typeof G.openCartModal==='function');
+  check('closeCartModal function defined',typeof G.closeCartModal==='function');
+  check('_renderCartModal function defined',typeof G._renderCartModal==='function');
+  check('_calcPeptideCartItem function defined',typeof G._calcPeptideCartItem==='function');
+  check('_calcEnhancementCartItem function defined',typeof G._calcEnhancementCartItem==='function');
+  check('_calcPeptideCartItem: retatrutide 3mg/week 1x/week 12wks → ~36mg → 4 vials RT5 → 1 box × $95',
+    (function(){
+      var p={id:'retatrutide',name:'Retatrutide',dose_am:'3',dose_pm:'',unit_am:'mg',unit_pm:'mg',times:['AM'],days:[0],active:true};
+      var item=G._calcPeptideCartItem(p,12);
+      return item&&item.vials===Math.ceil(3*1*12/5)&&item.price===(Math.ceil(Math.ceil(3*1*12/5)/10)*95);
+    })());
+  check('_calcPeptideCartItem: HGH 3 IU/day 7 days/week 12wks → 252 IU → 11 vials H24 → 2 boxes × $118',
+    (function(){
+      var p={id:'hgh',name:'HGH',dose_am:'3',dose_pm:'',unit_am:'IU',unit_pm:'IU',times:['AM'],days:[0,1,2,3,4,5,6],active:true};
+      var item=G._calcPeptideCartItem(p,12);
+      var totalIU=3*7*12; // 252 IU
+      var vials=Math.ceil(totalIU/24); // ceil(10.5)=11
+      var boxes=Math.ceil(vials/10);   // ceil(1.1)=2
+      return item&&item.vials===vials&&item.boxes===boxes&&item.price===boxes*118;
+    })());
+  check('_calcEnhancementCartItem: test_e 400mg/week 16wks → 6400mg → 3 vials (250×10=2500mg each)',
+    (function(){
+      var c={name:'Testosterone Enanthate',dose:400,unit:'mg/week',active:true};
+      var item=G._calcEnhancementCartItem(c,16);
+      return item&&item.units===Math.ceil(400*16/2500)&&item.unitLabel==='vials';
+    })());
+  check('_calcEnhancementCartItem: anavar 50mg/day 8wks → 2800mg → 3 packs (10×100=1000mg each)',
+    (function(){
+      var c={name:'Anavar (Oxandrolone)',dose:50,unit:'mg/day',active:true};
+      var item=G._calcEnhancementCartItem(c,8);
+      return item&&item.units===Math.ceil(50*7*8/1000)&&item.unitLabel==='packs';
+    })());
+  check('buildStackStore HTML includes Shopping List button',
+    (function(){var html=fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'index.html'),'utf8');return html.includes('openCartModal')&&html.includes('Shopping List');})());
 }

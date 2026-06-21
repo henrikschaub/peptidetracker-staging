@@ -179,6 +179,11 @@
     <div id="cycle-wiz-inner"></div>
   </div>
 </div>
+<div id="cart-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9000;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 40px;" onclick="if(event.target===this)closeCartModal()">
+  <div style="max-width:480px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;" onclick="event.stopPropagation()">
+    <div id="cart-modal-inner"></div>
+  </div>
+</div>
 <div id="onboarding-overlay" class="hidden">
   <div class="ob-header">
     <div class="ob-dots" id="ob-dots"></div>
@@ -332,6 +337,41 @@ const PEPTIDE_CAT=[
   {id:'nad',name:'NAD+',sku:'NJ100',group:'Anti-aging',goals:['antiaging','cognitive'],dot:'#ff6b2b',cg:[],desc:'Energy, DNA repair, sirtuin activation.',halfLife:'Utilised within hours; upstream effects are sustained',mechanism:'Nicotinamide Adenine Dinucleotide — the central redox coenzyme present in every cell. Serves as an electron carrier in mitochondrial energy production (ATP synthesis) and as a substrate for sirtuins (SIRT1–7, longevity regulators), PARP enzymes (DNA strand break repair), and CD38. NAD+ levels decline ~50% between age 20 and 60.',benefits:['ATP production and cellular energy restoration','DNA strand break repair via PARP activation','Sirtuin (SIRT1/SIRT3) activation — the primary longevity pathway','Neuroinflammation reduction and cognitive clarity','Mitochondrial biogenesis','Addictive cravings reduction (emerging clinical data)'],protocol:'100–500 mg SC 3× per week. SC is more practical than IV for ongoing protocols. IV offers faster CNS onset but requires slow infusion to avoid flushing. Oral NMN or NR are lower-cost precursor alternatives.',sideEffects:['Flushing and warmth — IV much more than SC','Nausea during rapid IV infusion','Transient chest tightness (IV only — slow the drip)','SC at ≤250 mg is generally well tolerated','High doses may accelerate cancer growth in pre-existing tumours — screen first'],dflt:{times:['AM'],days:[1,3,5],doseAm:'100',dosePm:'',unitAm:'mg',unitPm:'mg'}},
   {id:'hcg',name:'HCG',sku:'G5K',group:'TRT Support',goals:['trt'],dot:'#c084fc',cg:[],desc:'Testicular stimulation during TRT. Maintains fertility/size.',halfLife:'~33–36 h',mechanism:'Human Chorionic Gonadotropin — a glycoprotein hormone that mimics LH at the Leydig cell receptor in the testes. On exogenous testosterone, the HPG axis suppresses LH (which would normally drive the testes). HCG restores that LH signal, maintaining intratesticular testosterone production, testicular volume, and spermatogenesis.',benefits:['Prevents testicular atrophy during TRT','Maintains fertility and sperm count','Preserves intratesticular testosterone for mood and libido','Reduces the feeling of "shutdown" on TRT','Useful for fertility restart when discontinuing TRT'],protocol:'250–500 IU SC every 2–3 days (or 1,000 IU 3× per week for fertility). Inject abdomen or thigh. Use throughout TRT cycle and continue for 4–6 weeks post-cycle if fertility is the goal. Monitor oestradiol — HCG aromatises heavily.',sideEffects:['Elevated oestradiol (aromatisation) — may require an AI','Acne and oily skin','Water retention','Testicular discomfort or sensitivity (uncommon)','Mood fluctuations with oestrogen shifts'],dflt:{times:['AM'],days:[1,4],doseAm:'500',dosePm:'',unitAm:'IU',unitPm:'IU'}},
 ];
+// Peptide supplier pricelist (sourced from pricelist.csv). q=mg or IU per vial, n=vials/box, usd=price/box
+const PRICELIST={
+  'TR5':{q:5,unit:'mg',n:10,usd:51},'TR10':{q:10,unit:'mg',n:10,usd:70},'TR15':{q:15,unit:'mg',n:10,usd:87},
+  'TR20':{q:20,unit:'mg',n:10,usd:115},'TR30':{q:30,unit:'mg',n:10,usd:162},'TR40':{q:40,unit:'mg',n:10,usd:178},
+  'TR50':{q:50,unit:'mg',n:10,usd:199},'TR60':{q:60,unit:'mg',n:10,usd:223},'TR70':{q:70,unit:'mg',n:10,usd:242},
+  'TR80':{q:80,unit:'mg',n:10,usd:276},'TR90':{q:90,unit:'mg',n:10,usd:299},'TR100':{q:100,unit:'mg',n:10,usd:320},
+  'TR120':{q:120,unit:'mg',n:10,usd:378},
+  'SM2':{q:2,unit:'mg',n:10,usd:21},'SM5':{q:5,unit:'mg',n:10,usd:44},'SM10':{q:10,unit:'mg',n:10,usd:63},
+  'SM15':{q:15,unit:'mg',n:10,usd:75},'SM20':{q:20,unit:'mg',n:10,usd:94},'SM30':{q:30,unit:'mg',n:10,usd:119},
+  'SM50':{q:50,unit:'mg',n:10,usd:165},
+  'RT5':{q:5,unit:'mg',n:10,usd:95},'RT10':{q:10,unit:'mg',n:10,usd:136},'RT15':{q:15,unit:'mg',n:10,usd:175},
+  'RT20':{q:20,unit:'mg',n:10,usd:216},'RT30':{q:30,unit:'mg',n:10,usd:282},'RT40':{q:40,unit:'mg',n:10,usd:359},
+  'RT50':{q:50,unit:'mg',n:10,usd:410},'RT60':{q:60,unit:'mg',n:10,usd:529},
+  'CGL5':{q:5,unit:'mg',n:10,usd:122},'CGL10':{q:10,unit:'mg',n:10,usd:237},
+  'LC216':{q:10,unit:'ml',n:10,usd:84},
+  'BBG70':{q:70,unit:'mg',n:10,usd:229},'Klow80':{q:80,unit:'mg',n:10,usd:245},
+  'BT2':{q:2,unit:'mg',n:10,usd:45},'BT5':{q:5,unit:'mg',n:10,usd:93},'BT10':{q:10,unit:'mg',n:10,usd:176},
+  'BC5':{q:5,unit:'mg',n:10,usd:50},'BC10':{q:10,unit:'mg',n:10,usd:73},
+  'BB10':{q:10,unit:'mg',n:10,usd:122},'BB20':{q:20,unit:'mg',n:10,usd:205},
+  'NJ100':{q:100,unit:'mg',n:10,usd:47},'NJ500':{q:500,unit:'mg',n:10,usd:94},'NJ1000':{q:1000,unit:'mg',n:10,usd:177},
+  '5AD':{q:2,unit:'mg',n:10,usd:50},'5AD2':{q:5,unit:'mg',n:10,usd:106},'10AD':{q:10,unit:'mg',n:10,usd:193},
+  'CU50':{q:50,unit:'mg',n:10,usd:34},'CU100':{q:100,unit:'mg',n:10,usd:62},
+  'MS10':{q:10,unit:'mg',n:10,usd:71},'MS20':{q:20,unit:'mg',n:10,usd:136},'MS30':{q:30,unit:'mg',n:10,usd:196},'MS40':{q:40,unit:'mg',n:10,usd:235},
+  'G5K':{q:5000,unit:'iu',n:10,usd:88},'G10K':{q:10000,unit:'iu',n:10,usd:156},
+  'H10':{q:10,unit:'iu',n:10,usd:51},'H12':{q:12,unit:'iu',n:10,usd:60},'H15':{q:15,unit:'iu',n:10,usd:76},'H24':{q:24,unit:'iu',n:10,usd:118},
+  'CD2':{q:2,unit:'mg',n:10,usd:75},'CD5':{q:5,unit:'mg',n:10,usd:180},
+  'CND2':{q:2,unit:'mg',n:10,usd:45},'CND5':{q:5,unit:'mg',n:10,usd:99},'CND10':{q:10,unit:'mg',n:10,usd:193},
+  'CP10':{q:10,unit:'mg',n:10,usd:120},
+  'SMO5':{q:5,unit:'mg',n:10,usd:73},'SMO10':{q:10,unit:'mg',n:10,usd:148},
+  'TSM2':{q:2,unit:'mg',n:10,usd:60},'TSM5':{q:5,unit:'mg',n:10,usd:117},'TSM10':{q:10,unit:'mg',n:10,usd:230},'TSM20':{q:20,unit:'mg',n:10,usd:410},
+  'ET10':{q:10,unit:'mg',n:10,usd:37},'ET50':{q:50,unit:'mg',n:10,usd:169},
+  'IP5':{q:5,unit:'mg',n:10,usd:40},'IP10':{q:10,unit:'mg',n:10,usd:75},
+  'XA5':{q:5,unit:'mg',n:10,usd:46},'XA10':{q:10,unit:'mg',n:10,usd:75},'XA50':{q:50,unit:'mg',n:10,usd:375},
+  'SK5':{q:5,unit:'mg',n:10,usd:47},'SK10':{q:10,unit:'mg',n:10,usd:75}
+};
 // Dose guidance tiers per compound. Keys: l=label, d=dose string, n=note, b=1(optimal tier), r=risk text
 const DOSE_GUIDE={
   'cjc-ipa':    [{l:'Conservative',d:'3 IU × 2/day',n:'Maintenance / older adults'},{l:'Optimal',d:'4–6 IU × 2/day',n:'GH pulse for muscle & recovery',b:1},{l:'High',d:'8 IU × 2/day',n:'Aggressive loading',r:'Receptor saturation possible; diminishing returns above 8 IU'}],
@@ -600,6 +640,7 @@ function buildStackStore(){
     html+='<div class="stack-card-meta">';
     html+='<div>'+pCount+' peptide'+(pCount===1?'':'s')+'</div>';
     if(hasTrt)html+='<div style="color:var(--accent4);">+ TRT</div>';
+    html+='<button onclick="event.stopPropagation();openCartModal('+i+')" style="margin-top:4px;background:transparent;border:1px solid var(--border);color:var(--muted2);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:0.3px">🛒 Shopping List</button>';
     html+='</div>';
     html+='</div>';
   }
@@ -616,6 +657,164 @@ function buildStackStore(){
   }
   html+='</div>';
   body.innerHTML=html;
+}
+// ── Cart / Shopping List ──────────────────────────────────────────────────────
+var _cartStackIdx=0,_cartWeeks=12;
+function openCartModal(i){
+  _cartStackIdx=i;
+  var st=_userStacks[i];
+  _cartWeeks=(st&&st.cycle_length)||(_cycle&&_cycle.cycleLengthWeeks)||12;
+  document.getElementById('cart-modal').style.display='block';
+  document.body.style.overflow='hidden';
+  _renderCartModal();
+}
+function closeCartModal(){
+  document.getElementById('cart-modal').style.display='none';
+  document.body.style.overflow='';
+}
+function _cartDoseMgPerInj(doseVal,doseUnit,reconDb){
+  var d=parseFloat(doseVal);if(!d||isNaN(d))return 0;
+  if(!reconDb)return doseUnit==='mg'?d:doseUnit==='mcg'?d/1000:0;
+  var vialUnit=reconDb.unit||'mg';
+  if(vialUnit==='IU')return null; // HGH/HCG: keep in IU, handled separately
+  var vi=reconDb.defaultVi!=null?reconDb.defaultVi:0;
+  var wi=reconDb.defaultWi!=null?reconDb.defaultWi:reconDb.water.length-1;
+  var vialMg=reconDb.vials[vi];var waterMl=reconDb.water[wi];var conc=vialMg/waterMl;
+  if(doseUnit==='mg')return d;
+  if(doseUnit==='mcg')return d/1000;
+  if(doseUnit==='ml')return d*conc;
+  if(doseUnit==='IU')return d*0.01*conc; // insulin pen: 1 IU = 0.01 ml
+  return 0;
+}
+function _calcPeptideCartItem(p,weeks){
+  var cat=PEPTIDE_CAT.find(function(c){return c.id===p.id;});
+  if(!cat||!cat.sku)return null;
+  var pl=PRICELIST[cat.sku];
+  var reconDb=RECON_DB[p.id]||null;
+  var vialUnit=reconDb?reconDb.unit||'mg':'mg';
+  var isIuProduct=vialUnit==='IU'; // HGH, HCG
+  var days=(p.days||[0,1,2,3,4,5,6]).length;
+  var times=p.times||['AM'];
+  var totalInUnit=0;
+  if(isIuProduct){
+    var dAm=times.includes('AM')?parseFloat(p.dose_am||0):0;
+    var dPm=times.includes('PM')?parseFloat(p.dose_pm||0):0;
+    totalInUnit=(dAm+dPm)*days*weeks;
+    if(!totalInUnit)return{name:p.name||cat.name,sku:cat.sku,noData:true};
+    if(!pl)return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalInUnit*10)/10,unit:'IU',vials:null,boxes:null,price:null};
+    var vials=Math.ceil(totalInUnit/pl.q);var boxes=Math.ceil(vials/pl.n);
+    return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalInUnit*10)/10,unit:'IU',vials:vials,boxes:boxes,price:boxes*pl.usd};
+  }else{
+    var mgAm=times.includes('AM')?(_cartDoseMgPerInj(p.dose_am,p.unit_am,reconDb)||0):0;
+    var mgPm=times.includes('PM')?(_cartDoseMgPerInj(p.dose_pm,p.unit_pm,reconDb)||0):0;
+    var totalMg=(mgAm+mgPm)*days*weeks;
+    if(!totalMg)return{name:p.name||cat.name,sku:cat.sku,noData:true};
+    if(!pl)return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalMg*10)/10,unit:'mg',vials:null,boxes:null,price:null};
+    var vials=Math.ceil(totalMg/pl.q);var boxes=Math.ceil(vials/pl.n);
+    return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalMg*10)/10,unit:'mg',vials:vials,boxes:boxes,price:boxes*pl.usd};
+  }
+}
+function _calcEnhancementCartItem(c,weeks){
+  var ec=ENHANCEMENT_COMPOUNDS.find(function(x){return x.name===c.name;});
+  // HGH: bridge to pricelist via PEPTIDE_CAT
+  if(ec&&ec.id==='hgh'){
+    var pepHgh=PEPTIDE_CAT.find(function(p){return p.id==='hgh';});
+    var pl=pepHgh?PRICELIST[pepHgh.sku]:null;
+    var doseVal=parseFloat(c.dose)||0;
+    var unit=c.unit||'IU/day';
+    var totalIU=unit==='IU/day'?doseVal*7*weeks:doseVal*weeks;
+    if(!totalIU)return null;
+    if(!pl)return{name:c.name,totalMg:Math.round(totalIU),totalUnit:'IU',units:null,unitLabel:'vials',packDesc:'',noPrice:true};
+    var vials=Math.ceil(totalIU/pl.q);var boxes=Math.ceil(vials/pl.n);
+    return{name:c.name,totalMg:Math.round(totalIU),totalUnit:'IU',units:vials,unitLabel:vials===1?'vial':'vials',packDesc:'('+pl.q+' IU/vial)',price:boxes*pl.usd,sku:pepHgh.sku};
+  }
+  if(!ec||!ec.pack)return null;
+  var doseVal=parseFloat(c.dose)||0;var unit=c.unit||'mg/week';
+  var totalMg=0;
+  if(unit==='mg/week')totalMg=doseVal*weeks;
+  else if(unit==='mg/day')totalMg=doseVal*7*weeks;
+  else if(unit==='mg/EOD')totalMg=doseVal*Math.ceil(weeks*7/2);
+  else totalMg=doseVal*weeks;
+  if(!totalMg)return null;
+  var pack=ec.pack;
+  var mgPerUnit=pack.type==='vial'?pack.conc_mg_ml*pack.vol_ml:pack.mg_per_tab*pack.tabs_per_pack;
+  var units=Math.ceil(totalMg/mgPerUnit);
+  var isTab=pack.type==='tablet';
+  var packDesc=isTab?'('+pack.mg_per_tab+' mg/tab × '+pack.tabs_per_pack+' tabs/pack)':'('+pack.conc_mg_ml+' mg/mL × '+pack.vol_ml+' mL)';
+  return{name:c.name,totalMg:Math.round(totalMg),totalUnit:'mg',units:units,unitLabel:isTab?(units===1?'pack':'packs'):(units===1?'vial':'vials'),packDesc:packDesc,noPrice:true};
+}
+function _renderCartModal(){
+  var inner=document.getElementById('cart-modal-inner');if(!inner)return;
+  var st=_userStacks[_cartStackIdx];
+  if(!st){inner.innerHTML='<div style="padding:20px;color:var(--muted2)">No stack selected</div>';return;}
+  var weeks=_cartWeeks;
+  var ins='padding:8px 12px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:14px;font-family:inherit';
+  var h='<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">';
+  h+='<div style="font-family:Bebas Neue,sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent)">SHOPPING LIST</div>';
+  h+='<button onclick="closeCartModal()" style="background:none;border:none;color:var(--muted2);font-size:20px;cursor:pointer;padding:0;line-height:1">&#x2715;</button>';
+  h+='</div>';
+  h+='<div style="padding:16px 20px 20px">';
+  h+='<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:14px">'+_esc(st.name||'Stack '+(_cartStackIdx+1))+'</div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:12px;color:var(--muted2)">';
+  h+='Cycle length: <input type="number" min="1" max="52" value="'+weeks+'" oninput="_cartWeeks=Math.max(1,parseInt(this.value)||12);_renderCartModal()" style="'+ins+';width:64px;text-align:center"> weeks';
+  h+='</div>';
+  var peptides=(st.peptides||[]).filter(function(p){return p.active!==false&&(p.dose_am||p.dose_pm);});
+  var totalCost=0;var hasItems=false;
+  if(peptides.length){
+    h+='<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Peptides — from supplier</div>';
+    peptides.forEach(function(p){
+      var item=_calcPeptideCartItem(p,weeks);if(!item)return;hasItems=true;
+      h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">';
+      h+='<div style="font-size:13px;font-weight:600;color:var(--text);flex:1">'+_esc(item.name)+'</div>';
+      if(item.price!=null){h+='<div style="font-size:14px;font-weight:700;color:var(--accent);flex-shrink:0">US$'+item.price+'</div>';totalCost+=item.price;}
+      h+='</div>';
+      if(item.noData){h+='<div style="font-size:11px;color:var(--muted2);margin-top:4px">Set dose in Stack to calculate</div>';}
+      else if(item.vials!=null){
+        h+='<div style="font-size:11px;color:var(--muted2);line-height:1.9;margin-top:4px">';
+        h+='Total: '+item.total+' '+item.unit+' · '+item.vials+' vial'+(item.vials===1?'':'s');
+        if(item.boxes!=null)h+=' → <span style="font-weight:600;color:var(--text)">'+item.boxes+' box'+(item.boxes===1?'':'es')+'</span>';
+        h+='<br><span style="font-size:10px">SKU: '+_esc(item.sku)+'</span>';
+        h+='</div>';
+      }else{
+        h+='<div style="font-size:11px;color:var(--muted2);margin-top:4px">'+item.total+' '+item.unit+' total · SKU: '+_esc(item.sku)+' (not in pricelist)</div>';
+      }
+      h+='</div>';
+    });
+    if(!peptides.some(function(p){return _calcPeptideCartItem(p,weeks);})){
+      h+='<div style="font-size:12px;color:var(--muted2);padding:8px 0">No peptide data available</div>';
+    }
+  }
+  var enhanceCmpds=_cycle&&_cycle.compounds?_cycle.compounds.filter(function(c){return c.active&&c.name;}):[];
+  if(enhanceCmpds.length){
+    h+='<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;margin-top:18px">Enhancement Compounds — source separately</div>';
+    enhanceCmpds.forEach(function(c){
+      var item=_calcEnhancementCartItem(c,weeks);if(!item)return;hasItems=true;
+      h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">';
+      h+='<div style="font-size:13px;font-weight:600;color:var(--text);flex:1">'+_esc(item.name)+'</div>';
+      if(item.price!=null){h+='<div style="font-size:14px;font-weight:700;color:var(--accent);flex-shrink:0">US$'+item.price+'</div>';totalCost+=item.price;}
+      else{h+='<div style="font-size:10px;color:var(--muted2);flex-shrink:0;margin-top:2px">price varies</div>';}
+      h+='</div>';
+      h+='<div style="font-size:11px;color:var(--muted2);line-height:1.9;margin-top:4px">';
+      h+='Total: '+item.totalMg.toLocaleString()+' '+item.totalUnit+' · <span style="font-weight:600;color:var(--text)">'+item.units+' '+item.unitLabel+'</span> '+_esc(item.packDesc);
+      if(item.sku)h+='<br><span style="font-size:10px">SKU: '+_esc(item.sku)+'</span>';
+      h+='</div>';
+      h+='</div>';
+    });
+  }
+  if(!hasItems&&!peptides.length&&!enhanceCmpds.length){
+    h+='<div style="text-align:center;padding:24px 0;color:var(--muted2);font-size:13px">Add peptides to this stack to see your shopping list.</div>';
+  }
+  if(totalCost>0){
+    h+='<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;display:flex;justify-content:space-between;align-items:center">';
+    h+='<div style="font-size:11px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:0.5px">Peptide Total</div>';
+    h+='<div style="font-size:22px;font-weight:700;color:var(--accent)">US$'+totalCost+'</div>';
+    h+='</div>';
+    h+='<div style="font-size:10px;color:var(--muted2);margin-top:4px;text-align:right">All-in for '+weeks+' weeks ('+peptides.length+' peptide'+(peptides.length===1?'':'s')+')</div>';
+  }
+  h+='</div>';
+  inner.innerHTML=h;
 }
 // ── Create or edit stack ─────────────────────────────────────────────────────
 // ── Weight tracking ────────────────────────────────────────────────────────
