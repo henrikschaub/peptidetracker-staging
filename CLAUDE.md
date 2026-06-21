@@ -1,5 +1,20 @@
 # Peptide Tracker Staging — Claude Instructions
 
+## ⚠️ COMPOUND DATA LIVES IN BACKEND ONLY — NEVER IN PUBLIC REPOS ⚠️
+All peptide and compound information is **commercially sensitive and proprietary**. It must **NEVER** be stored in any public repository (`peptidetracker`, `peptidetracker-staging`, `workout`, `workout-staging`).
+
+This includes, but is not limited to:
+- Peptide catalogue data (names, SKUs, mechanisms, protocols, side effects, dosing defaults)
+- Enhancement compound data (concentrations, vial sizes, anabolic profiles, dosing guidance)
+- Reconstitution data (vial/water volumes, concentration defaults)
+- Dose guidance tiers and risk labels
+- Pricelist / SKU mappings
+- Any supplier-specific product data
+
+**The only place this data may live is `claude-agent-backend`.** The frontend apps must fetch it from the backend at runtime — never hardcode it into `index.html`, `tab-cycles.js`, or any other file in a public repo.
+
+**Current state (as of 2026-06-21):** `PEPTIDE_CAT`, `ENHANCEMENT_COMPOUNDS`, `RECON_DB`, `DOSE_GUIDE`, `DEFAULT_PHASES`, `PRICELIST`, and related constants are still hardcoded in `index.html` / `tab-cycles.js`. This is a known technical debt. **Do not add new compound data to these files** — any new compounds or data updates must go into the backend and be served via API.
+
 ## ⚠️ NO PRICES IN THE APP — NEVER ⚠️
 Supplier pricing is commercially sensitive and must **NEVER** appear in any app UI, rendered HTML, or user-facing output. The `PRICELIST` const in `index.html` (and `tests/pricelist.csv`) contains only vial sizes and quantities (`q`, `unit`, `n` fields) — **no `usd` or price fields**.
 
