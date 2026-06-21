@@ -103,6 +103,7 @@ function _collectEditInputs(){
   var nameEl=document.getElementById('edit-stack-name');
   if(nameEl)_editBuf.name=nameEl.value;
   var csEl=document.getElementById('edit-cycle-start');if(csEl)_editBuf.cycle_start=csEl.value;
+  var ceEl=document.getElementById('edit-cycle-end');if(ceEl){if(ceEl.value)_editBuf.end_date=ceEl.value;else delete _editBuf.end_date;}
   (_editBuf.peptides||[]).forEach(function(p,pi){
     var el;
     if((el=document.getElementById('ed-dam-'+pi)))p.dose_am=el.value;
@@ -138,11 +139,12 @@ function renderStackEditor(){
     html+='<div class="wiz-section">Cycle</div>';
     if(_effCs){
       var _sd2=parseLocalDate(_effCs);
-      var _ed2=new Date(_sd2.getTime()+cycle*7*86400000);
+      var _explicitEnd2=st.end_date?parseLocalDate(st.end_date):null;
+      var _ed2=_explicitEnd2||new Date(_sd2.getTime()+cycle*7*86400000);
       var _dDone2=Math.max(0,Math.floor((NOW-_sd2)/86400000));
       var _wk2=Math.min(cycle,Math.floor(_dDone2/7)+1);
-      html+='<div style="font-size:13px;color:var(--text);margin-bottom:2px;">Start: '+fmtDate(_sd2)+'</div>';
-      html+='<div style="font-size:12px;color:var(--muted2);margin-bottom:16px;">Week '+_wk2+' of '+cycle+' · Ends '+fmtDate(_ed2)+'</div>';
+      html+='<div style="font-size:13px;color:var(--text);margin-bottom:2px;">'+fmtDate(_sd2)+' → '+fmtDate(_ed2)+'</div>';
+      html+='<div style="font-size:12px;color:var(--muted2);margin-bottom:16px;">Week '+_wk2+' of '+cycle+(_explicitEnd2?' · set end date':' · '+cycle+' wk cycle')+'</div>';
     }else{
       html+='<div style="font-size:12px;color:var(--muted2);margin-bottom:16px;">'+cycle+' wk cycle · No start date</div>';
     }
@@ -193,8 +195,12 @@ function renderStackEditor(){
   html+='<input id="edit-stack-name" type="text" value="'+_esc(st.name||'')+'" oninput="_editBuf.name=this.value" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:15px;font-weight:600;font-family:inherit;outline:none;">';
   html+='</div>';
   html+='<div class="wiz-section">Cycle Start</div>';
-  html+='<input type="date" id="edit-cycle-start" value="'+_esc(_effCs)+'" onchange="_collectEditInputs();renderStackEditor();" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;font-family:inherit;outline:none;width:100%;box-sizing:border-box;margin-bottom:6px;">';
-  if(_effCs&&cycle){var _sd=parseLocalDate(_effCs);var _ed=new Date(_sd.getTime()+cycle*7*86400000);var _dDone=Math.max(0,Math.floor((NOW-_sd)/86400000));var _wk=Math.min(cycle,Math.floor(_dDone/7)+1);html+='<div style="font-size:12px;color:var(--muted2);margin-bottom:16px;">Ends '+fmtDate(_ed)+' · Week '+_wk+' of '+cycle+'</div>';}else{html+='<div style="margin-bottom:16px;"></div>';}
+  var _dateInputStyle='background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;font-family:inherit;outline:none;width:100%;box-sizing:border-box;margin-bottom:6px;';
+  html+='<input type="date" id="edit-cycle-start" value="'+_esc(_effCs)+'" onchange="_collectEditInputs();renderStackEditor();" style="'+_dateInputStyle+'">';
+  if(_effCs&&cycle){var _sd=parseLocalDate(_effCs);var _ed=new Date(_sd.getTime()+cycle*7*86400000);var _dDone=Math.max(0,Math.floor((NOW-_sd)/86400000));var _wk=Math.min(cycle,Math.floor(_dDone/7)+1);html+='<div style="font-size:12px;color:var(--muted2);margin-bottom:16px;">Week '+_wk+' of '+cycle+'</div>';}else{html+='<div style="margin-bottom:16px;"></div>';}
+  html+='<div class="wiz-section">Cycle End</div>';
+  html+='<input type="date" id="edit-cycle-end" value="'+_esc(st.end_date||'')+'" onchange="_collectEditInputs();renderStackEditor();" style="'+_dateInputStyle+'">';
+  if(st.end_date){html+='<div style="font-size:12px;color:var(--muted2);margin-bottom:16px;">Ends '+fmtDate(parseLocalDate(st.end_date))+'</div>';}else if(_effCs&&cycle){html+='<div style="font-size:12px;color:var(--muted2);margin-bottom:16px;">Auto: '+fmtDate(new Date(parseLocalDate(_effCs).getTime()+cycle*7*86400000))+'</div>';}else{html+='<div style="margin-bottom:16px;"></div>';}
   html+='<div class="wiz-section">Cycle Length</div>';
   html+='<select onchange="_collectEditInputs();_editBuf.cycle_length=parseInt(this.value);renderStackEditor();" style="'+_CYCLE_SELECT_STYLE+'">';
   CYCLE_WEEKS.forEach(function(w){html+='<option value="'+w+'"'+(cycle===w?' selected':'')+'>'+w+' weeks</option>';});
@@ -311,7 +317,7 @@ function editPickPeptide(id){
 async function saveEditBuf(){
   _collectEditInputs();
   _userStacks[_editIdx]=_editBuf;
-  if(_isActiveStack(_editIdx)){updateWEEKLY();buildWeekStrip();buildToday();}
+  updateWEEKLY();buildWeekStrip();buildToday();
   await saveStacksToBackend();
   buildStackStore();
   buildTimeline();

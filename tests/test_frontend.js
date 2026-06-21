@@ -1332,6 +1332,59 @@ console.log('\n── dose dedup migration ────────────�
     !rawScript.includes("if(!_activeStackIndices.length)_activeStackIndices=[0];"));
 }
 
+// ── getDosesForDate + _findWeeklyItemInfo (date-range scheduling) ──────────────
+{
+  console.log('\n── getDosesForDate ─────────────────────────────────────────');
+  const fs2=require('fs');
+  const todayJs=fs2.readFileSync(require('path').join(__dirname,'../tab-today.js'),'utf8');
+  const tabStackJs=fs2.readFileSync(require('path').join(__dirname,'../tab-stack.js'),'utf8');
+
+  check('getDosesForDate function defined',typeof G.getDosesForDate==='function');
+  check('_findWeeklyItemInfo function defined',typeof G._findWeeklyItemInfo==='function');
+
+  const cycleStack={name:'Cycle A',cycle_start:'2026-06-21',cycle_length:12,end_date:'2026-09-13',
+    peptides:[{id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'3',unit_am:'mg',active:true}]};
+  G._userStacks=[cycleStack];G._activeStackIndices=[];
+  var jun21=new Date(2026,5,21);
+  var doses21=G.getDosesForDate(jun21);
+  check('getDosesForDate: date-ranged stack shows doses on start date',doses21.length>0);
+  check('getDosesForDate: dose id includes the date',doses21[0]&&doses21[0].id.includes('2026-06-21'));
+
+  var may1=new Date(2026,4,1);
+  check('getDosesForDate: no doses before cycle_start',G.getDosesForDate(may1).length===0);
+
+  var dec1=new Date(2026,11,1);
+  check('getDosesForDate: no doses after end_date',G.getDosesForDate(dec1).length===0);
+
+  const noDateStack={name:'No Date',peptides:[{id:'semaglutide',name:'Sema',dot:'#f59e0b',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'0.5',unit_am:'mg',active:true}]};
+  G._userStacks=[noDateStack];G._activeStackIndices=[];
+  check('getDosesForDate: no-date stack inactive → no doses',G.getDosesForDate(jun21).length===0);
+  G._activeStackIndices=[0];
+  check('getDosesForDate: no-date stack active → shows doses',G.getDosesForDate(jun21).length>0);
+
+  G._userStacks=[cycleStack];
+  var found=G._findWeeklyItemInfo('retatrutide');
+  check('_findWeeklyItemInfo finds peptide by base id',found&&found.name==='Retatrutide');
+  check('_findWeeklyItemInfo returns null for unknown id',G._findWeeklyItemInfo('unknown-peptide')===null);
+
+  check('end_date normalization in loadUserStacks',rawScript.includes('if(stack.end_date){var _cep=stack.end_date.split'));
+
+  check('buildToday uses getDosesForDate(NOW) instead of WEEKLY.forEach',
+    todayJs.includes('getDosesForDate(NOW)') && !todayJs.includes('WEEKLY.forEach(d=>'));
+  check('showDayInline uses getDosesForDate for future days',
+    todayJs.includes('doses=getDosesForDate(d)'));
+  check('showDayInline uses getPastDoses for past days',
+    todayJs.includes('isPast') && todayJs.includes('getPastDoses(d)') && todayJs.includes('_findWeeklyItemInfo(bid)'));
+  check('buildWeekStrip uses getDosesForDate for future/today dots',
+    todayJs.includes('getDosesForDate(d).forEach'));
+  check('buildWeekStrip uses getPastDoses + _findWeeklyItemInfo for past dots',
+    todayJs.includes('getPastDoses(d)') && todayJs.includes('_findWeeklyItemInfo(bid)'));
+  check('tab-stack.js edit view has Cycle End date input',
+    tabStackJs.includes("id='edit-cycle-end'")||tabStackJs.includes('id="edit-cycle-end"'));
+  check('_collectEditInputs reads end_date from edit-cycle-end',
+    tabStackJs.includes("'edit-cycle-end'")&&tabStackJs.includes('_editBuf.end_date'));
+}
+
 // ── Storage tab hideable via Settings ─────────────────────────────────────────
 {
   check('TAB_LABELS uses Object.assign to conditionally include storage (IS_STAGING gate)',
