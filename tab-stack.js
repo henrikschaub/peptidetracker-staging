@@ -102,7 +102,7 @@ function _collectEditInputs(){
   if(!_editBuf)return;
   var nameEl=document.getElementById('edit-stack-name');
   if(nameEl)_editBuf.name=nameEl.value;
-  var csEl=document.getElementById('edit-cycle-start');if(csEl)_editBuf.cycle_start=csEl.value;
+  var csEl=document.getElementById('edit-cycle-start');if(csEl){if(csEl.value)_editBuf.cycle_start=csEl.value;else delete _editBuf.cycle_start;}
   var ceEl=document.getElementById('edit-cycle-end');if(ceEl){if(ceEl.value)_editBuf.end_date=ceEl.value;else delete _editBuf.end_date;}
   (_editBuf.peptides||[]).forEach(function(p,pi){
     var el;
@@ -113,9 +113,6 @@ function _collectEditInputs(){
     if((el=document.getElementById('ed-note-'+pi)))p.note=el.value;
     if((el=document.getElementById('ed-sd-'+pi))){if(el.value)p.start_date=el.value;else delete p.start_date;}
   });
-  // Keep cycle_start ≤ earliest peptide start_date
-  var _ed=_deriveEarliestStartDate(_editBuf.peptides);
-  if(_ed&&(!_editBuf.cycle_start||_ed<_editBuf.cycle_start)){_editBuf.cycle_start=_ed;}
 }
 function _deriveEarliestStartDate(peptides){
   var dates=(peptides||[]).map(function(p){return p.start_date;}).filter(Boolean);
@@ -127,7 +124,7 @@ function renderStackEditor(){
   var body=document.getElementById('stack-body');if(!body)return;
   var st=_editBuf;var cycle=st.cycle_length||12;
   var isActive=_isActiveStack(_editIdx);
-  var _effCs=(function(){var _ec=_deriveEarliestStartDate(st.peptides);var _sc=st.cycle_start||'';if(_ec&&(!_sc||_ec<_sc))_sc=_ec;if(_sc){var _csp=_sc.split('-');_sc=_csp[0]+'-'+(_csp[1]||'1').padStart(2,'0')+'-'+(_csp[2]||'1').padStart(2,'0');}return _sc;})();
+  var _effCs=(function(){var _sc=st.cycle_start||'';if(_sc){var _csp=_sc.split('-');_sc=_csp[0]+'-'+(_csp[1]||'1').padStart(2,'0')+'-'+(_csp[2]||'1').padStart(2,'0');}return _sc;})();
   var html='';
 
   if(_editReadOnly){
@@ -725,7 +722,7 @@ function _renderTRTViewTab(st){
     });
   }
   html+='<div class="wiz-section" style="margin-top:16px;margin-bottom:10px;">Injection Log</div>';
-  var _effCsLog=(function(){var _ec=_deriveEarliestStartDate(st.peptides);var _sc=st.cycle_start||'';if(_ec&&(!_sc||_ec<_sc))_sc=_ec;if(_sc){var _csp=_sc.split('-');_sc=_csp[0]+'-'+(_csp[1]||'1').padStart(2,'0')+'-'+(_csp[2]||'1').padStart(2,'0');}return _sc;})();
+  var _effCsLog=(function(){var _sc=st.cycle_start||'';if(_sc){var _csp=_sc.split('-');_sc=_csp[0]+'-'+(_csp[1]||'1').padStart(2,'0')+'-'+(_csp[2]||'1').padStart(2,'0');}return _sc;})();
   if(!_effCsLog){
     html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">Set a start date to see the injection log for this stack.</div>';
   }else{
