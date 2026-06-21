@@ -1291,3 +1291,22 @@ console.log('\n── dose dedup migration ────────────�
     check('dedup collapses padded+non-padded into single entry', dd.length===1 && dd[0]==='cjc-am_2026-05-22');
   })();
 }
+
+// ── Storage tab hideable via Settings ─────────────────────────────────────────
+{
+  check('TAB_LABELS uses Object.assign to conditionally include storage (IS_STAGING gate)',
+    rawScript.includes("Object.assign({today:'Today'") && rawScript.includes("IS_STAGING?{storage:'Storage'}:{}"));
+  check('TAB_DEFAULTS uses Object.assign to conditionally include storage:true',
+    rawScript.includes("IS_STAGING?{storage:true}:{}"));
+  check('tab-btn-storage exists in HTML (hidden by default)',
+    html.includes('id="tab-btn-storage"'));
+  check('storage tab controlled by applyTabVis via TAB_LABELS (no manual show override in init)',
+    rawScript.includes("Object.keys(TAB_LABELS).forEach") &&
+    !rawScript.includes("tab-btn-storage').style.display=''"));
+  check('initTabVis called in init() without manual storage override after it',
+    (function(){
+      var i = rawScript.indexOf('initTabVis();');
+      var after = rawScript.slice(i, i + 60);
+      return i >= 0 && !after.includes('tab-btn-storage');
+    })());
+}
