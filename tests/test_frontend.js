@@ -1447,31 +1447,31 @@ console.log('\n── dose dedup migration ────────────�
   // ── PRICELIST & Cart functions ───────────────────────────────────────────
   const G=sandbox;
   check('PRICELIST is defined',typeof G.PRICELIST==='object'&&G.PRICELIST!==null);
-  check('PRICELIST CP10 = 10mg/vial × 10 vials × $120',
-    G.PRICELIST&&G.PRICELIST['CP10']&&G.PRICELIST['CP10'].q===10&&G.PRICELIST['CP10'].n===10&&G.PRICELIST['CP10'].usd===120);
-  check('PRICELIST H24 = 24 IU/vial × 10 vials × $118',
-    G.PRICELIST&&G.PRICELIST['H24']&&G.PRICELIST['H24'].q===24&&G.PRICELIST['H24'].unit==='iu'&&G.PRICELIST['H24'].usd===118);
-  check('PRICELIST RT5 = 5mg × 10 × $95',
-    G.PRICELIST&&G.PRICELIST['RT5']&&G.PRICELIST['RT5'].q===5&&G.PRICELIST['RT5'].usd===95);
+  check('PRICELIST CP10 = 10mg/vial × 10 vials (no price)',
+    G.PRICELIST&&G.PRICELIST['CP10']&&G.PRICELIST['CP10'].q===10&&G.PRICELIST['CP10'].n===10&&!('usd' in G.PRICELIST['CP10']));
+  check('PRICELIST H24 = 24 IU/vial × 10 vials (no price)',
+    G.PRICELIST&&G.PRICELIST['H24']&&G.PRICELIST['H24'].q===24&&G.PRICELIST['H24'].unit==='iu'&&!('usd' in G.PRICELIST['H24']));
+  check('PRICELIST RT5 = 5mg × 10 (no price)',
+    G.PRICELIST&&G.PRICELIST['RT5']&&G.PRICELIST['RT5'].q===5&&!('usd' in G.PRICELIST['RT5']));
   check('openCartModal function defined',typeof G.openCartModal==='function');
   check('closeCartModal function defined',typeof G.closeCartModal==='function');
   check('_renderCartModal function defined',typeof G._renderCartModal==='function');
   check('_calcPeptideCartItem function defined',typeof G._calcPeptideCartItem==='function');
   check('_calcEnhancementCartItem function defined',typeof G._calcEnhancementCartItem==='function');
-  check('_calcPeptideCartItem: retatrutide 3mg/week 1x/week 12wks → ~36mg → 4 vials RT5 → 1 box × $95',
+  check('_calcPeptideCartItem: retatrutide 3mg/week 1x/week 12wks → ~36mg → 4 vials RT5 → 1 box (no price)',
     (function(){
       var p={id:'retatrutide',name:'Retatrutide',dose_am:'3',dose_pm:'',unit_am:'mg',unit_pm:'mg',times:['AM'],days:[0],active:true};
       var item=G._calcPeptideCartItem(p,12);
-      return item&&item.vials===Math.ceil(3*1*12/5)&&item.price===(Math.ceil(Math.ceil(3*1*12/5)/10)*95);
+      return item&&item.vials===Math.ceil(3*1*12/5)&&item.boxes===Math.ceil(Math.ceil(3*1*12/5)/10)&&!('price' in item);
     })());
-  check('_calcPeptideCartItem: HGH 3 IU/day 7 days/week 12wks → 252 IU → 11 vials H24 → 2 boxes × $118',
+  check('_calcPeptideCartItem: HGH 3 IU/day 7 days/week 12wks → 252 IU → 11 vials H24 → 2 boxes (no price)',
     (function(){
       var p={id:'hgh',name:'HGH',dose_am:'3',dose_pm:'',unit_am:'IU',unit_pm:'IU',times:['AM'],days:[0,1,2,3,4,5,6],active:true};
       var item=G._calcPeptideCartItem(p,12);
       var totalIU=3*7*12; // 252 IU
       var vials=Math.ceil(totalIU/24); // ceil(10.5)=11
       var boxes=Math.ceil(vials/10);   // ceil(1.1)=2
-      return item&&item.vials===vials&&item.boxes===boxes&&item.price===boxes*118;
+      return item&&item.vials===vials&&item.boxes===boxes&&!('price' in item);
     })());
   check('_calcEnhancementCartItem: test_e 400mg/week 16wks → 6400mg → 3 vials (250×10=2500mg each)',
     (function(){
