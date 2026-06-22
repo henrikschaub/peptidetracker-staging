@@ -1,5 +1,12 @@
 # Peptide Tracker Staging — Claude Instructions
 
+## ⚠️ RESEARCH SCOPE — ALWAYS THE FULL CATALOGUE ⚠️
+When conducting research, building databases, or compiling reference data for these apps:
+- **Never** scope research to only the compounds Henrik is currently using
+- **Always** scope to the **complete catalogue** — every entry in `PEPTIDE_CAT`, `TRT_CAT`, `ENHANCEMENT_COMPOUNDS`, and any other compound data structure in the app
+- The database must serve all potential users and all potential use cases — not just the current user's active protocol
+- This applies to: compound reference data, bloodwork panels, drug interaction tables, AI prompt design, RAG knowledge base construction, and any other research task
+
 ## ⚠️ COMPOUND DATA LIVES IN BACKEND ONLY — NEVER IN PUBLIC REPOS ⚠️
 All peptide and compound information is **commercially sensitive and proprietary**. It must **NEVER** be stored in any public repository (`peptidetracker`, `peptidetracker-staging`, `workout`, `workout-staging`).
 
