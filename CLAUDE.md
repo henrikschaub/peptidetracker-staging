@@ -120,6 +120,11 @@ confusion, break things Henrik didn't intend to change, and waste debugging
 time. **One PR = one explicitly requested change.**
 
 ## Git workflow — ALWAYS follow this
+0. **Always create new branches from the latest remote main — never from a local clone's stale HEAD:**
+   ```
+   git fetch origin && git checkout -b <branch-name> origin/main
+   ```
+   This ensures any AI (Claude, or another AI picking up when Claude hits token limits) always starts from a clean, up-to-date base and can hand off without conflicts.
 1. Make changes on a feature branch
 2. Before opening the PR, locally extract the `<script>` block from `index.html` and run `node --check` on it — catch syntax errors before they ever hit CI
 3. Create a PR, then **check its CI status before merging** — call `pull_request_read` with `method: get_check_runs` (or `get_status`) and confirm `conclusion`/`state` is `success`. If it's still running, wait and re-check; if it failed, fix the issue and push again. **Never merge a PR with a failing or pending check.**
