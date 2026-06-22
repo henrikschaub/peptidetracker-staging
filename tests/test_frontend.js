@@ -1462,20 +1462,21 @@ console.log('\n── dose dedup migration ────────────�
   check('_renderCartModal function defined',typeof G._renderCartModal==='function');
   check('_calcPeptideCartItem function defined',typeof G._calcPeptideCartItem==='function');
   check('_calcEnhancementCartItem function defined',typeof G._calcEnhancementCartItem==='function');
-  check('_calcPeptideCartItem: retatrutide 3mg/week 1x/week 12wks → ~36mg → 4 vials RT5 → 1 box (no price)',
+  // optimizer: retatrutide 3mg/week 1x/week 12wks → 36mg total → RT20 (46.7d ≤ 55) → 2 vials
+  check('_calcPeptideCartItem: retatrutide 3mg/week 1x/week 12wks → RT20 → 2 vials (no price, no boxes)',
     (function(){
       var p={id:'retatrutide',name:'Retatrutide',dose_am:'3',dose_pm:'',unit_am:'mg',unit_pm:'mg',times:['AM'],days:[0],active:true};
       var item=G._calcPeptideCartItem(p,12);
-      return item&&item.vials===Math.ceil(3*1*12/5)&&item.boxes===Math.ceil(Math.ceil(3*1*12/5)/10)&&!('price' in item);
+      return item&&item.sku==='RT20'&&item.vials===2&&item.boxes==null&&!('price' in item);
     })());
-  check('_calcPeptideCartItem: HGH 3 IU/day 7 days/week 12wks → 252 IU → 11 vials H24 → 2 boxes (no price)',
+  // optimizer: HGH 3 IU/day 7 days/week 12wks → 252 IU → H24 → 11 vials (H24 was already optimal)
+  check('_calcPeptideCartItem: HGH 3 IU/day 7 days/week 12wks → 252 IU → 11 vials H24 (no boxes, no price)',
     (function(){
       var p={id:'hgh',name:'HGH',dose_am:'3',dose_pm:'',unit_am:'IU',unit_pm:'IU',times:['AM'],days:[0,1,2,3,4,5,6],active:true};
       var item=G._calcPeptideCartItem(p,12);
       var totalIU=3*7*12; // 252 IU
       var vials=Math.ceil(totalIU/24); // ceil(10.5)=11
-      var boxes=Math.ceil(vials/10);   // ceil(1.1)=2
-      return item&&item.vials===vials&&item.boxes===boxes&&!('price' in item);
+      return item&&item.sku==='H24'&&item.vials===vials&&item.boxes==null&&!('price' in item);
     })());
   check('_calcEnhancementCartItem: test_e 400mg/week 16wks → 6400mg → 3 vials (250×10=2500mg each)',
     (function(){
@@ -1491,4 +1492,35 @@ console.log('\n── dose dedup migration ────────────�
     })());
   check('buildStackStore HTML includes Shopping List button',
     (function(){var html=fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'index.html'),'utf8');return html.includes('openCartModal')&&html.includes('Shopping List');})());
+  // ── Vial optimizer ───────────────────────────────────────────────────────────
+  check('_optimalVialSku function defined',typeof G._optimalVialSku==='function');
+  // Tesamorelin 2mg/day 7d/wk 12wks → 168mg → TSM20 → 9 vials
+  check('_calcPeptideCartItem: Tesamorelin 2mg/day 7d/wk 12wks → TSM20 → 9 vials',
+    (function(){
+      var p={id:'tesamorelin',name:'Tesamorelin',dose_am:'2',dose_pm:'',unit_am:'mg',unit_pm:'mg',times:['AM'],days:[0,1,2,3,4,5,6],active:true};
+      var item=G._calcPeptideCartItem(p,12);
+      return item&&item.sku==='TSM20'&&item.vials===9&&item.boxes==null;
+    })());
+  // NAD+ 100mg 3d/wk 12wks → 3600mg → NJ1000 → 4 vials
+  check('_calcPeptideCartItem: NAD+ 100mg 3d/wk 12wks → NJ1000 → 4 vials',
+    (function(){
+      var p={id:'nad',name:'NAD+',dose_am:'100',dose_pm:'',unit_am:'mg',unit_pm:'mg',times:['AM'],days:[1,3,5],active:true};
+      var item=G._calcPeptideCartItem(p,12);
+      return item&&item.sku==='NJ1000'&&item.vials===4&&item.boxes==null;
+    })());
+  // NAD+ 100mg 1d/wk 12wks — NJ1000 = 70 days > 55, must use NJ500 → 3 vials
+  check('_calcPeptideCartItem: NAD+ 100mg 1d/wk 12wks → NJ500 (NJ1000 violates 55-day rule) → 3 vials',
+    (function(){
+      var p={id:'nad',name:'NAD+',dose_am:'100',dose_pm:'',unit_am:'mg',unit_pm:'mg',times:['AM'],days:[1],active:true};
+      var item=G._calcPeptideCartItem(p,12);
+      return item&&item.sku==='NJ500'&&item.vials===3&&item.boxes==null;
+    })());
+  // Shopping list render: vials bolded, no box display
+  check('shopping list renders vials in bold span (no box count)',
+    (function(){
+      var html=fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'index.html'),'utf8');
+      var hasBoldVials=html.includes('font-weight:600;color:var(--text)">\'+item.vials');
+      var hasBoxRender=html.includes('item.boxes');
+      return hasBoldVials&&!hasBoxRender;
+    })());
 }
