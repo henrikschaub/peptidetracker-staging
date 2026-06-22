@@ -245,10 +245,19 @@ G.initWizard();
 G.wizNext();check('wizNext: 0→1',    G._wiz.step===1);
 G.wizNext();check('wizNext: 1→2',    G._wiz.step===2);
 G.wizNext();G.wizNext();G.wizNext();
-check('wizNext: step=5 after 5 calls',   G._wiz.step===5);
+// TRT not enabled → step 5 (TRT) is skipped, lands on 6
+check('wizNext: skips step 5 when TRT disabled (4→6)', G._wiz.step===6);
 G.wizNext();
 check('wizNext: does not exceed 6',  G._wiz.step===6);
+// With TRT enabled, step 5 is NOT skipped
+G.initWizard();G._wiz.trt.enabled=true;
+G.wizNext();G.wizNext();G.wizNext();G.wizNext();G.wizNext();
+check('wizNext: step=5 after 5 calls when TRT enabled', G._wiz.step===5);
 G._wiz.step=2;G.wizBack();check('wizBack: 2→1',    G._wiz.step===1);
+// wizBack from REVIEW (6) with TRT disabled jumps to CONFIGURE (4)
+G.initWizard();G._wiz.step=6;G.wizBack();check('wizBack: 6→4 when TRT disabled', G._wiz.step===4);
+// wizBack from REVIEW (6) with TRT enabled goes to TRT (5)
+G.initWizard();G._wiz.trt.enabled=true;G._wiz.step=6;G.wizBack();check('wizBack: 6→5 when TRT enabled', G._wiz.step===5);
 G.wizSetStackName('My New Stack');
 check('wizSetStackName updates _wiz', G._wiz.stackName==='My New Stack');
 
