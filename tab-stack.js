@@ -538,8 +538,8 @@ function wizToggleGoal(id){
 }
 
 function wizStepPeptides(body,footer){
-  var filtered=PEPTIDE_CAT;
-  if(_wiz.goals.length){filtered=PEPTIDE_CAT.filter(function(p){return p.goals.some(function(g){return _wiz.goals.includes(g);});});}
+  var filtered=PEPTIDE_CAT.filter(function(p){return !p.goals.every(function(g){return g==='trt';});});
+  if(_wiz.goals.length){filtered=filtered.filter(function(p){return p.goals.some(function(g){return _wiz.goals.includes(g);});});}
   var groups={};
   filtered.forEach(function(p){if(!groups[p.group])groups[p.group]=[];groups[p.group].push(p);});
   var selIds=_wiz.peptides.map(function(x){return x.id;});
@@ -1006,6 +1006,15 @@ function wizStepTRT(body,footer){
       html+='</div>';
     }
   });
+  var trtSupportCat=PEPTIDE_CAT.filter(function(p){return p.goals.every(function(g){return g==='trt';});});
+  if(trtSupportCat.length){
+    var pepSelIds=(_wiz.peptides||[]).map(function(x){return x.id;});
+    html+='<div class="wiz-section" style="margin-top:16px">TRT Support</div>';
+    trtSupportCat.forEach(function(p){
+      var isSel=pepSelIds.includes(p.id);
+      html+='<div class="pep-card'+(isSel?' sel':'')+'" onclick="wizTogglePep(\''+p.id+'\');wizStepTRT(document.getElementById(\'wiz-body\'),document.getElementById(\'wiz-footer\'));"><div class="pep-dot-sm" style="background:'+p.dot+'"></div><div class="pep-info"><div class="pep-name">'+p.name+'</div><div class="pep-meta">'+p.desc+'</div></div><div style="display:flex;align-items:center;gap:10px"><button class="info-btn" onclick="event.stopPropagation();showPeptideCard(\''+p.id+'\')">ℹ</button><div class="pep-chk">'+(isSel?'<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="#0a0a0a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')+'</div></div></div>';
+    });
+  }
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
 }
