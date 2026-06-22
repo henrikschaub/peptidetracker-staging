@@ -492,7 +492,7 @@ function showPeptideCard(id){
   document.body.appendChild(overlay);
 }
 // ── Wizard ────────────────────────────────────────────────────────────────────
-var GOAL_DEFS=[{id:'muscle',label:'Muscle & Recovery',icon:'💪'},{id:'recovery',label:'Injury & Healing',icon:'🩹'},{id:'skin',label:'Skin & Anti-aging',icon:'✨'},{id:'fat',label:'Fat Loss',icon:'🔥'},{id:'cognitive',label:'Cognitive',icon:'🧠'},{id:'antiaging',label:'Longevity',icon:'⏳'},{id:'enhanced',label:'HGH / Growth Hormone',icon:'💉'}];
+var GOAL_DEFS=[{id:'muscle',label:'Muscle & Recovery',icon:'💪'},{id:'recovery',label:'Injury & Healing',icon:'🩹'},{id:'skin',label:'Skin & Anti-aging',icon:'✨'},{id:'fat',label:'Fat Loss',icon:'🔥'},{id:'cognitive',label:'Cognitive',icon:'🧠'},{id:'antiaging',label:'Longevity',icon:'⏳'},{id:'enhanced',label:'Enhanced Cycle',icon:'💉'}];
 var UNITS=['mg','mcg','IU','ml'];var UNIT_LABELS={mcg:'µg'};
 var DAYS_SHORT=['S','M','T','W','T','F','S'];
 var DAYS_ORDER=[1,2,3,4,5,6,0]; // display order: Mon first (Sun last)
@@ -511,8 +511,8 @@ function wizStepGoals(body,footer){
   html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">'+(trtOn?'Compound, dose &amp; schedule configured in the next step.':'Add Testoviron, Nebido or another ester to your cycle.')+'</div>';
   var enhOn=_wiz.goals.includes('enhanced');
   html+='<div class="wiz-section">Enhanced Cycle</div>';
-  html+='<div class="goal-chip'+(enhOn?' sel':'')+'" onclick="wizToggleGoal(\'enhanced\')" style="width:100%;justify-content:flex-start;gap:8px;margin-bottom:6px;">💉 HGH (Human Growth Hormone)</div>';
-  html+='<div style="font-size:12px;color:var(--muted2);">Prescription / controlled substance. Replaces GH secretagogue peptides when started.</div>';
+  html+='<div class="trt-toggle" onclick="wizToggleGoal(\'enhanced\')"><div class="trt-toggle-label">💉 Steroids &amp; prescription compounds</div><div class="toggle-sw'+(enhOn?' on':'')+'"></div></div>';
+  html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;">Controlled / prescription compounds listed in the catalogue alongside peptides.</div>';
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
 }
