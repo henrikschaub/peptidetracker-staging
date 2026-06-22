@@ -525,13 +525,13 @@ async function loadUserStacks(){
       if((p.id==='glow'||p.id==='glow-1')&&(parseFloat(p.dose_am)===0.2||(parseFloat(p.dose_am)===0.09&&p.unit_am!=='ml'))){p.dose_am='0.09';p.unit_am='ml';}
     });
   });
-  // In-memory correction: any peptide start_date >= May 2026 was auto-detected from
-  // the 19-day log window and is wrong. Fix in memory every load (self-disabling once
-  // backend persists correct April dates). No save attempt here — backend does that.
+  // In-memory correction: any peptide with a start_date >= May 2026 was auto-detected from
+  // the 19-day log window and is wrong. Only corrects existing wrong dates — never stamps
+  // a date onto peptides that have none (new / test stacks must stay date-free).
   (function(){
     var _fx=function(id,name){var i=(id||'').toLowerCase(),n=(name||'').toLowerCase();if(i.indexOf('reta')>=0||n.indexOf('retat')>=0)return'2026-04-04';if(i.indexOf('cjc')>=0||n.indexOf('cjc')>=0)return'2026-04-04';if(i.indexOf('glow')>=0||n.indexOf('glow')>=0)return'2026-04-16';return null;};
     _userStacks.forEach(function(stack){
-      (stack.peptides||[]).forEach(function(p){var c=_fx(p.id,p.name);if(c&&(!p.start_date||p.start_date>='2026-05-01'))p.start_date=c;});
+      (stack.peptides||[]).forEach(function(p){var c=_fx(p.id,p.name);if(c&&p.start_date&&p.start_date>='2026-05-01')p.start_date=c;});
     });
   })();
   updateWEEKLY();

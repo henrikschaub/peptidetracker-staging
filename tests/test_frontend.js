@@ -391,7 +391,8 @@ G.wizSave().then(async ()=>{
   await G.loadUserStacks();
   const glowP2=G._userStacks[0].peptides[0];
   check('migration: expired end_date cleared from glow',   !glowP2.end_date,  `end_date still set: ${glowP2.end_date}`);
-  check('migration: start_date corrected to apr16 for glow', glowP2.start_date==='2026-04-16',`start_date: ${glowP2.start_date}`);
+  // Glow has no start_date — migration must NOT stamp one (new/test stacks must stay date-free)
+  check('migration: glow with no start_date NOT auto-stamped', !glowP2.start_date, `start_date unexpectedly set: ${glowP2.start_date}`);
   const wklyGlow=G.buildWeeklyFromProtocol(G._userStacks[0]);
   check('migration: glow-am entry has no endDate',         !wklyGlow.find(w=>w.id==='glow-am')?.endDate, 'glow-am still has endDate');
   check('migration: glow-pm entry has no endDate',         !wklyGlow.find(w=>w.id==='glow-pm')?.endDate, 'glow-pm still has endDate');
@@ -403,6 +404,32 @@ G.wizSave().then(async ()=>{
   await G.loadUserStacks();
   const glowP3=G._userStacks[0].peptides[0];
   check('migration: start_date preserved when expired end_date cleared', glowP3.start_date==='2026-04-16'&&!glowP3.end_date, `start_date=${glowP3.start_date} end_date=${glowP3.end_date}`);
+  // ── Regression: new stacks must not get auto-dated ───────────────────────────
+  console.log('\n── New stack: no auto start_date ───────────────────────────');
+  // Any new stack created by the wizard has no start_date on its peptides.
+  // loadUserStacks must NOT stamp April dates on them.
+  const newCjcStack={name:'Test CJC',peptides:[
+    {id:'cjc-ipa',name:'CJC-1295/Ipa',dot:'#3cffa0',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'4',unit_am:'IU',active:true},
+  ]};
+  G.fetch=async()=>({ok:true,json:async()=>({stacks:[JSON.parse(JSON.stringify(newCjcStack))],active_index:0})});
+  await G.loadUserStacks();
+  const newCjcPep=G._userStacks[0].peptides[0];
+  check('new CJC stack: no auto start_date stamped', !newCjcPep.start_date, `start_date unexpectedly set: ${newCjcPep.start_date}`);
+  const newRetaStack={name:'Test Reta',peptides:[
+    {id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0],times:['AM'],dose_am:'3',unit_am:'mg',active:true},
+  ]};
+  G.fetch=async()=>({ok:true,json:async()=>({stacks:[JSON.parse(JSON.stringify(newRetaStack))],active_index:0})});
+  await G.loadUserStacks();
+  check('new Reta stack: no auto start_date stamped', !G._userStacks[0].peptides[0].start_date, `start_date unexpectedly set: ${G._userStacks[0].peptides[0].start_date}`);
+  // Migration STILL corrects an existing wrong date (>= May 2026)
+  const wrongDateGlowStack={name:'My Stack',peptides:[
+    {id:'glow',name:'Glow Blend',dot:'#3b9eff',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'0.09',unit_am:'ml',start_date:'2026-05-15'},
+  ]};
+  G.fetch=async()=>({ok:true,json:async()=>({stacks:[JSON.parse(JSON.stringify(wrongDateGlowStack))],active_index:0})});
+  await G.loadUserStacks();
+  check('migration: wrong start_date 2026-05-15 corrected to 2026-04-16 for glow',
+    G._userStacks[0].peptides[0].start_date==='2026-04-16',
+    `got: ${G._userStacks[0].peptides[0].start_date}`);
   // Glow recon: 70mg/3ml = 23.333mg/ml, 9 IU = 0.09ml
   const rcGlow9=G.reconCalc('0.09','ml',G.RECON_DB['glow'].vials[G.RECON_DB['glow'].defaultVi],G.RECON_DB['glow'].water[G.RECON_DB['glow'].defaultWi],'mg');
   check('glow 3ml: 0.09ml → 9 IU',    rcGlow9&&rcGlow9.iu===9,      `got ${rcGlow9?.iu}`);
