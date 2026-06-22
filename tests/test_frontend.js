@@ -1291,3 +1291,15 @@ console.log('\n── dose dedup migration ────────────�
     check('dedup collapses padded+non-padded into single entry', dd.length===1 && dd[0]==='cjc-am_2026-05-22');
   })();
 }
+
+// ── Shopping list: vials only, no boxes ──────────────────────────────────────
+{
+  const src = require('fs').readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
+  // boxes must not appear in the rendered shopping list output
+  check('shopping list does not render box count (no "→ X box")',
+    !src.includes("item.boxes+' box'+(item.boxes===1?'':'es')+'</span>'"));
+  // vial count must be bolded (font-weight:600)
+  check('shopping list renders vial count in bold',
+    src.includes("item.vials+' vial'+(item.vials===1?'':'s')+'</span>'") &&
+    src.includes('font-weight:600;color:var(--text)\">\''));
+}

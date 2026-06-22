@@ -146,6 +146,7 @@
     </div>
     <div id="s-tabs-card" style="margin-top:14px"></div>
     <div id="s-appearance-card" style="margin-top:14px"></div>
+    <div id="s-cache-card" style="margin-top:14px"></div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:14px;">
       <div class="s-sec-hdr" onclick="toggleSSec('data')">Data<span class="s-chev">▾</span></div>
       <div class="s-sec-body collapsed" id="s-sec-data">
@@ -178,6 +179,11 @@
     <div id="cycle-wiz-inner"></div>
   </div>
 </div>
+<div id="cart-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9000;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 40px;" onclick="if(event.target===this)closeCartModal()">
+  <div style="max-width:480px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;" onclick="event.stopPropagation()">
+    <div id="cart-modal-inner"></div>
+  </div>
+</div>
 <div id="onboarding-overlay" class="hidden">
   <div class="ob-header">
     <div class="ob-dots" id="ob-dots"></div>
@@ -190,7 +196,7 @@
   </div>
 </div>
 <script>
-const VERSION='1.270';
+const VERSION='1.285';
 const IS_STAGING=(window.location.pathname||'').startsWith('/peptidetracker-staging');
 if(IS_STAGING){var _S='staging:';var _r=window.localStorage;var _PT=new Set(['google_token','google_email']);var _pk=function(k){return _PT.has(k)?k:_S+k;};var _p=new Proxy(_r,{get:function(t,n){if(n==='getItem')return function(k){return _r.getItem(_pk(k));};if(n==='setItem')return function(k,v){_r.setItem(_pk(k),v);};if(n==='removeItem')return function(k){_r.removeItem(_pk(k));};if(n==='clear')return function(){Object.keys(_r).filter(function(k){return k.startsWith(_S);}).forEach(function(k){_r.removeItem(k);});};if(n==='key')return function(i){return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);})[i]||null;};if(n==='length')return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).length;if(typeof t[n]==='function')return t[n].bind(t);return t[n];},set:function(t,n,v){t[n]=v;return true;},ownKeys:function(){return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);});},getOwnPropertyDescriptor:function(t,n){if(Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);}).includes(n))return{configurable:true,enumerable:true,value:_r.getItem(_S+n)};return undefined;},has:function(t,n){return _r.getItem(_pk(n))!==null;}});try{Object.defineProperty(window,'localStorage',{get:function(){return _p;},configurable:true});}catch(e){}}
 const AGENT_URL="https://claude-agent-api-aged-sun-3616.fly.dev";
@@ -250,10 +256,10 @@ let _userStacks=[];let _activeStackIndices=[0];let _stacksLoaded=false;
 function _isActiveStack(i){return _activeStackIndices.indexOf(i)>=0;}
 let _stackViewTab='peptides';let _editInnerTab='peptides';
 let _reconStackIdx=0;let _reconState={};
-const TAB_LABELS={today:'Today',stacks:'Stacks',recon:'Recon',schedule:'Schedule',macros:'Macros',timeline:'Timeline',body:'Body Comp'};
-const TAB_DEFAULTS={today:true,stacks:true,recon:true,schedule:false,macros:false,timeline:true,body:true};
+const TAB_LABELS=Object.assign({today:'Today',stacks:'Stacks',recon:'Recon',schedule:'Schedule',macros:'Macros',timeline:'Timeline',body:'Body Comp'},IS_STAGING?{storage:'Storage'}:{});
+const TAB_DEFAULTS=Object.assign({today:true,stacks:true,recon:true,schedule:false,macros:false,timeline:true,body:true},IS_STAGING?{storage:true}:{});
 let _tabVis={};let _currentTab='today';
-const GOOGLE_CLIENT_ID='580935445116-sovhqu5i940pjvb3co63af3tm0ekjds8.apps.googleusercontent.com';let _googleToken=localStorage.getItem('google_token')||'';function authHeaders(extra){const h={};if(_googleToken)h['Authorization']='Bearer '+_googleToken;return extra?Object.assign({},h,extra):h;}var _appUnlocked=false;function unlockApp(){if(_appUnlocked)return;_appUnlocked=true;document.getElementById('signin-screen').classList.add('hidden');document.body.classList.remove('locked');document.getElementById('app').classList.add('visible');init();}function onGoogleSignIn(resp){_googleToken=resp.credential;localStorage.setItem('google_token',_googleToken);try{var _jp=JSON.parse(atob(_googleToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));if(_jp&&_jp.email)localStorage.setItem('google_email',_jp.email);}catch(e){}unlockApp();}function initGoogleAuth(){var _ih={client_id:GOOGLE_CLIENT_ID,callback:onGoogleSignIn,auto_select:true,cancel_on_tap_outside:false,locale:'en'};var _hl=localStorage.getItem('google_email')||'';if(_hl)_ih.login_hint=_hl;google.accounts.id.initialize(_ih);google.accounts.id.renderButton(document.getElementById('g_signin_container'),{theme:'filled_black',size:'large',shape:'pill',text:'sign_in_with',width:260});google.accounts.id.prompt();}function _loadGsi(){const _gs=document.createElement('script');_gs.src='https://accounts.google.com/gsi/client?hl=en';_gs.onload=initGoogleAuth;document.head.appendChild(_gs);}if(_googleToken){fetch(AGENT_URL+'/auth/verify',{method:'POST',headers:{'Authorization':'Bearer '+_googleToken}}).then(function(r){if(r.ok)unlockApp();else{localStorage.removeItem('google_token');_googleToken='';}}).catch(function(){});}_loadGsi();
+const GOOGLE_CLIENT_ID='580935445116-sovhqu5i940pjvb3co63af3tm0ekjds8.apps.googleusercontent.com';let _googleToken=localStorage.getItem('google_token')||'';function authHeaders(extra){const h={};if(_googleToken)h['Authorization']='Bearer '+_googleToken;return extra?Object.assign({},h,extra):h;}var _tokenRefreshResolvers=[];function _onTokenRefreshed(){_tokenRefreshResolvers.forEach(function(r){r();});_tokenRefreshResolvers=[];}async function _ensureValidToken(){if(!_googleToken)return;try{var _tp=JSON.parse(atob(_googleToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));if((_tp.exp*1000)-Date.now()>30000)return;}catch(e){return;}return new Promise(function(resolve){_tokenRefreshResolvers.push(resolve);if(window.google&&google.accounts)google.accounts.id.prompt();setTimeout(function(){var _ti=_tokenRefreshResolvers.indexOf(resolve);if(_ti>=0)_tokenRefreshResolvers.splice(_ti,1);resolve();},3000);});}var _appUnlocked=false;function unlockApp(){if(_appUnlocked)return;_appUnlocked=true;document.getElementById('signin-screen').classList.add('hidden');document.body.classList.remove('locked');document.getElementById('app').classList.add('visible');init();}function onGoogleSignIn(resp){_googleToken=resp.credential;localStorage.setItem('google_token',_googleToken);try{var _jp=JSON.parse(atob(_googleToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));if(_jp&&_jp.email)localStorage.setItem('google_email',_jp.email);}catch(e){}if(typeof _onTokenRefreshed==='function')_onTokenRefreshed();unlockApp();}function initGoogleAuth(){var _ih={client_id:GOOGLE_CLIENT_ID,callback:onGoogleSignIn,auto_select:true,cancel_on_tap_outside:false,locale:'en'};var _hl=localStorage.getItem('google_email')||'';if(_hl)_ih.login_hint=_hl;google.accounts.id.initialize(_ih);google.accounts.id.renderButton(document.getElementById('g_signin_container'),{theme:'filled_black',size:'large',shape:'pill',text:'sign_in_with',width:260});google.accounts.id.prompt();}function _loadGsi(){const _gs=document.createElement('script');_gs.src='https://accounts.google.com/gsi/client?hl=en';_gs.onload=initGoogleAuth;document.head.appendChild(_gs);}if(_googleToken){fetch(AGENT_URL+'/auth/verify',{method:'POST',headers:{'Authorization':'Bearer '+_googleToken}}).then(function(r){if(r.ok)unlockApp();else{localStorage.removeItem('google_token');_googleToken='';}}).catch(function(){});}_loadGsi();setInterval(function(){if(!_googleToken||!_appUnlocked)return;try{var _pp=JSON.parse(atob(_googleToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));if((_pp.exp*1000)-Date.now()<300000&&window.google&&google.accounts)google.accounts.id.prompt();}catch(e){}},60000);
 
 function getData(k,d){try{return JSON.parse(localStorage.getItem(k))||d;}catch{return d;}}
 function setData(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
@@ -284,15 +290,15 @@ function lsDbgCopyAll(){var out={};for(var _ci=0;_ci<localStorage.length;_ci++){
 function switchTab(id,el){_currentTab=id;localStorage.setItem('pep-last-tab',id);document.querySelectorAll('.content').forEach(c=>c.classList.add('hidden'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById('tab-'+id).classList.remove('hidden');el.classList.add('active');if(id==='body')setTimeout(bcRender,50);if(id==='settings')loadSettings();if(id==='storage')buildStoragePage();if(id==='macros')loadMacros();if(id==='timeline')buildTimeline();if(id==='recon')renderRecon();if(id==='stacks'){buildStackStore();openCyclesTab();}if(id==='body'){var wi=document.getElementById('bc-weight-in');var hi=document.getElementById('bc-height-in');if(wi){var sw=localStorage.getItem('user_weight');var sh=localStorage.getItem('user_height');if(sw)wi.value=sw;if(sh)hi.value=sh;}setBioSex(localStorage.getItem('user_sex')||'male');var ai=document.getElementById('bc-age-in');if(ai){var sa=localStorage.getItem('user_age');if(sa)ai.value=sa;}}}
 
 function logout(){_googleToken='';localStorage.removeItem('google_token');localStorage.removeItem('google_email');if(window.google&&google.accounts)google.accounts.id.disableAutoSelect();document.getElementById('app').classList.remove('visible');document.getElementById('signin-screen').classList.remove('hidden');}
-async function loadSettings(){document.getElementById('s-version').textContent='v'+VERSION;try{const p=JSON.parse(atob(_googleToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));document.getElementById('s-email').textContent=p.email||'—';}catch{}const localDoseKeys=Object.keys(localStorage).filter(k=>k.startsWith('proto-chk-'));const localDoseCount=localDoseKeys.reduce((n,k)=>{try{return n+(JSON.parse(localStorage.getItem(k)||'[]').length);}catch{return n;}},0);document.getElementById('s-local-doses').textContent=localDoseCount+' doses ('+localDoseKeys.length+' days)';const bcData=getData(BC_KEY,[]);document.getElementById('s-local-bc').textContent=bcData.length+' entries';const aDot=document.getElementById('s-agent-dot');const sDot=document.getElementById('s-sync-dot');try{const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),5000);const r=await fetch(AGENT_URL+'/health',{signal:ctrl.signal});aDot.className='agent-dot '+(r.ok?'up':'down');document.getElementById('s-agent-label').textContent=r.ok?'Online':'Offline';}catch(e){aDot.className='agent-dot down';document.getElementById('s-agent-label').textContent='Offline';}try{const ctrl2=new AbortController();setTimeout(()=>ctrl2.abort(),5000);const r=await fetch(AGENT_URL+'/peptide-log',{headers:authHeaders(),signal:ctrl2.signal});if(r.ok){const remote=await r.json();document.getElementById('s-remote-doses').textContent=remote.length+' entries';const remoteDates=new Set(remote.map(e=>e.date));const unsynced=localDoseKeys.filter(k=>{const date=k.replace('proto-chk-','');const doses=JSON.parse(localStorage.getItem(k)||'[]');return doses.length>0&&!remoteDates.has(date);}).length;sDot.className='agent-dot '+(unsynced===0?'up':'warn');document.getElementById('s-sync-label').textContent=unsynced===0?'All synced':unsynced+' day(s) not on backend';const _mBtn=document.getElementById('s-migrate-btn');if(_mBtn)_mBtn.style.display=unsynced===0?'none':'';}else{sDot.className='agent-dot down';document.getElementById('s-sync-label').textContent='Backend error';}}catch(e){sDot.className='agent-dot down';document.getElementById('s-sync-label').textContent='Check failed';}try{const _bc=new AbortController();setTimeout(()=>_bc.abort(),5000);const _rb=await fetch(AGENT_URL+'/backups',{headers:authHeaders(),signal:_bc.signal});if(_rb.ok){const _bd=await _rb.json();const _dates=[...new Set((_bd.backups||[]).map(function(b){return b.date;}))].sort();const _dl=_dates.length?_dates[_dates.length-1]:null;const _wk=_dates.slice().reverse().find(function(d){return new Date(d+'T12:00:00').getDay()===1;})||null;const _mo=_dates.slice().reverse().find(function(d){return d.slice(8)==='01';})||null;if(document.getElementById('s-backup-daily'))document.getElementById('s-backup-daily').textContent=_dl||'None';if(document.getElementById('s-backup-weekly'))document.getElementById('s-backup-weekly').textContent=_wk||'None';if(document.getElementById('s-backup-monthly'))document.getElementById('s-backup-monthly').textContent=_mo||'None';}}catch(e){}buildTabsSettingsCard();buildAppearanceCard();checkForUpdate();buildLastPushDropdown();const _mEl=document.getElementById('s-milestones-count');if(_mEl&&_mEl.textContent==='—')_mEl.textContent=MILESTONES.length+' events';}
-const PROMOTE_STEPS=['Checkout staging','Checkout prod','Sync files into prod branch','Open PR on prod','Wait for CI and merge prod PR'];let _prodVer=null;let _lastPushData=null;let _pollErrs=0;let _prevProdVer=null;let _prodArtifacts=null;function pushToProd(){const btn=document.getElementById('push-to-prod-btn');const statusEl=document.getElementById('push-to-prod-status');if(btn){btn.textContent='Pushing...';btn.disabled=true;}_prodVer=null;_pollErrs=0;_prevProdVer=null;fetch('https://henrikschaub.github.io/peptidetracker/version.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{_prevProdVer=d.version||null;}).catch(()=>{});renderPromoteStatus({status:'queued',steps:PROMOTE_STEPS.map(n=>({name:n,status:'queued',conclusion:null}))},statusEl);fetch(AGENT_URL+'/promote-to-prod',{method:'POST',headers:authHeaders()}).then(r=>{if(!r.ok)return r.json().catch(()=>({})).then(j=>{throw new Error('HTTP '+r.status+(j.detail?' — '+j.detail:''));});return r.json();}).then(data=>{pollPromoteStatus(0,data.dispatched_at||new Date().toISOString().replace(/\.\d{3}Z$/,'Z'));}).catch(e=>{if(btn){btn.textContent='Push to Prod';btn.disabled=false;}if(statusEl)statusEl.textContent='Failed: '+e.message;});}
-function pollPromoteStatus(attempt,since){if(attempt>100){const statusEl=document.getElementById('push-to-prod-status');const btn=document.getElementById('push-to-prod-btn');if(btn){btn.textContent='Push to Prod';btn.disabled=false;}if(statusEl)statusEl.innerHTML+='<div style="color:#ef4444;font-weight:600;margin-top:6px">Timed out — <a href="https://github.com/henrikschaub/peptidetracker-staging/actions" target="_blank" style="color:#ef4444">Check Actions →</a></div>';return;}fetch(AGENT_URL+'/promote-to-prod/status?since='+encodeURIComponent(since),{headers:authHeaders()}).then(r=>r.json()).then(data=>{_pollErrs=0;const statusEl=document.getElementById('push-to-prod-status');const btn=document.getElementById('push-to-prod-btn');renderPromoteStatus(data,statusEl);if(data.status==='completed'){_lastPushData=data;saveLastPush(data,null);if(btn){btn.textContent='Push to Prod';btn.disabled=false;}if(data.pr_url)pollProdVersion(0);}else{setTimeout(()=>pollPromoteStatus(attempt+1,since),3000);}}).catch(()=>{_pollErrs++;if(_pollErrs>=5){const statusEl=document.getElementById('push-to-prod-status');const btn=document.getElementById('push-to-prod-btn');if(btn){btn.textContent='Push to Prod';btn.disabled=false;}if(statusEl)statusEl.innerHTML+='<div style="color:#ef4444;font-weight:600;margin-top:6px">Connection lost — <a href="https://github.com/henrikschaub/peptidetracker-staging/actions" target="_blank" style="color:#ef4444">Check Actions →</a></div>';return;}setTimeout(()=>pollPromoteStatus(attempt+1,since),5000);});}
-function pollProdVersion(attempt){if(attempt>40)return;fetch('https://henrikschaub.github.io/peptidetracker/version.json',{cache:'no-store'}).then(r=>r.json()).then(function(d){var v=d.version||'?';var row=document.getElementById('push-to-prod-prod-row');if(_prevProdVer!==null&&v===_prevProdVer){if(row)row.innerHTML='<span style="color:var(--accent);font-weight:700;width:10px;text-align:center;flex-shrink:0">…</span><span style="color:var(--muted2)">Pages deploying...</span>';setTimeout(function(){pollProdVersion(attempt+1);},20000);return;}_prodVer=v;if(row)row.innerHTML='<span style="color:#22c55e;font-weight:700;width:10px;text-align:center;flex-shrink:0">✓</span><span style="color:var(--fg)">Prod: v'+v+'</span>';saveLastPush(_lastPushData,v);pollProdArtifacts(0);}).catch(function(){setTimeout(function(){pollProdVersion(attempt+1);},5000);});}
+async function loadSettings(){document.getElementById('s-version').textContent='v'+VERSION;try{const p=JSON.parse(atob(_googleToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));document.getElementById('s-email').textContent=p.email||'—';}catch{}const localDoseKeys=Object.keys(localStorage).filter(k=>k.startsWith('proto-chk-'));const localDoseCount=localDoseKeys.reduce((n,k)=>{try{return n+(JSON.parse(localStorage.getItem(k)||'[]').length);}catch{return n;}},0);document.getElementById('s-local-doses').textContent=localDoseCount+' doses ('+localDoseKeys.length+' days)';const bcData=getData(BC_KEY,[]);document.getElementById('s-local-bc').textContent=bcData.length+' entries';const aDot=document.getElementById('s-agent-dot');const sDot=document.getElementById('s-sync-dot');try{const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),5000);const r=await fetch(AGENT_URL+'/health',{signal:ctrl.signal});aDot.className='agent-dot '+(r.ok?'up':'down');document.getElementById('s-agent-label').textContent=r.ok?'Online':'Offline';}catch(e){aDot.className='agent-dot down';document.getElementById('s-agent-label').textContent='Offline';}try{const ctrl2=new AbortController();setTimeout(()=>ctrl2.abort(),5000);const r=await fetch(AGENT_URL+'/peptide-log',{headers:authHeaders(),signal:ctrl2.signal});if(r.ok){const remote=await r.json();document.getElementById('s-remote-doses').textContent=remote.length+' entries';const remoteDates=new Set(remote.map(e=>e.date));const unsynced=localDoseKeys.filter(k=>{const date=k.replace('proto-chk-','');const doses=JSON.parse(localStorage.getItem(k)||'[]');return doses.length>0&&!remoteDates.has(date);}).length;sDot.className='agent-dot '+(unsynced===0?'up':'warn');document.getElementById('s-sync-label').textContent=unsynced===0?'All synced':unsynced+' day(s) not on backend';const _mBtn=document.getElementById('s-migrate-btn');if(_mBtn)_mBtn.style.display=unsynced===0?'none':'';}else{sDot.className='agent-dot down';document.getElementById('s-sync-label').textContent='Backend error';}}catch(e){sDot.className='agent-dot down';document.getElementById('s-sync-label').textContent='Check failed';}try{const _bc=new AbortController();setTimeout(()=>_bc.abort(),5000);const _rb=await fetch(AGENT_URL+'/backups',{headers:authHeaders(),signal:_bc.signal});if(_rb.ok){const _bd=await _rb.json();const _dates=[...new Set((_bd.backups||[]).map(function(b){return b.date;}))].sort();const _dl=_dates.length?_dates[_dates.length-1]:null;const _wk=_dates.slice().reverse().find(function(d){return new Date(d+'T12:00:00').getDay()===1;})||null;const _mo=_dates.slice().reverse().find(function(d){return d.slice(8)==='01';})||null;if(document.getElementById('s-backup-daily'))document.getElementById('s-backup-daily').textContent=_dl||'None';if(document.getElementById('s-backup-weekly'))document.getElementById('s-backup-weekly').textContent=_wk||'None';if(document.getElementById('s-backup-monthly'))document.getElementById('s-backup-monthly').textContent=_mo||'None';}}catch(e){}buildTabsSettingsCard();buildAppearanceCard();buildCacheCard();checkForUpdate();buildLastPushDropdown();const _mEl=document.getElementById('s-milestones-count');if(_mEl&&_mEl.textContent==='—')_mEl.textContent=MILESTONES.length+' events';}
+const PROMOTE_STEPS=['Checkout staging','Checkout prod','Sync files into prod branch','Open PR on prod','Wait for CI and merge prod PR'];let _prodVer=null;let _lastPushData=null;let _pollErrs=0;let _prevProdVer=null;let _prodArtifacts=null;let _stagingVer=null;function pushToProd(){const btn=document.getElementById('push-to-prod-btn');const statusEl=document.getElementById('push-to-prod-status');if(btn){btn.textContent='Pushing...';btn.disabled=true;}_prodVer=null;_pollErrs=0;_prevProdVer=null;_stagingVer=VERSION;fetch('https://henrikschaub.github.io/peptidetracker/version.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{_prevProdVer=d.version||null;}).catch(()=>{});renderPromoteStatus({status:'queued',steps:PROMOTE_STEPS.map(n=>({name:n,status:'queued',conclusion:null}))},statusEl);fetch(AGENT_URL+'/promote-to-prod',{method:'POST',headers:authHeaders()}).then(r=>{if(!r.ok)return r.json().catch(()=>({})).then(j=>{throw new Error('HTTP '+r.status+(j.detail?' — '+j.detail:''));});return r.json();}).then(data=>{pollPromoteStatus(0,data.dispatched_at||new Date().toISOString().replace(/\.\d{3}Z$/,'Z'));}).catch(e=>{if(btn){btn.textContent='Push to Prod';btn.disabled=false;}if(statusEl)statusEl.textContent='Failed: '+e.message;});}
+function pollPromoteStatus(attempt,since){if(attempt>100){const statusEl=document.getElementById('push-to-prod-status');const btn=document.getElementById('push-to-prod-btn');if(btn){btn.textContent='Push to Prod';btn.disabled=false;}if(statusEl)statusEl.innerHTML+='<div style="color:#ef4444;font-weight:600;margin-top:6px">Timed out — <a href="https://github.com/henrikschaub/peptidetracker-staging/actions" target="_blank" style="color:#ef4444">Check Actions →</a></div>';return;}fetch(AGENT_URL+'/promote-to-prod/status?since='+encodeURIComponent(since),{headers:authHeaders()}).then(r=>r.json()).then(data=>{_pollErrs=0;const statusEl=document.getElementById('push-to-prod-status');const btn=document.getElementById('push-to-prod-btn');renderPromoteStatus(data,statusEl);if(data.status==='completed'){_lastPushData=data;saveLastPush(data,null,_stagingVer);if(btn){btn.textContent='Push to Prod';btn.disabled=false;}if(data.pr_url)pollProdVersion(0);}else{setTimeout(()=>pollPromoteStatus(attempt+1,since),3000);}}).catch(()=>{_pollErrs++;if(_pollErrs>=5){const statusEl=document.getElementById('push-to-prod-status');const btn=document.getElementById('push-to-prod-btn');if(btn){btn.textContent='Push to Prod';btn.disabled=false;}if(statusEl)statusEl.innerHTML+='<div style="color:#ef4444;font-weight:600;margin-top:6px">Connection lost — <a href="https://github.com/henrikschaub/peptidetracker-staging/actions" target="_blank" style="color:#ef4444">Check Actions →</a></div>';return;}setTimeout(()=>pollPromoteStatus(attempt+1,since),5000);});}
+function pollProdVersion(attempt){if(attempt>40)return;fetch('https://henrikschaub.github.io/peptidetracker/version.json',{cache:'no-store'}).then(r=>r.json()).then(function(d){var v=d.version||'?';var row=document.getElementById('push-to-prod-prod-row');if(_prevProdVer!==null&&v===_prevProdVer){if(row)row.innerHTML='<span style="color:var(--accent);font-weight:700;width:10px;text-align:center;flex-shrink:0">…</span><span style="color:var(--muted2)">Pages deploying...</span>';setTimeout(function(){pollProdVersion(attempt+1);},20000);return;}_prodVer=v;if(row)row.innerHTML='<span style="color:#22c55e;font-weight:700;width:10px;text-align:center;flex-shrink:0">✓</span><span style="color:var(--fg)">Prod: v'+v+'</span>';saveLastPush(_lastPushData,v,_stagingVer);pollProdArtifacts(0);}).catch(function(){setTimeout(function(){pollProdVersion(attempt+1);},5000);});}
 function pollProdArtifacts(attempt){var urls=['https://henrikschaub.github.io/peptidetracker/manifest.json','https://henrikschaub.github.io/peptidetracker/protocol-icon.png'];var row=document.getElementById('push-to-prod-artifacts-row');if(attempt>5){if(row)row.innerHTML='<span style="color:#ef4444;font-weight:700;width:10px;text-align:center;flex-shrink:0">✗</span><span style="color:var(--fg)">Could not verify prod artifacts</span>';return;}Promise.all(urls.map(function(u){return fetch(u,{method:'HEAD',cache:'no-store'}).then(function(r){return{url:u,ok:r.ok};}).catch(function(){return{url:u,ok:false};});})).then(function(results){var missing=results.filter(function(r){return!r.ok;}).map(function(r){return r.url.split('/').pop();});if(missing.length===0){_prodArtifacts=true;if(row)row.innerHTML='<span style="color:#22c55e;font-weight:700;width:10px;text-align:center;flex-shrink:0">✓</span><span style="color:var(--fg)">Artifacts OK (manifest + icon)</span>';}else{if(row)row.innerHTML='<span style="color:#ef4444;font-weight:700;width:10px;text-align:center;flex-shrink:0">✗</span><span style="color:var(--fg)">Missing on prod: '+missing.join(', ')+'</span>';setTimeout(function(){pollProdArtifacts(attempt+1);},15000);}});}
 function renderPromoteStatus(data,el){if(!el)return;const COL={success:'#22c55e',failure:'#ef4444',skipped:'var(--muted2)',in_progress:'var(--accent)'};const LBL={success:'✓',failure:'✗',skipped:'—',in_progress:'…',queued:'·'};let html='<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:6px">';const steps=(data.steps&&data.steps.length)?data.steps:PROMOTE_STEPS.map(n=>({name:n,status:'queued',conclusion:null}));steps.forEach(s=>{const state=s.status==='completed'?s.conclusion:s.status;const col=COL[state]||'var(--muted2)';const lbl=LBL[state]||'·';const dim=state==='skipped'||state==='queued'||!state;html+=`<div style="display:flex;align-items:center;gap:8px"><span style="color:${col};font-weight:700;width:10px;text-align:center;flex-shrink:0">${lbl}</span><span style="color:${dim?'var(--muted2)':'var(--fg)'}">${s.name}</span></div>`;});if(data.status==='completed'&&data.conclusion==='success'){html+=_prodVer?`<div id="push-to-prod-prod-row" style="display:flex;align-items:center;gap:8px"><span style="color:#22c55e;font-weight:700;width:10px;text-align:center;flex-shrink:0">✓</span><span style="color:var(--fg)">Prod: v${_prodVer}</span></div>`:'<div id="push-to-prod-prod-row" style="display:flex;align-items:center;gap:8px"><span style="color:var(--accent);font-weight:700;width:10px;text-align:center;flex-shrink:0">…</span><span style="color:var(--muted2)">Verifying prod...</span></div>';html+='<div id="push-to-prod-artifacts-row" style="display:flex;align-items:center;gap:8px"><span style="color:var(--accent);font-weight:700;width:10px;text-align:center;flex-shrink:0">…</span><span style="color:var(--muted2)">Checking artifacts...</span></div>';}else{html+='<div style="display:flex;align-items:center;gap:8px"><span style="color:var(--muted2);font-weight:700;width:10px;text-align:center;flex-shrink:0">·</span><span style="color:var(--muted2)">Verify prod version</span></div>';html+='<div style="display:flex;align-items:center;gap:8px"><span style="color:var(--muted2);font-weight:700;width:10px;text-align:center;flex-shrink:0">·</span><span style="color:var(--muted2)">Verify prod artifacts</span></div>';}html+='</div>';if(data.pr_url){html+=`<div><a href="${data.pr_url}" target="_blank" style="color:var(--accent)">View PR on peptidetracker →</a></div>`;}else if(data.status==='completed'&&data.conclusion==='success'){html+='<div style="color:var(--muted2)">No changes — staging and prod are already in sync.</div>';}else if(data.status==='completed'&&data.conclusion==='failure'){html+=`<div style="color:#ef4444">Workflow failed — <a href="${data.run_url}" target="_blank" style="color:#ef4444">view logs</a></div>`;}el.innerHTML=html;}
 function _fmtAgo(d){const s=Math.floor((Date.now()-d)/1000);if(s<60)return 'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago';}
-function saveLastPush(data,prodVer){if(!data)return;try{const rec={ts:new Date().toISOString(),conclusion:data.conclusion,steps:data.steps,prUrl:data.pr_url||null,runUrl:data.run_url||null,prodVer:prodVer||null};localStorage.setItem('proto-last-push',JSON.stringify(rec));}catch{}buildLastPushDropdown();}
-function buildLastPushDropdown(){const el=document.getElementById('push-to-prod-last');if(!el)return;let rec=null;try{rec=JSON.parse(localStorage.getItem('proto-last-push')||'null');}catch{}if(!rec){el.innerHTML='';return;}const COL={success:'#22c55e',failure:'#ef4444',skipped:'var(--muted2)',in_progress:'var(--accent)'};const LBL={success:'✓',failure:'✗',skipped:'—',in_progress:'…',queued:'·'};const icoCol=rec.conclusion==='success'?'#22c55e':'#ef4444';const ico=rec.conclusion==='success'?'✓':'✗';const ago=_fmtAgo(new Date(rec.ts));let det='<div style="display:flex;flex-direction:column;gap:3px;padding:6px 0">';(rec.steps||[]).forEach(s=>{const state=s.status==='completed'?s.conclusion:s.status;const col=COL[state]||'var(--muted2)';const lbl=LBL[state]||'·';const dim=state==='skipped'||state==='queued'||!state;det+=`<div style="display:flex;align-items:center;gap:8px"><span style="color:${col};font-weight:700;width:10px;text-align:center;flex-shrink:0">${lbl}</span><span style="color:${dim?'var(--muted2)':'var(--fg)'}">${s.name}</span></div>`;});if(rec.prodVer)det+=`<div style="display:flex;align-items:center;gap:8px"><span style="color:#22c55e;font-weight:700;width:10px;text-align:center;flex-shrink:0">✓</span><span style="color:var(--fg)">Prod: v${rec.prodVer}</span></div>`;if(rec.prUrl)det+=`<div style="margin-top:4px"><a href="${rec.prUrl}" target="_blank" style="color:var(--accent)">View PR →</a></div>`;else if(rec.runUrl&&rec.conclusion==='failure')det+=`<div style="margin-top:4px"><a href="${rec.runUrl}" target="_blank" style="color:#ef4444">View failure logs →</a></div>`;det+='</div>';el.innerHTML=`<details><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;color:var(--muted2)"><span style="color:${icoCol};font-weight:700">${ico}</span><span>Last push: ${ago}${rec.prodVer?' · v'+rec.prodVer+' on prod':''}</span></summary>${det}</details>`;}
+function saveLastPush(data,prodVer,stagingVer){if(!data)return;try{const rec={ts:new Date().toISOString(),conclusion:data.conclusion,steps:data.steps,prUrl:data.pr_url||null,runUrl:data.run_url||null,stagingVer:stagingVer||null,prodVer:prodVer||null};localStorage.setItem('proto-last-push',JSON.stringify(rec));}catch{}buildLastPushDropdown();}
+function buildLastPushDropdown(){const el=document.getElementById('push-to-prod-last');if(!el)return;let rec=null;try{rec=JSON.parse(localStorage.getItem('proto-last-push')||'null');}catch{}if(!rec){el.innerHTML='';return;}const COL={success:'#22c55e',failure:'#ef4444',skipped:'var(--muted2)',in_progress:'var(--accent)'};const LBL={success:'✓',failure:'✗',skipped:'—',in_progress:'…',queued:'·'};const icoCol=rec.conclusion==='success'?'#22c55e':'#ef4444';const ico=rec.conclusion==='success'?'✓':'✗';const ago=_fmtAgo(new Date(rec.ts));const _verSummary=rec.stagingVer&&rec.prodVer?' · v'+rec.stagingVer+' → v'+rec.prodVer:rec.prodVer?' · v'+rec.prodVer+' on prod':rec.stagingVer?' · staged v'+rec.stagingVer:'';let det='<div style="display:flex;flex-direction:column;gap:3px;padding:6px 0">';(rec.steps||[]).forEach(s=>{const state=s.status==='completed'?s.conclusion:s.status;const col=COL[state]||'var(--muted2)';const lbl=LBL[state]||'·';const dim=state==='skipped'||state==='queued'||!state;det+=`<div style="display:flex;align-items:center;gap:8px"><span style="color:${col};font-weight:700;width:10px;text-align:center;flex-shrink:0">${lbl}</span><span style="color:${dim?'var(--muted2)':'var(--fg)'}">${s.name}</span></div>`;});if(rec.stagingVer)det+=`<div style="display:flex;align-items:center;gap:8px"><span style="color:var(--muted2);font-weight:700;width:10px;text-align:center;flex-shrink:0">→</span><span style="color:var(--muted2)">Staged: v${rec.stagingVer}</span></div>`;if(rec.prodVer)det+=`<div style="display:flex;align-items:center;gap:8px"><span style="color:#22c55e;font-weight:700;width:10px;text-align:center;flex-shrink:0">✓</span><span style="color:var(--fg)">Prod: v${rec.prodVer}</span></div>`;if(rec.prUrl)det+=`<div style="margin-top:4px"><a href="${rec.prUrl}" target="_blank" style="color:var(--accent)">View PR →</a></div>`;else if(rec.runUrl&&rec.conclusion==='failure')det+=`<div style="margin-top:4px"><a href="${rec.runUrl}" target="_blank" style="color:#ef4444">View failure logs →</a></div>`;det+='</div>';el.innerHTML=`<details><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;color:var(--muted2)"><span style="color:${icoCol};font-weight:700">${ico}</span><span>Last push: ${ago}${_verSummary}</span></summary>${det}</details>`;}
 function pushAllPeptideToBackend(){const btn=document.getElementById('peptide-sync-btn');if(btn){btn.textContent='Syncing...';btn.disabled=true;}fetch(AGENT_URL+'/peptide-log',{headers:authHeaders()}).then(r=>r.json()).then(remote=>{const remoteDates=new Set(remote.map(e=>e.date));const keys=Object.keys(localStorage).filter(k=>k.startsWith('proto-chk-'));let count=0;const promises=keys.map(key=>{const date=key.replace('proto-chk-','');if(remoteDates.has(date))return Promise.resolve();const doses=JSON.parse(localStorage.getItem(key)||'[]');if(!doses.length)return Promise.resolve();count++;return fetch(AGENT_URL+'/peptide-log',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({date,doses})});});return Promise.all(promises).then(()=>count);}).then(count=>{if(btn){btn.textContent='Done '+count+' synced';setTimeout(()=>{const b=btn.closest('.sync-bar');if(b)b.remove();},2000);}localStorage.setItem('peptide_sync_done_fly','1');}).catch(e=>{if(btn){btn.textContent='Failed';btn.disabled=false;}});}
 async function pushMilestonesToBackend(){const colorMap=[['nebido','#c084fc'],['testoviron','#c084fc'],['trt','#c084fc'],['glow','#3b9eff'],['blood','#ff6b2b'],['panel','#ff6b2b'],['hgh','#3cffa0']];function _mc(name){const n=name.toLowerCase();for(const[kw,col]of colorMap)if(n.includes(kw))return col;return'#e8ff3c';}const milestones=MILESTONES.map(m=>{const d=m.date;const date=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return{date,label:m.name,color:_mc(m.name),desc:m.desc||''};});try{const r=await fetch(AGENT_URL+'/stack-milestones/custom',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({milestones})});if(!r.ok)throw new Error('HTTP '+r.status);}catch(e){}}
 async function migrateLegacyData(){const btn=document.getElementById('s-migrate-btn');if(btn){btn.textContent='Fixing…';btn.disabled=true;}try{const r=await fetch(AGENT_URL+'/auth/migrate',{method:'POST',headers:authHeaders()});if(!r.ok)throw new Error('HTTP '+r.status);const res=await r.json();if(btn){btn.textContent='Fixed ('+res.total+')';setTimeout(()=>{btn.textContent='Fix old data';btn.disabled=false;},3000);}await syncPeptideLogFromAgent();loadSettings();}catch(e){if(btn){btn.textContent='Failed';btn.disabled=false;}}}
@@ -331,6 +337,41 @@ const PEPTIDE_CAT=[
   {id:'nad',name:'NAD+',sku:'NJ100',group:'Anti-aging',goals:['antiaging','cognitive'],dot:'#ff6b2b',cg:[],desc:'Energy, DNA repair, sirtuin activation.',halfLife:'Utilised within hours; upstream effects are sustained',mechanism:'Nicotinamide Adenine Dinucleotide — the central redox coenzyme present in every cell. Serves as an electron carrier in mitochondrial energy production (ATP synthesis) and as a substrate for sirtuins (SIRT1–7, longevity regulators), PARP enzymes (DNA strand break repair), and CD38. NAD+ levels decline ~50% between age 20 and 60.',benefits:['ATP production and cellular energy restoration','DNA strand break repair via PARP activation','Sirtuin (SIRT1/SIRT3) activation — the primary longevity pathway','Neuroinflammation reduction and cognitive clarity','Mitochondrial biogenesis','Addictive cravings reduction (emerging clinical data)'],protocol:'100–500 mg SC 3× per week. SC is more practical than IV for ongoing protocols. IV offers faster CNS onset but requires slow infusion to avoid flushing. Oral NMN or NR are lower-cost precursor alternatives.',sideEffects:['Flushing and warmth — IV much more than SC','Nausea during rapid IV infusion','Transient chest tightness (IV only — slow the drip)','SC at ≤250 mg is generally well tolerated','High doses may accelerate cancer growth in pre-existing tumours — screen first'],dflt:{times:['AM'],days:[1,3,5],doseAm:'100',dosePm:'',unitAm:'mg',unitPm:'mg'}},
   {id:'hcg',name:'HCG',sku:'G5K',group:'TRT Support',goals:['trt'],dot:'#c084fc',cg:[],desc:'Testicular stimulation during TRT. Maintains fertility/size.',halfLife:'~33–36 h',mechanism:'Human Chorionic Gonadotropin — a glycoprotein hormone that mimics LH at the Leydig cell receptor in the testes. On exogenous testosterone, the HPG axis suppresses LH (which would normally drive the testes). HCG restores that LH signal, maintaining intratesticular testosterone production, testicular volume, and spermatogenesis.',benefits:['Prevents testicular atrophy during TRT','Maintains fertility and sperm count','Preserves intratesticular testosterone for mood and libido','Reduces the feeling of "shutdown" on TRT','Useful for fertility restart when discontinuing TRT'],protocol:'250–500 IU SC every 2–3 days (or 1,000 IU 3× per week for fertility). Inject abdomen or thigh. Use throughout TRT cycle and continue for 4–6 weeks post-cycle if fertility is the goal. Monitor oestradiol — HCG aromatises heavily.',sideEffects:['Elevated oestradiol (aromatisation) — may require an AI','Acne and oily skin','Water retention','Testicular discomfort or sensitivity (uncommon)','Mood fluctuations with oestrogen shifts'],dflt:{times:['AM'],days:[1,4],doseAm:'500',dosePm:'',unitAm:'IU',unitPm:'IU'}},
 ];
+// Peptide supplier pricelist (sourced from pricelist.csv). q=mg or IU per vial, n=vials/box
+const PRICELIST={
+  'TR5':{q:5,unit:'mg',n:10},'TR10':{q:10,unit:'mg',n:10},'TR15':{q:15,unit:'mg',n:10},
+  'TR20':{q:20,unit:'mg',n:10},'TR30':{q:30,unit:'mg',n:10},'TR40':{q:40,unit:'mg',n:10},
+  'TR50':{q:50,unit:'mg',n:10},'TR60':{q:60,unit:'mg',n:10},'TR70':{q:70,unit:'mg',n:10},
+  'TR80':{q:80,unit:'mg',n:10},'TR90':{q:90,unit:'mg',n:10},'TR100':{q:100,unit:'mg',n:10},
+  'TR120':{q:120,unit:'mg',n:10},
+  'SM2':{q:2,unit:'mg',n:10},'SM5':{q:5,unit:'mg',n:10},'SM10':{q:10,unit:'mg',n:10},
+  'SM15':{q:15,unit:'mg',n:10},'SM20':{q:20,unit:'mg',n:10},'SM30':{q:30,unit:'mg',n:10},
+  'SM50':{q:50,unit:'mg',n:10},
+  'RT5':{q:5,unit:'mg',n:10},'RT10':{q:10,unit:'mg',n:10},'RT15':{q:15,unit:'mg',n:10},
+  'RT20':{q:20,unit:'mg',n:10},'RT30':{q:30,unit:'mg',n:10},'RT40':{q:40,unit:'mg',n:10},
+  'RT50':{q:50,unit:'mg',n:10},'RT60':{q:60,unit:'mg',n:10},
+  'CGL5':{q:5,unit:'mg',n:10},'CGL10':{q:10,unit:'mg',n:10},
+  'LC216':{q:10,unit:'ml',n:10},
+  'BBG70':{q:70,unit:'mg',n:10},'Klow80':{q:80,unit:'mg',n:10},
+  'BT2':{q:2,unit:'mg',n:10},'BT5':{q:5,unit:'mg',n:10},'BT10':{q:10,unit:'mg',n:10},
+  'BC5':{q:5,unit:'mg',n:10},'BC10':{q:10,unit:'mg',n:10},
+  'BB10':{q:10,unit:'mg',n:10},'BB20':{q:20,unit:'mg',n:10},
+  'NJ100':{q:100,unit:'mg',n:10},'NJ500':{q:500,unit:'mg',n:10},'NJ1000':{q:1000,unit:'mg',n:10},
+  '5AD':{q:2,unit:'mg',n:10},'5AD2':{q:5,unit:'mg',n:10},'10AD':{q:10,unit:'mg',n:10},
+  'CU50':{q:50,unit:'mg',n:10},'CU100':{q:100,unit:'mg',n:10},
+  'MS10':{q:10,unit:'mg',n:10},'MS20':{q:20,unit:'mg',n:10},'MS30':{q:30,unit:'mg',n:10},'MS40':{q:40,unit:'mg',n:10},
+  'G5K':{q:5000,unit:'iu',n:10},'G10K':{q:10000,unit:'iu',n:10},
+  'H10':{q:10,unit:'iu',n:10},'H12':{q:12,unit:'iu',n:10},'H15':{q:15,unit:'iu',n:10},'H24':{q:24,unit:'iu',n:10},
+  'CD2':{q:2,unit:'mg',n:10},'CD5':{q:5,unit:'mg',n:10},
+  'CND2':{q:2,unit:'mg',n:10},'CND5':{q:5,unit:'mg',n:10},'CND10':{q:10,unit:'mg',n:10},
+  'CP10':{q:10,unit:'mg',n:10},
+  'SMO5':{q:5,unit:'mg',n:10},'SMO10':{q:10,unit:'mg',n:10},
+  'TSM2':{q:2,unit:'mg',n:10},'TSM5':{q:5,unit:'mg',n:10},'TSM10':{q:10,unit:'mg',n:10},'TSM20':{q:20,unit:'mg',n:10},
+  'ET10':{q:10,unit:'mg',n:10},'ET50':{q:50,unit:'mg',n:10},
+  'IP5':{q:5,unit:'mg',n:10},'IP10':{q:10,unit:'mg',n:10},
+  'XA5':{q:5,unit:'mg',n:10},'XA10':{q:10,unit:'mg',n:10},'XA50':{q:50,unit:'mg',n:10},
+  'SK5':{q:5,unit:'mg',n:10},'SK10':{q:10,unit:'mg',n:10}
+};
 // Dose guidance tiers per compound. Keys: l=label, d=dose string, n=note, b=1(optimal tier), r=risk text
 const DOSE_GUIDE={
   'cjc-ipa':    [{l:'Conservative',d:'3 IU × 2/day',n:'Maintenance / older adults'},{l:'Optimal',d:'4–6 IU × 2/day',n:'GH pulse for muscle & recovery',b:1},{l:'High',d:'8 IU × 2/day',n:'Aggressive loading',r:'Receptor saturation possible; diminishing returns above 8 IU'}],
@@ -405,6 +446,36 @@ function buildWeeklyFromProtocol(proto){
   });
   return built;
 }
+function _findWeeklyItemInfo(baseId){
+  for(var _si=0;_si<_userStacks.length;_si++){
+    var _items=buildWeeklyFromProtocol(_userStacks[_si]);
+    for(var _ii=0;_ii<_items.length;_ii++){if(_items[_ii].id===baseId)return _items[_ii];}
+  }
+  return null;
+}
+// Returns dose items for date d from all stacks whose cycle date range covers d.
+// Stacks with no cycle_start fall back to the _activeStackIndices manual toggle.
+function getDosesForDate(d){
+  var dow=d.getDay();var dk=dateKey(d);var seen={};var result=[];
+  _userStacks.forEach(function(st,si){
+    if(st.cycle_start){
+      var sStart=parseLocalDate(st.cycle_start);
+      if(d<sStart)return;
+      var sEnd=st.end_date?parseLocalDate(st.end_date):(st.cycle_length?new Date(sStart.getTime()+st.cycle_length*7*86400000):null);
+      if(sEnd&&d>sEnd)return;
+    }else{
+      if(!_isActiveStack(si))return;
+    }
+    buildWeeklyFromProtocol(st).forEach(function(item){
+      if(!item.dow.includes(dow))return;
+      if(item.startDate&&d<item.startDate)return;
+      if(item.endDate&&d>item.endDate)return;
+      var did=item.id+'_'+dk;
+      if(!seen[did]){seen[did]=true;result.push({id:did,name:item.name,detail:item.detail,time:item.time,dot:item.dot});}
+    });
+  });
+  return result;
+}
 // ── Load user protocol from backend ─────────────────────────────────────────
 // ── Stack store state ────────────────────────────────────────────────────────
 // ── Load all stacks ─────────────────────────────────────────────────────────
@@ -414,7 +485,7 @@ async function loadUserStacks(){
     if(r.ok){
       var data=await r.json();
       _userStacks=data.stacks||[];
-      _activeStackIndices=data.active_indices||(data.active_index!=null?[data.active_index]:[0]);
+      _activeStackIndices=Array.isArray(data.active_indices)?data.active_indices:(data.active_index!=null?[data.active_index]:[0]);
       // Cache to localStorage for offline fallback
       try{localStorage.setItem('stacks_cache',JSON.stringify({stacks:_userStacks,active_indices:_activeStackIndices}));}catch(e){}
     } else {
@@ -424,7 +495,7 @@ async function loadUserStacks(){
     // Try localStorage cache before falling back to synthesized stack
     try{
       var cached=JSON.parse(localStorage.getItem('stacks_cache')||'null');
-      if(cached&&cached.stacks&&cached.stacks.length){_userStacks=cached.stacks;_activeStackIndices=cached.active_indices||(cached.active_index!=null?[cached.active_index]:[0]);}
+      if(cached&&cached.stacks&&cached.stacks.length){_userStacks=cached.stacks;_activeStackIndices=Array.isArray(cached.active_indices)?cached.active_indices:(cached.active_index!=null?[cached.active_index]:[0]);}
       else{_userStacks=[];_activeStackIndices=[0];}
     }catch(e2){_userStacks=[];_activeStackIndices=[0];}
   }
@@ -435,6 +506,7 @@ async function loadUserStacks(){
   }
   _userStacks.forEach(function(stack){
     if(stack.cycle_start){var _csp=stack.cycle_start.split('-');stack.cycle_start=_csp[0]+'-'+(_csp[1]||'1').padStart(2,'0')+'-'+(_csp[2]||'1').padStart(2,'0');}
+    if(stack.end_date){var _cep=stack.end_date.split('-');stack.end_date=_cep[0]+'-'+(_cep[1]||'1').padStart(2,'0')+'-'+(_cep[2]||'1').padStart(2,'0');}
     (stack.peptides||[]).forEach(function(pp){if(pp.start_date){var _psp=pp.start_date.split('-');pp.start_date=_psp[0]+'-'+(_psp[1]||'1').padStart(2,'0')+'-'+(_psp[2]||'1').padStart(2,'0');}});
     if(!stack.peptides)return;
     stack.peptides.forEach(function(p){
@@ -460,7 +532,6 @@ async function loadUserStacks(){
     var _fx=function(id,name){var i=(id||'').toLowerCase(),n=(name||'').toLowerCase();if(i.indexOf('reta')>=0||n.indexOf('retat')>=0)return'2026-04-04';if(i.indexOf('cjc')>=0||n.indexOf('cjc')>=0)return'2026-04-04';if(i.indexOf('glow')>=0||n.indexOf('glow')>=0)return'2026-04-16';return null;};
     _userStacks.forEach(function(stack){
       (stack.peptides||[]).forEach(function(p){var c=_fx(p.id,p.name);if(c&&(!p.start_date||p.start_date>='2026-05-01'))p.start_date=c;});
-      var m=_deriveEarliestStartDate(stack.peptides||[]);if(m&&(!stack.cycle_start||m<stack.cycle_start))stack.cycle_start=m;
     });
   })();
   updateWEEKLY();
@@ -472,7 +543,7 @@ async function loadUserStacks(){
 // ── Update WEEKLY from active stack ──────────────────────────────────────────
 function updateWEEKLY(){
   var active=_activeStackIndices.filter(function(i){return i>=0&&i<_userStacks.length;});
-  if(!active.length){WEEKLY=WEEKLY_DEFAULT.slice();return;}
+  if(!active.length){WEEKLY=[];return;}
   if(active.length===1){WEEKLY=buildWeeklyFromProtocol(_userStacks[active[0]]);return;}
   var seen={};WEEKLY=[];
   active.forEach(function(i){
@@ -484,7 +555,7 @@ function updateWEEKLY(){
 }
 // ── Save all stacks to backend ───────────────────────────────────────────────
 async function saveStacksToBackend(){
-  var payload={stacks:_userStacks,active_index:_activeStackIndices[0]||0,active_indices:_activeStackIndices};
+  var payload={stacks:_userStacks,active_index:_activeStackIndices.length?_activeStackIndices[0]:null,active_indices:_activeStackIndices};
   var body=JSON.stringify(payload);
   // localStorage is the primary store — always write first so data is never lost
   try{localStorage.setItem('stacks_cache',body);}catch(e){}
@@ -509,7 +580,6 @@ async function toggleStack(idx){
   if(pos===-1){
     _activeStackIndices.push(idx);
   } else {
-    if(_activeStackIndices.length===1)return; // keep at least one active
     _activeStackIndices.splice(pos,1);
   }
   updateWEEKLY();
@@ -535,8 +605,7 @@ async function deleteStack(idx){
   if(idx>=0&&idx<_userStacks.length){
     _userStacks.splice(idx,1);
     _activeStackIndices=_activeStackIndices.filter(function(i){return i!==idx;}).map(function(i){return i>idx?i-1:i;});
-    if(!_activeStackIndices.length)_activeStackIndices=[0];
-    if(_activeStackIndices[0]>=_userStacks.length)_activeStackIndices=[Math.max(0,_userStacks.length-1)];
+    if(_activeStackIndices.length&&_activeStackIndices[0]>=_userStacks.length)_activeStackIndices=[Math.max(0,_userStacks.length-1)];
     await saveStacksToBackend();
     updateWEEKLY();
     buildWeekStrip();
@@ -562,13 +631,16 @@ function buildStackStore(){
     html+='<div class="stack-card'+(isActive?' active':'')+'" onclick="viewStack('+i+')">';
     html+='<div class="stack-card-header">';
     html+='<div style="flex:1;min-width:0;">';
-    html+='<button onclick="event.stopPropagation();toggleStack('+i+')" style="background:'+(isActive?'var(--accent)':'#444')+';color:'+(isActive?'#000':'#aaa')+';border:none;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700;text-transform:uppercase;cursor:pointer;font-family:inherit;display:inline-block;margin-bottom:3px;letter-spacing:0.5px;">'+(isActive?'Active':'Inactive')+'</button>';
+    html+='<div onclick="event.stopPropagation();toggleStack('+i+')" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-bottom:5px;"><div style="width:34px;height:18px;border-radius:9px;background:'+(isActive?'var(--accent)':'rgba(255,255,255,0.15)')+';position:relative;flex-shrink:0;"><div style="position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:'+(isActive?'18px':'2px')+';box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div></div><span style="font-size:10px;font-weight:600;color:'+(isActive?'var(--accent)':'var(--muted2)')+';letter-spacing:0.3px;">'+(isActive?'Active':'Inactive')+'</span></div>';
     html+='<div class="stack-card-name">'+_esc(st.name||'Stack '+(i+1))+'</div>';
+    var _csDisp=st.cycle_start||'';
+    if(_csDisp){var _csdD=parseLocalDate(_csDisp);if(st.cycle_length){var _cedD=new Date(_csdD.getTime()+st.cycle_length*7*86400000);html+='<div style="font-size:10px;color:var(--muted2);margin-top:2px;">'+fmtDate(_csdD)+' → '+fmtDate(_cedD)+'</div>';}else{html+='<div style="font-size:10px;color:var(--muted2);margin-top:2px;">'+fmtDate(_csdD)+' → ongoing</div>';}}
     html+='</div>';
     html+='</div>';
     html+='<div class="stack-card-meta">';
     html+='<div>'+pCount+' peptide'+(pCount===1?'':'s')+'</div>';
     if(hasTrt)html+='<div style="color:var(--accent4);">+ TRT</div>';
+    html+='<button onclick="event.stopPropagation();openCartModal('+i+')" style="margin-top:4px;background:transparent;border:1px solid var(--border);color:var(--muted2);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:0.3px">🛒 Shopping List</button>';
     html+='</div>';
     html+='</div>';
   }
@@ -585,6 +657,151 @@ function buildStackStore(){
   }
   html+='</div>';
   body.innerHTML=html;
+}
+// ── Cart / Shopping List ──────────────────────────────────────────────────────
+var _cartStackIdx=0,_cartWeeks=12;
+function openCartModal(i){
+  _cartStackIdx=i;
+  var st=_userStacks[i];
+  _cartWeeks=(st&&st.cycle_length)||(_cycle&&_cycle.cycleLengthWeeks)||12;
+  document.getElementById('cart-modal').style.display='block';
+  document.body.style.overflow='hidden';
+  _renderCartModal();
+}
+function closeCartModal(){
+  document.getElementById('cart-modal').style.display='none';
+  document.body.style.overflow='';
+}
+function _cartDoseMgPerInj(doseVal,doseUnit,reconDb){
+  var d=parseFloat(doseVal);if(!d||isNaN(d))return 0;
+  if(!reconDb)return doseUnit==='mg'?d:doseUnit==='mcg'?d/1000:0;
+  var vialUnit=reconDb.unit||'mg';
+  if(vialUnit==='IU')return null; // HGH/HCG: keep in IU, handled separately
+  var vi=reconDb.defaultVi!=null?reconDb.defaultVi:0;
+  var wi=reconDb.defaultWi!=null?reconDb.defaultWi:reconDb.water.length-1;
+  var vialMg=reconDb.vials[vi];var waterMl=reconDb.water[wi];var conc=vialMg/waterMl;
+  if(doseUnit==='mg')return d;
+  if(doseUnit==='mcg')return d/1000;
+  if(doseUnit==='ml')return d*conc;
+  if(doseUnit==='IU')return d*0.01*conc; // insulin pen: 1 IU = 0.01 ml
+  return 0;
+}
+function _calcPeptideCartItem(p,weeks){
+  var cat=PEPTIDE_CAT.find(function(c){return c.id===p.id;});
+  if(!cat||!cat.sku)return null;
+  var pl=PRICELIST[cat.sku];
+  var reconDb=RECON_DB[p.id]||null;
+  var vialUnit=reconDb?reconDb.unit||'mg':'mg';
+  var isIuProduct=vialUnit==='IU'; // HGH, HCG
+  var days=(p.days||[0,1,2,3,4,5,6]).length;
+  var times=p.times||['AM'];
+  var totalInUnit=0;
+  if(isIuProduct){
+    var dAm=times.includes('AM')?parseFloat(p.dose_am||0):0;
+    var dPm=times.includes('PM')?parseFloat(p.dose_pm||0):0;
+    totalInUnit=(dAm+dPm)*days*weeks;
+    if(!totalInUnit)return{name:p.name||cat.name,sku:cat.sku,noData:true};
+    if(!pl)return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalInUnit*10)/10,unit:'IU',vials:null,boxes:null};
+    var vials=Math.ceil(totalInUnit/pl.q);var boxes=Math.ceil(vials/pl.n);
+    return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalInUnit*10)/10,unit:'IU',vials:vials,boxes:boxes};
+  }else{
+    var mgAm=times.includes('AM')?(_cartDoseMgPerInj(p.dose_am,p.unit_am,reconDb)||0):0;
+    var mgPm=times.includes('PM')?(_cartDoseMgPerInj(p.dose_pm,p.unit_pm,reconDb)||0):0;
+    var totalMg=(mgAm+mgPm)*days*weeks;
+    if(!totalMg)return{name:p.name||cat.name,sku:cat.sku,noData:true};
+    if(!pl)return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalMg*10)/10,unit:'mg',vials:null,boxes:null};
+    var vials=Math.ceil(totalMg/pl.q);var boxes=Math.ceil(vials/pl.n);
+    return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalMg*10)/10,unit:'mg',vials:vials,boxes:boxes};
+  }
+}
+function _calcEnhancementCartItem(c,weeks){
+  var ec=ENHANCEMENT_COMPOUNDS.find(function(x){return x.name===c.name;});
+  // HGH: bridge to pricelist via PEPTIDE_CAT
+  if(ec&&ec.id==='hgh'){
+    var pepHgh=PEPTIDE_CAT.find(function(p){return p.id==='hgh';});
+    var pl=pepHgh?PRICELIST[pepHgh.sku]:null;
+    var doseVal=parseFloat(c.dose)||0;
+    var unit=c.unit||'IU/day';
+    var totalIU=unit==='IU/day'?doseVal*7*weeks:doseVal*weeks;
+    if(!totalIU)return null;
+    if(!pl)return{name:c.name,totalMg:Math.round(totalIU),totalUnit:'IU',units:null,unitLabel:'vials',packDesc:''};
+    var vials=Math.ceil(totalIU/pl.q);
+    return{name:c.name,totalMg:Math.round(totalIU),totalUnit:'IU',units:vials,unitLabel:vials===1?'vial':'vials',packDesc:'('+pl.q+' IU/vial)',sku:pepHgh.sku};
+  }
+  if(!ec||!ec.pack)return null;
+  var doseVal=parseFloat(c.dose)||0;var unit=c.unit||'mg/week';
+  var totalMg=0;
+  if(unit==='mg/week')totalMg=doseVal*weeks;
+  else if(unit==='mg/day')totalMg=doseVal*7*weeks;
+  else if(unit==='mg/EOD')totalMg=doseVal*Math.ceil(weeks*7/2);
+  else totalMg=doseVal*weeks;
+  if(!totalMg)return null;
+  var pack=ec.pack;
+  var mgPerUnit=pack.type==='vial'?pack.conc_mg_ml*pack.vol_ml:pack.mg_per_tab*pack.tabs_per_pack;
+  var units=Math.ceil(totalMg/mgPerUnit);
+  var isTab=pack.type==='tablet';
+  var packDesc=isTab?'('+pack.mg_per_tab+' mg/tab × '+pack.tabs_per_pack+' tabs/pack)':'('+pack.conc_mg_ml+' mg/mL × '+pack.vol_ml+' mL)';
+  return{name:c.name,totalMg:Math.round(totalMg),totalUnit:'mg',units:units,unitLabel:isTab?(units===1?'pack':'packs'):(units===1?'vial':'vials'),packDesc:packDesc};
+}
+function _renderCartModal(){
+  var inner=document.getElementById('cart-modal-inner');if(!inner)return;
+  var st=_userStacks[_cartStackIdx];
+  if(!st){inner.innerHTML='<div style="padding:20px;color:var(--muted2)">No stack selected</div>';return;}
+  var weeks=_cartWeeks;
+  var ins='padding:8px 12px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:14px;font-family:inherit';
+  var h='<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">';
+  h+='<div style="font-family:Bebas Neue,sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent)">SHOPPING LIST</div>';
+  h+='<button onclick="closeCartModal()" style="background:none;border:none;color:var(--muted2);font-size:20px;cursor:pointer;padding:0;line-height:1">&#x2715;</button>';
+  h+='</div>';
+  h+='<div style="padding:16px 20px 20px">';
+  h+='<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:14px">'+_esc(st.name||'Stack '+(_cartStackIdx+1))+'</div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:12px;color:var(--muted2)">';
+  h+='Cycle length: <input type="number" min="1" max="52" value="'+weeks+'" oninput="_cartWeeks=Math.max(1,parseInt(this.value)||12);_renderCartModal()" style="'+ins+';width:64px;text-align:center"> weeks';
+  h+='</div>';
+  var peptides=(st.peptides||[]).filter(function(p){return p.active!==false&&(p.dose_am||p.dose_pm);});
+  var hasItems=false;
+  if(peptides.length){
+    h+='<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Peptides — from supplier</div>';
+    peptides.forEach(function(p){
+      var item=_calcPeptideCartItem(p,weeks);if(!item)return;hasItems=true;
+      h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">';
+      h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">';
+      h+='<div style="font-size:13px;font-weight:600;color:var(--text);flex:1">'+_esc(item.name)+'</div>';
+      h+='</div>';
+      if(item.noData){h+='<div style="font-size:11px;color:var(--muted2);margin-top:4px">Set dose in Stack to calculate</div>';}
+      else if(item.vials!=null){
+        h+='<div style="font-size:11px;color:var(--muted2);line-height:1.9;margin-top:4px">';
+        h+='Total: '+item.total+' '+item.unit+' · <span style="font-weight:600;color:var(--text)">'+item.vials+' vial'+(item.vials===1?'':'s')+'</span>';
+        h+='<br><span style="font-size:10px">SKU: '+_esc(item.sku)+'</span>';
+        h+='</div>';
+      }else{
+        h+='<div style="font-size:11px;color:var(--muted2);margin-top:4px">'+item.total+' '+item.unit+' total · SKU: '+_esc(item.sku)+' (not in pricelist)</div>';
+      }
+      h+='</div>';
+    });
+    if(!peptides.some(function(p){return _calcPeptideCartItem(p,weeks);})){
+      h+='<div style="font-size:12px;color:var(--muted2);padding:8px 0">No peptide data available</div>';
+    }
+  }
+  var enhanceCmpds=_cycle&&_cycle.compounds?_cycle.compounds.filter(function(c){return c.active&&c.name;}):[];
+  if(enhanceCmpds.length){
+    h+='<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;margin-top:18px">Enhancement Compounds — source separately</div>';
+    enhanceCmpds.forEach(function(c){
+      var item=_calcEnhancementCartItem(c,weeks);if(!item)return;hasItems=true;
+      h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">';
+      h+='<div style="font-size:13px;font-weight:600;color:var(--text)">'+_esc(item.name)+'</div>';
+      h+='<div style="font-size:11px;color:var(--muted2);line-height:1.9;margin-top:4px">';
+      h+='Total: '+item.totalMg.toLocaleString()+' '+item.totalUnit+' · <span style="font-weight:600;color:var(--text)">'+item.units+' '+item.unitLabel+'</span> '+_esc(item.packDesc);
+      if(item.sku)h+='<br><span style="font-size:10px">SKU: '+_esc(item.sku)+'</span>';
+      h+='</div>';
+      h+='</div>';
+    });
+  }
+  if(!hasItems&&!peptides.length&&!enhanceCmpds.length){
+    h+='<div style="text-align:center;padding:24px 0;color:var(--muted2);font-size:13px">Add peptides to this stack to see your shopping list.</div>';
+  }
+  h+='</div>';
+  inner.innerHTML=h;
 }
 // ── Create or edit stack ─────────────────────────────────────────────────────
 // ── Weight tracking ────────────────────────────────────────────────────────
@@ -743,7 +960,7 @@ function obFinish(){
   var kv={};if(_obData.sex)kv['user_sex']=_obData.sex;if(profile.height)kv['user_height']=profile.height;if(profile.weight)kv['user_weight']=profile.weight;
   if(Object.keys(kv).length)pushPepSettingsToAgent(kv);
   document.getElementById('onboarding-overlay').classList.add('hidden');
-  buildAppearanceCard();
+  buildAppearanceCard();buildCacheCard();
 }
 function buildAppearanceCard(){
   var card=document.getElementById('s-appearance-card');if(!card)return;
@@ -764,9 +981,11 @@ function buildAppearanceCard(){
     +'<div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+tiles+'</div>'
     +'</div></div>';
 }
-function init(){document.getElementById('hdr-day').textContent=NOW.getDate()+' '+NOW.toLocaleString('en-GB',{month:'short'});document.getElementById('hdr-weekday').textContent=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][TODAY_DOW];checkAgentStatus();checkSyncStatus();checkAppVersion();(function(){if(localStorage.getItem('pep-dose-dedup-v1'))return;function _ndi(id){var _m=id.match(/^(.+)_(\d{4}-\d{1,2}-\d{1,2})$/);if(!_m)return id;var _p=_m[2].split('-');return _m[1]+'_'+_p[0]+'-'+('0'+_p[1]).slice(-2)+'-'+('0'+_p[2]).slice(-2);}var _ks=[];for(var _i=0;_i<localStorage.length;_i++){var _k=localStorage.key(_i);if(_k&&_k.startsWith('proto-chk-'))_ks.push(_k);}_ks.forEach(function(k){var _d;try{_d=JSON.parse(localStorage.getItem(k)||'[]');}catch(e){return;}if(!Array.isArray(_d))return;var _seen=new Set();var _dd=[];_d.forEach(function(id){var _n=_ndi(id);if(!_seen.has(_n)){_seen.add(_n);_dd.push(_n);}});if(_dd.length!==_d.length)localStorage.setItem(k,JSON.stringify(_dd));});localStorage.setItem('pep-dose-dedup-v1','1');})();buildWeekStrip();buildToday();buildSchedule();buildTimeline();initBodyComp();document.getElementById('header-version').textContent='v'+VERSION;const _pv=document.getElementById('signin-version');if(_pv)_pv.textContent='v'+VERSION;setTimeout(function(){buildWeekStrip();buildToday();},100);if(!localStorage.getItem('peptide_sync_done_fly')){const bar=document.createElement('div');bar.className='sync-bar';bar.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#1c1c1c;border-top:1px solid var(--accent);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;z-index:500;font-size:13px;';bar.innerHTML='<span style="color:#f0f0f0">Sync local data to backend?<\/span><button id="peptide-sync-btn" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" onclick="pushAllPeptideToBackend()">Sync Now<\/button>';document.body.appendChild(bar);}checkAgentStatus();checkAppVersion();syncPeptideLogFromAgent();syncPepSettingsFromAgent();checkSyncStatus();setTimeout(function(){if(_syncPending){_syncPending=false;buildToday();}},7000);loadUserStacks();loadUserWeight();(function(){var _mpk='pep-mp-'+MILESTONES.length;if(!localStorage.getItem(_mpk))pushMilestonesToBackend().then(function(){localStorage.setItem(_mpk,'1');}).catch(function(){});})();initTabVis();if(IS_STAGING){var _ssb=document.getElementById('tab-btn-storage');if(_ssb)_ssb.style.display='';}(function(){const _lt=localStorage.getItem('pep-last-tab');if(_lt&&_tabVis[_lt]!==false){const _b=document.getElementById('tab-btn-'+_lt);if(_b)switchTab(_lt,_b);else localStorage.removeItem('pep-last-tab');}})();}
+function buildCacheCard(){var card=document.getElementById('s-cache-card');if(!card)return;card.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">'+sSecHdr('cache','Local Cache')+sSecBody('cache')+'<div style="padding:14px 16px;"><div style="font-size:12px;color:var(--muted2);margin-bottom:12px;">All data is stored on the server. Clear the local cache to force a full re-sync.</div><button onclick="wipeLocalCache()" style="background:var(--danger,#ff3c3c);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Wipe local cache</button></div></div></div>';}
+function init(){document.getElementById('hdr-day').textContent=NOW.getDate()+' '+NOW.toLocaleString('en-GB',{month:'short'});document.getElementById('hdr-weekday').textContent=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][TODAY_DOW];checkAgentStatus();checkSyncStatus();checkAppVersion();(function(){if(localStorage.getItem('pep-dose-dedup-v1'))return;function _ndi(id){var _m=id.match(/^(.+)_(\d{4}-\d{1,2}-\d{1,2})$/);if(!_m)return id;var _p=_m[2].split('-');return _m[1]+'_'+_p[0]+'-'+('0'+_p[1]).slice(-2)+'-'+('0'+_p[2]).slice(-2);}var _ks=[];for(var _i=0;_i<localStorage.length;_i++){var _k=localStorage.key(_i);if(_k&&_k.startsWith('proto-chk-'))_ks.push(_k);}_ks.forEach(function(k){var _d;try{_d=JSON.parse(localStorage.getItem(k)||'[]');}catch(e){return;}if(!Array.isArray(_d))return;var _seen=new Set();var _dd=[];_d.forEach(function(id){var _n=_ndi(id);if(!_seen.has(_n)){_seen.add(_n);_dd.push(_n);}});if(_dd.length!==_d.length)localStorage.setItem(k,JSON.stringify(_dd));});localStorage.setItem('pep-dose-dedup-v1','1');})();buildWeekStrip();buildToday();buildSchedule();buildTimeline();initBodyComp();document.getElementById('header-version').textContent='v'+VERSION;const _pv=document.getElementById('signin-version');if(_pv)_pv.textContent='v'+VERSION;setTimeout(function(){buildWeekStrip();buildToday();},100);if(!localStorage.getItem('peptide_sync_done_fly')){const bar=document.createElement('div');bar.className='sync-bar';bar.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#1c1c1c;border-top:1px solid var(--accent);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;z-index:500;font-size:13px;';bar.innerHTML='<span style="color:#f0f0f0">Sync local data to backend?<\/span><button id="peptide-sync-btn" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer" onclick="pushAllPeptideToBackend()">Sync Now<\/button>';document.body.appendChild(bar);}checkAgentStatus();checkAppVersion();syncPeptideLogFromAgent();syncPepSettingsFromAgent();checkSyncStatus();setTimeout(function(){if(_syncPending){_syncPending=false;buildToday();}},7000);loadUserStacks();loadUserWeight();(function(){var _mpk='pep-mp-'+MILESTONES.length;if(!localStorage.getItem(_mpk))pushMilestonesToBackend().then(function(){localStorage.setItem(_mpk,'1');}).catch(function(){});})();initTabVis();(function(){const _lt=localStorage.getItem('pep-last-tab');if(_lt&&_tabVis[_lt]!==false){const _b=document.getElementById('tab-btn-'+_lt);if(_b)switchTab(_lt,_b);else localStorage.removeItem('pep-last-tab');}})();}
 function initTabVis(){const saved=getData('proto-tab-vis',{});_tabVis=Object.assign({},TAB_DEFAULTS,saved);applyTabVis();}
 async function pushPepSettingsToAgent(kv){try{await fetch(AGENT_URL+'/user-settings',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({settings:kv})});}catch(e){}}
+function wipeLocalCache(){if(!confirm('Clear all locally cached data? The app will reload and re-fetch everything from the backend. You will stay signed in.'))return;var _t=window.localStorage.getItem('google_token');var _e=window.localStorage.getItem('google_email');window.localStorage.clear();if(_t)window.localStorage.setItem('google_token',_t);if(_e)window.localStorage.setItem('google_email',_e);window.location.reload();}
 async function syncPepSettingsFromAgent(){try{const r=await fetch(AGENT_URL+'/user-settings',{headers:authHeaders()});if(!r.ok)return;const s=await r.json();if(!s)return;if(s['proto-tab-vis']){_tabVis=Object.assign({},TAB_DEFAULTS,s['proto-tab-vis']);setData('proto-tab-vis',s['proto-tab-vis']);applyTabVis();buildTabsSettingsCard();}if(s['user_sex'])setBioSex(s['user_sex']);if(s['user_height']){localStorage.setItem('user_height',String(s['user_height']));const hi=document.getElementById('bc-height-in');if(hi)hi.value=s['user_height'];}if(s['user_weight']){localStorage.setItem('user_weight',String(s['user_weight']));const wi=document.getElementById('bc-weight-in');if(wi)wi.value=s['user_weight'];}if(s['user_age']){localStorage.setItem('user_age',String(s['user_age']));const ai=document.getElementById('bc-age-in');if(ai)ai.value=s['user_age'];}if(s['pep-theme'])applyTheme(s['pep-theme']);if(s['macros-train-time'])localStorage.setItem('macros-train-time',s['macros-train-time']);if(s['macros-train-dur'])localStorage.setItem('macros-train-dur',String(s['macros-train-dur']));}catch(e){}}
 function applyTabVis(){Object.keys(TAB_LABELS).forEach(id=>{const btn=document.getElementById('tab-btn-'+id);if(btn)btn.style.display=_tabVis[id]?'':'none';});}
 function _userProfile(){return{sex:localStorage.getItem('user_sex')||'male',age:parseInt(localStorage.getItem('user_age')||'0')||0,weight_kg:parseFloat(localStorage.getItem('user_weight')||'0')||0};}
@@ -774,14 +993,14 @@ function _dosePersonalization(pepId,profile){var mods=[];var ghAxis=['cjc-ipa','
 function toggleTabVis(id){if(id==='settings')return;_tabVis[id]=!_tabVis[id];setData('proto-tab-vis',_tabVis);pushPepSettingsToAgent({'proto-tab-vis':_tabVis});if(!_tabVis[id]&&_currentTab===id){const b=document.getElementById('tab-btn-today');if(b)switchTab('today',b);}applyTabVis();buildTabsSettingsCard();}
 function buildTabsSettingsCard(){const card=document.getElementById('s-tabs-card');if(!card)return;const rows=Object.entries(TAB_LABELS).map(([id,label])=>{const on=!!_tabVis[id];return'<div style="padding:11px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--text)">'+label+'</span><button onclick="toggleTabVis(\''+id+'\')" style="background:'+(on?'var(--accent)':'var(--surface2)')+';color:'+(on?'#000':'var(--muted)')+';border:1px solid '+(on?'transparent':'var(--border)')+';border-radius:20px;padding:4px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;min-width:48px">'+(on?'ON':'OFF')+'</button></div>';}).join('');card.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">'+sSecHdr('tabs','Tabs')+sSecBody('tabs')+rows+'<div style="padding:8px 16px 10px;font-size:11px;color:var(--muted2)">Settings is always visible</div></div></div>';}
 </script>
-<script src="tab-cycles.js?v=1.270"></script>
-<script src="tab-macros.js?v=1.270"></script>
-<script src="tab-stack.js?v=1.270"></script>
-<script src="tab-today.js?v=1.270"></script>
-<script src="tab-schedule.js?v=1.270"></script>
-<script src="tab-timeline.js?v=1.270"></script>
-<script src="tab-body.js?v=1.270"></script>
-<script src="tab-recon.js?v=1.270"></script>
+<script src="tab-cycles.js?v=1.285"></script>
+<script src="tab-macros.js?v=1.285"></script>
+<script src="tab-stack.js?v=1.285"></script>
+<script src="tab-today.js?v=1.285"></script>
+<script src="tab-schedule.js?v=1.285"></script>
+<script src="tab-timeline.js?v=1.285"></script>
+<script src="tab-body.js?v=1.285"></script>
+<script src="tab-recon.js?v=1.285"></script>
 <script>
 init();
 if(IS_STAGING){const dc=document.getElementById('s-deploy-card');if(dc)dc.style.display='';}

@@ -1,5 +1,44 @@
 # Peptide Tracker Staging — Claude Instructions
 
+## ⚠️ COMPOUND DATA LIVES IN BACKEND ONLY — NEVER IN PUBLIC REPOS ⚠️
+All peptide and compound information is **commercially sensitive and proprietary**. It must **NEVER** be stored in any public repository (`peptidetracker`, `peptidetracker-staging`, `workout`, `workout-staging`).
+
+This includes, but is not limited to:
+- Peptide catalogue data (names, SKUs, mechanisms, protocols, side effects, dosing defaults)
+- Enhancement compound data (concentrations, vial sizes, anabolic profiles, dosing guidance)
+- Reconstitution data (vial/water volumes, concentration defaults)
+- Dose guidance tiers and risk labels
+- Pricelist / SKU mappings
+- Any supplier-specific product data
+
+**The only place this data may live is `claude-agent-backend`.** The frontend apps must fetch it from the backend at runtime — never hardcode it into `index.html`, `tab-cycles.js`, or any other file in a public repo.
+
+**Current state (as of 2026-06-21):** `PEPTIDE_CAT`, `ENHANCEMENT_COMPOUNDS`, `RECON_DB`, `DOSE_GUIDE`, `DEFAULT_PHASES`, `PRICELIST`, and related constants are still hardcoded in `index.html` / `tab-cycles.js`. This is a known technical debt. **Do not add new compound data to these files** — any new compounds or data updates must go into the backend and be served via API.
+
+## ⚠️ NO PRICES IN THE APP — NEVER ⚠️
+Supplier pricing is commercially sensitive and must **NEVER** appear in any app UI, rendered HTML, or user-facing output. The `PRICELIST` const in `index.html` (and `tests/pricelist.csv`) contains only vial sizes and quantities (`q`, `unit`, `n` fields) — **no `usd` or price fields**.
+
+Rules:
+- **Never add a `usd`, `price`, or any cost field** to `PRICELIST` entries
+- **Never display US$ amounts, per-box prices, or grand totals** in the Shopping List modal or anywhere else
+- **Shopping List shows VIALS only — never boxes.** Box count is a supplier unit that reveals cost structure. Display format: `Total: Xmg · **N vials**`. The `boxes` field must never appear in rendered output.
+- `PRICELIST` is used **exclusively** for quantity calculations (how many vials/boxes needed per cycle)
+- `pricelist.csv` must have only 3 columns: `SKU Code;Products Name;Mg*vials` — no price column ever
+
+## ⚠️ localStorage IS A CACHE — NEVER THE SOURCE OF TRUTH ⚠️
+localStorage is a read cache for performance only. It is NEVER the source of truth.
+
+**Every single localStorage write MUST be paired with a backend push in the same code path — no exceptions.**
+
+This means:
+- `setData(key, value)` alone → WRONG
+- `localStorage.setItem(key, value)` alone → WRONG  
+- `setData(key, value)` + `push*ToAgent(...)` in the same call → CORRECT
+
+A "Wipe local cache" button exists in Settings specifically to verify this: after wiping, ALL user data must come back from the backend on next load. If anything is lost after a wipe, that data was relying on localStorage as its source of truth — which is a bug.
+
+This rule was violated multiple times (wk-db-*, wk-gear-* were localStorage-only). Any new data type must have a backend endpoint AND be included in the startup sync before it can be written to localStorage.
+
 ## ⚠️ BACKEND IS THE SOURCE OF TRUTH — EVERY SAVE MUST HIT THE BACKEND ⚠️
 **Every user-facing data operation (save, update, delete) MUST be persisted to
 the backend immediately — no exceptions, ever.** localStorage is only a local
