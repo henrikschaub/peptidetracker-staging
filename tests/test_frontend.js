@@ -391,7 +391,8 @@ G.wizSave().then(async ()=>{
   await G.loadUserStacks();
   const glowP2=G._userStacks[0].peptides[0];
   check('migration: expired end_date cleared from glow',   !glowP2.end_date,  `end_date still set: ${glowP2.end_date}`);
-  check('migration: start_date corrected to apr16 for glow', glowP2.start_date==='2026-04-16',`start_date: ${glowP2.start_date}`);
+  // Glow has no start_date — migration must NOT stamp one (new/test stacks must stay date-free)
+  check('migration: glow with no start_date NOT auto-stamped', !glowP2.start_date, `start_date unexpectedly set: ${glowP2.start_date}`);
   const wklyGlow=G.buildWeeklyFromProtocol(G._userStacks[0]);
   check('migration: glow-am entry has no endDate',         !wklyGlow.find(w=>w.id==='glow-am')?.endDate, 'glow-am still has endDate');
   check('migration: glow-pm entry has no endDate',         !wklyGlow.find(w=>w.id==='glow-pm')?.endDate, 'glow-pm still has endDate');
@@ -403,6 +404,32 @@ G.wizSave().then(async ()=>{
   await G.loadUserStacks();
   const glowP3=G._userStacks[0].peptides[0];
   check('migration: start_date preserved when expired end_date cleared', glowP3.start_date==='2026-04-16'&&!glowP3.end_date, `start_date=${glowP3.start_date} end_date=${glowP3.end_date}`);
+  // ── Regression: new stacks must not get auto-dated ───────────────────────────
+  console.log('\n── New stack: no auto start_date ───────────────────────────');
+  // Any new stack created by the wizard has no start_date on its peptides.
+  // loadUserStacks must NOT stamp April dates on them.
+  const newCjcStack={name:'Test CJC',peptides:[
+    {id:'cjc-ipa',name:'CJC-1295/Ipa',dot:'#3cffa0',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'4',unit_am:'IU',active:true},
+  ]};
+  G.fetch=async()=>({ok:true,json:async()=>({stacks:[JSON.parse(JSON.stringify(newCjcStack))],active_index:0})});
+  await G.loadUserStacks();
+  const newCjcPep=G._userStacks[0].peptides[0];
+  check('new CJC stack: no auto start_date stamped', !newCjcPep.start_date, `start_date unexpectedly set: ${newCjcPep.start_date}`);
+  const newRetaStack={name:'Test Reta',peptides:[
+    {id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0],times:['AM'],dose_am:'3',unit_am:'mg',active:true},
+  ]};
+  G.fetch=async()=>({ok:true,json:async()=>({stacks:[JSON.parse(JSON.stringify(newRetaStack))],active_index:0})});
+  await G.loadUserStacks();
+  check('new Reta stack: no auto start_date stamped', !G._userStacks[0].peptides[0].start_date, `start_date unexpectedly set: ${G._userStacks[0].peptides[0].start_date}`);
+  // Migration STILL corrects an existing wrong date (>= May 2026)
+  const wrongDateGlowStack={name:'My Stack',peptides:[
+    {id:'glow',name:'Glow Blend',dot:'#3b9eff',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'0.09',unit_am:'ml',start_date:'2026-05-15'},
+  ]};
+  G.fetch=async()=>({ok:true,json:async()=>({stacks:[JSON.parse(JSON.stringify(wrongDateGlowStack))],active_index:0})});
+  await G.loadUserStacks();
+  check('migration: wrong start_date 2026-05-15 corrected to 2026-04-16 for glow',
+    G._userStacks[0].peptides[0].start_date==='2026-04-16',
+    `got: ${G._userStacks[0].peptides[0].start_date}`);
   // Glow recon: 70mg/3ml = 23.333mg/ml, 9 IU = 0.09ml
   const rcGlow9=G.reconCalc('0.09','ml',G.RECON_DB['glow'].vials[G.RECON_DB['glow'].defaultVi],G.RECON_DB['glow'].water[G.RECON_DB['glow'].defaultWi],'mg');
   check('glow 3ml: 0.09ml → 9 IU',    rcGlow9&&rcGlow9.iu===9,      `got ${rcGlow9?.iu}`);
@@ -1462,20 +1489,21 @@ console.log('\n── dose dedup migration ────────────�
   check('_renderCartModal function defined',typeof G._renderCartModal==='function');
   check('_calcPeptideCartItem function defined',typeof G._calcPeptideCartItem==='function');
   check('_calcEnhancementCartItem function defined',typeof G._calcEnhancementCartItem==='function');
-  check('_calcPeptideCartItem: retatrutide 3mg/week 1x/week 12wks → ~36mg → 4 vials RT5 → 1 box (no price)',
+  // optimizer: retatrutide 3mg/week 1x/week 12wks → 36mg total → RT20 (46.7d ≤ 55) → 2 vials
+  check('_calcPeptideCartItem: retatrutide 3mg/week 1x/week 12wks → RT20 → 2 vials (no price, no boxes)',
     (function(){
       var p={id:'retatrutide',name:'Retatrutide',dose_am:'3',dose_pm:'',unit_am:'mg',unit_pm:'mg',times:['AM'],days:[0],active:true};
       var item=G._calcPeptideCartItem(p,12);
-      return item&&item.vials===Math.ceil(3*1*12/5)&&item.boxes===Math.ceil(Math.ceil(3*1*12/5)/10)&&!('price' in item);
+      return item&&item.sku==='RT20'&&item.vials===2&&item.boxes==null&&!('price' in item);
     })());
-  check('_calcPeptideCartItem: HGH 3 IU/day 7 days/week 12wks → 252 IU → 11 vials H24 → 2 boxes (no price)',
+  // optimizer: HGH 3 IU/day 7 days/week 12wks → 252 IU → H24 → 11 vials (H24 was already optimal)
+  check('_calcPeptideCartItem: HGH 3 IU/day 7 days/week 12wks → 252 IU → 11 vials H24 (no boxes, no price)',
     (function(){
       var p={id:'hgh',name:'HGH',dose_am:'3',dose_pm:'',unit_am:'IU',unit_pm:'IU',times:['AM'],days:[0,1,2,3,4,5,6],active:true};
       var item=G._calcPeptideCartItem(p,12);
       var totalIU=3*7*12; // 252 IU
       var vials=Math.ceil(totalIU/24); // ceil(10.5)=11
-      var boxes=Math.ceil(vials/10);   // ceil(1.1)=2
-      return item&&item.vials===vials&&item.boxes===boxes&&!('price' in item);
+      return item&&item.sku==='H24'&&item.vials===vials&&item.boxes==null&&!('price' in item);
     })());
   check('_calcEnhancementCartItem: test_e 400mg/week 16wks → 6400mg → 3 vials (250×10=2500mg each)',
     (function(){
@@ -1491,4 +1519,35 @@ console.log('\n── dose dedup migration ────────────�
     })());
   check('buildStackStore HTML includes Shopping List button',
     (function(){var html=fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'index.html'),'utf8');return html.includes('openCartModal')&&html.includes('Shopping List');})());
+  // ── Vial optimizer ───────────────────────────────────────────────────────────
+  check('_optimalVialSku function defined',typeof G._optimalVialSku==='function');
+  // Tesamorelin 2mg/day 7d/wk 12wks → 168mg → TSM20 → 9 vials
+  check('_calcPeptideCartItem: Tesamorelin 2mg/day 7d/wk 12wks → TSM20 → 9 vials',
+    (function(){
+      var p={id:'tesamorelin',name:'Tesamorelin',dose_am:'2',dose_pm:'',unit_am:'mg',unit_pm:'mg',times:['AM'],days:[0,1,2,3,4,5,6],active:true};
+      var item=G._calcPeptideCartItem(p,12);
+      return item&&item.sku==='TSM20'&&item.vials===9&&item.boxes==null;
+    })());
+  // NAD+ 100mg 3d/wk 12wks → 3600mg → NJ1000 → 4 vials
+  check('_calcPeptideCartItem: NAD+ 100mg 3d/wk 12wks → NJ1000 → 4 vials',
+    (function(){
+      var p={id:'nad',name:'NAD+',dose_am:'100',dose_pm:'',unit_am:'mg',unit_pm:'mg',times:['AM'],days:[1,3,5],active:true};
+      var item=G._calcPeptideCartItem(p,12);
+      return item&&item.sku==='NJ1000'&&item.vials===4&&item.boxes==null;
+    })());
+  // NAD+ 100mg 1d/wk 12wks — NJ1000 = 70 days > 55, must use NJ500 → 3 vials
+  check('_calcPeptideCartItem: NAD+ 100mg 1d/wk 12wks → NJ500 (NJ1000 violates 55-day rule) → 3 vials',
+    (function(){
+      var p={id:'nad',name:'NAD+',dose_am:'100',dose_pm:'',unit_am:'mg',unit_pm:'mg',times:['AM'],days:[1],active:true};
+      var item=G._calcPeptideCartItem(p,12);
+      return item&&item.sku==='NJ500'&&item.vials===3&&item.boxes==null;
+    })());
+  // Shopping list render: vials bolded, no box display
+  check('shopping list renders vials in bold span (no box count)',
+    (function(){
+      var html=fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'index.html'),'utf8');
+      var hasBoldVials=html.includes('font-weight:600;color:var(--text)">\'+item.vials');
+      var hasBoxRender=html.includes('item.boxes');
+      return hasBoldVials&&!hasBoxRender;
+    })());
 }

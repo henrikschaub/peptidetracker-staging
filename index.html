@@ -196,7 +196,7 @@
   </div>
 </div>
 <script>
-const VERSION='1.284';
+const VERSION='1.287';
 const IS_STAGING=(window.location.pathname||'').startsWith('/peptidetracker-staging');
 if(IS_STAGING){var _S='staging:';var _r=window.localStorage;var _PT=new Set(['google_token','google_email']);var _pk=function(k){return _PT.has(k)?k:_S+k;};var _p=new Proxy(_r,{get:function(t,n){if(n==='getItem')return function(k){return _r.getItem(_pk(k));};if(n==='setItem')return function(k,v){_r.setItem(_pk(k),v);};if(n==='removeItem')return function(k){_r.removeItem(_pk(k));};if(n==='clear')return function(){Object.keys(_r).filter(function(k){return k.startsWith(_S);}).forEach(function(k){_r.removeItem(k);});};if(n==='key')return function(i){return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);})[i]||null;};if(n==='length')return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).length;if(typeof t[n]==='function')return t[n].bind(t);return t[n];},set:function(t,n,v){t[n]=v;return true;},ownKeys:function(){return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);});},getOwnPropertyDescriptor:function(t,n){if(Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);}).includes(n))return{configurable:true,enumerable:true,value:_r.getItem(_S+n)};return undefined;},has:function(t,n){return _r.getItem(_pk(n))!==null;}});try{Object.defineProperty(window,'localStorage',{get:function(){return _p;},configurable:true});}catch(e){}}
 const AGENT_URL="https://claude-agent-api-aged-sun-3616.fly.dev";
@@ -525,13 +525,13 @@ async function loadUserStacks(){
       if((p.id==='glow'||p.id==='glow-1')&&(parseFloat(p.dose_am)===0.2||(parseFloat(p.dose_am)===0.09&&p.unit_am!=='ml'))){p.dose_am='0.09';p.unit_am='ml';}
     });
   });
-  // In-memory correction: any peptide start_date >= May 2026 was auto-detected from
-  // the 19-day log window and is wrong. Fix in memory every load (self-disabling once
-  // backend persists correct April dates). No save attempt here — backend does that.
+  // In-memory correction: any peptide with a start_date >= May 2026 was auto-detected from
+  // the 19-day log window and is wrong. Only corrects existing wrong dates — never stamps
+  // a date onto peptides that have none (new / test stacks must stay date-free).
   (function(){
     var _fx=function(id,name){var i=(id||'').toLowerCase(),n=(name||'').toLowerCase();if(i.indexOf('reta')>=0||n.indexOf('retat')>=0)return'2026-04-04';if(i.indexOf('cjc')>=0||n.indexOf('cjc')>=0)return'2026-04-04';if(i.indexOf('glow')>=0||n.indexOf('glow')>=0)return'2026-04-16';return null;};
     _userStacks.forEach(function(stack){
-      (stack.peptides||[]).forEach(function(p){var c=_fx(p.id,p.name);if(c&&(!p.start_date||p.start_date>='2026-05-01'))p.start_date=c;});
+      (stack.peptides||[]).forEach(function(p){var c=_fx(p.id,p.name);if(c&&p.start_date&&p.start_date>='2026-05-01')p.start_date=c;});
     });
   })();
   updateWEEKLY();
@@ -686,6 +686,22 @@ function _cartDoseMgPerInj(doseVal,doseUnit,reconDb){
   if(doseUnit==='IU')return d*0.01*conc; // insulin pen: 1 IU = 0.01 ml
   return 0;
 }
+function _optimalVialSku(defaultSku,totalAmount,dosePerDay,injDays){
+  if(!defaultSku||!dosePerDay||!injDays)return defaultSku;
+  var pm=defaultSku.match(/^[A-Za-z]+/);var prefix=pm?pm[0]:'';
+  var defaultPl=PRICELIST[defaultSku];if(!defaultPl)return defaultSku;
+  var unit=defaultPl.unit;
+  var candidates=prefix?Object.keys(PRICELIST).filter(function(k){return k.startsWith(prefix)&&PRICELIST[k].unit===unit;}):[defaultSku];
+  // 55-day reconstitution rule: daysToUseVial = vialQ * 7 / (dosePerDay * injDays)
+  var valid=candidates.filter(function(k){return PRICELIST[k].q*7/(dosePerDay*injDays)<=55;});
+  if(!valid.length)return defaultSku;
+  return valid.reduce(function(a,b){
+    var qa=PRICELIST[a].q,qb=PRICELIST[b].q;
+    var va=Math.ceil(totalAmount/qa),vb=Math.ceil(totalAmount/qb);
+    if(va!==vb)return va<vb?a:b;
+    return qa>=qb?a:b; // tie: prefer larger vial
+  });
+}
 function _calcPeptideCartItem(p,weeks){
   var cat=PEPTIDE_CAT.find(function(c){return c.id===p.id;});
   if(!cat||!cat.sku)return null;
@@ -702,16 +718,20 @@ function _calcPeptideCartItem(p,weeks){
     totalInUnit=(dAm+dPm)*days*weeks;
     if(!totalInUnit)return{name:p.name||cat.name,sku:cat.sku,noData:true};
     if(!pl)return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalInUnit*10)/10,unit:'IU',vials:null,boxes:null};
-    var vials=Math.ceil(totalInUnit/pl.q);var boxes=Math.ceil(vials/pl.n);
-    return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalInUnit*10)/10,unit:'IU',vials:vials,boxes:boxes};
+    var optSku=_optimalVialSku(cat.sku,totalInUnit,dAm+dPm,days);
+    var optPl=PRICELIST[optSku]||pl;
+    var vials=Math.ceil(totalInUnit/optPl.q);
+    return{name:p.name||cat.name,sku:optSku,total:Math.round(totalInUnit*10)/10,unit:'IU',vials:vials,boxes:null};
   }else{
     var mgAm=times.includes('AM')?(_cartDoseMgPerInj(p.dose_am,p.unit_am,reconDb)||0):0;
     var mgPm=times.includes('PM')?(_cartDoseMgPerInj(p.dose_pm,p.unit_pm,reconDb)||0):0;
     var totalMg=(mgAm+mgPm)*days*weeks;
     if(!totalMg)return{name:p.name||cat.name,sku:cat.sku,noData:true};
     if(!pl)return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalMg*10)/10,unit:'mg',vials:null,boxes:null};
-    var vials=Math.ceil(totalMg/pl.q);var boxes=Math.ceil(vials/pl.n);
-    return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalMg*10)/10,unit:'mg',vials:vials,boxes:boxes};
+    var optSku=_optimalVialSku(cat.sku,totalMg,mgAm+mgPm,days);
+    var optPl=PRICELIST[optSku]||pl;
+    var vials=Math.ceil(totalMg/optPl.q);
+    return{name:p.name||cat.name,sku:optSku,total:Math.round(totalMg*10)/10,unit:'mg',vials:vials,boxes:null};
   }
 }
 function _calcEnhancementCartItem(c,weeks){
@@ -771,8 +791,7 @@ function _renderCartModal(){
       if(item.noData){h+='<div style="font-size:11px;color:var(--muted2);margin-top:4px">Set dose in Stack to calculate</div>';}
       else if(item.vials!=null){
         h+='<div style="font-size:11px;color:var(--muted2);line-height:1.9;margin-top:4px">';
-        h+='Total: '+item.total+' '+item.unit+' · '+item.vials+' vial'+(item.vials===1?'':'s');
-        if(item.boxes!=null)h+=' → <span style="font-weight:600;color:var(--text)">'+item.boxes+' box'+(item.boxes===1?'':'es')+'</span>';
+        h+='Total: '+item.total+' '+item.unit+' · <span style="font-weight:600;color:var(--text)">'+item.vials+' vial'+(item.vials===1?'':'s')+'</span>';
         h+='<br><span style="font-size:10px">SKU: '+_esc(item.sku)+'</span>';
         h+='</div>';
       }else{
@@ -994,14 +1013,14 @@ function _dosePersonalization(pepId,profile){var mods=[];var ghAxis=['cjc-ipa','
 function toggleTabVis(id){if(id==='settings')return;_tabVis[id]=!_tabVis[id];setData('proto-tab-vis',_tabVis);pushPepSettingsToAgent({'proto-tab-vis':_tabVis});if(!_tabVis[id]&&_currentTab===id){const b=document.getElementById('tab-btn-today');if(b)switchTab('today',b);}applyTabVis();buildTabsSettingsCard();}
 function buildTabsSettingsCard(){const card=document.getElementById('s-tabs-card');if(!card)return;const rows=Object.entries(TAB_LABELS).map(([id,label])=>{const on=!!_tabVis[id];return'<div style="padding:11px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--text)">'+label+'</span><button onclick="toggleTabVis(\''+id+'\')" style="background:'+(on?'var(--accent)':'var(--surface2)')+';color:'+(on?'#000':'var(--muted)')+';border:1px solid '+(on?'transparent':'var(--border)')+';border-radius:20px;padding:4px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;min-width:48px">'+(on?'ON':'OFF')+'</button></div>';}).join('');card.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">'+sSecHdr('tabs','Tabs')+sSecBody('tabs')+rows+'<div style="padding:8px 16px 10px;font-size:11px;color:var(--muted2)">Settings is always visible</div></div></div>';}
 </script>
-<script src="tab-cycles.js?v=1.284"></script>
-<script src="tab-macros.js?v=1.284"></script>
-<script src="tab-stack.js?v=1.284"></script>
-<script src="tab-today.js?v=1.284"></script>
-<script src="tab-schedule.js?v=1.284"></script>
-<script src="tab-timeline.js?v=1.284"></script>
-<script src="tab-body.js?v=1.284"></script>
-<script src="tab-recon.js?v=1.284"></script>
+<script src="tab-cycles.js?v=1.287"></script>
+<script src="tab-macros.js?v=1.287"></script>
+<script src="tab-stack.js?v=1.287"></script>
+<script src="tab-today.js?v=1.287"></script>
+<script src="tab-schedule.js?v=1.287"></script>
+<script src="tab-timeline.js?v=1.287"></script>
+<script src="tab-body.js?v=1.287"></script>
+<script src="tab-recon.js?v=1.287"></script>
 <script>
 init();
 if(IS_STAGING){const dc=document.getElementById('s-deploy-card');if(dc)dc.style.display='';}
