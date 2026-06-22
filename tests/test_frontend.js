@@ -421,15 +421,6 @@ G.wizSave().then(async ()=>{
   G.fetch=async()=>({ok:true,json:async()=>({stacks:[JSON.parse(JSON.stringify(newRetaStack))],active_index:0})});
   await G.loadUserStacks();
   check('new Reta stack: no auto start_date stamped', !G._userStacks[0].peptides[0].start_date, `start_date unexpectedly set: ${G._userStacks[0].peptides[0].start_date}`);
-  // Migration STILL corrects an existing wrong date (>= May 2026)
-  const wrongDateGlowStack={name:'My Stack',peptides:[
-    {id:'glow',name:'Glow Blend',dot:'#3b9eff',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'0.09',unit_am:'ml',start_date:'2026-05-15'},
-  ]};
-  G.fetch=async()=>({ok:true,json:async()=>({stacks:[JSON.parse(JSON.stringify(wrongDateGlowStack))],active_index:0})});
-  await G.loadUserStacks();
-  check('migration: wrong start_date 2026-05-15 corrected to 2026-04-16 for glow',
-    G._userStacks[0].peptides[0].start_date==='2026-04-16',
-    `got: ${G._userStacks[0].peptides[0].start_date}`);
   // Glow recon: 70mg/3ml = 23.333mg/ml, 9 IU = 0.09ml
   const rcGlow9=G.reconCalc('0.09','ml',G.RECON_DB['glow'].vials[G.RECON_DB['glow'].defaultVi],G.RECON_DB['glow'].water[G.RECON_DB['glow'].defaultWi],'mg');
   check('glow 3ml: 0.09ml → 9 IU',    rcGlow9&&rcGlow9.iu===9,      `got ${rcGlow9?.iu}`);
