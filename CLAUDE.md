@@ -120,6 +120,11 @@ confusion, break things Henrik didn't intend to change, and waste debugging
 time. **One PR = one explicitly requested change.**
 
 ## Git workflow — ALWAYS follow this
+### ⚠️ CLAUDE ALWAYS CREATES AND MERGES ITS OWN PRS — NEVER ASK HENRIK ⚠️
+**Claude must NEVER ask Henrik to create a PR, merge a PR, or do anything with GitHub.**
+Claude has `mcp__github__create_pull_request` and `mcp__github__merge_pull_request` tools.
+Use them. Every time. No exceptions. Asking Henrik to touch GitHub is a failure.
+
 0. **Always create new branches from the latest remote main — never from a local clone's stale HEAD:**
    ```
    git fetch origin && git checkout -b <branch-name> origin/main
@@ -127,8 +132,9 @@ time. **One PR = one explicitly requested change.**
    This ensures any AI (Claude, or another AI picking up when Claude hits token limits) always starts from a clean, up-to-date base and can hand off without conflicts.
 1. Make changes on a feature branch
 2. Before opening the PR, locally extract the `<script>` block from `index.html` and run `node --check` on it — catch syntax errors before they ever hit CI
-3. Create a PR, then **check its CI status before merging** — call `pull_request_read` with `method: get_check_runs` (or `get_status`) and confirm `conclusion`/`state` is `success`. If it's still running, wait and re-check; if it failed, fix the issue and push again. **Never merge a PR with a failing or pending check.**
-4. Once CI is green, merge it yourself — never stop and ask the user to merge, never push directly to main
+3. `mcp__github__create_pull_request` — do this yourself immediately after pushing
+4. Check CI: `pull_request_read` with `method: get_check_runs` — wait for `conclusion: success`. If still running, poll. If failed, fix and re-push. **Never merge with failing or pending checks.**
+5. `mcp__github__merge_pull_request` — once CI is green, merge it yourself immediately
 5. After merge the `version-bump` GitHub Action auto-increments the minor version in `version.json` and `const VERSION` in `index.html` and commits with `[skip ci]`
 6. **After merging, you must confirm BOTH of these before telling the user it's live:**
    - `mcp__github__actions_list` (method: list_workflow_runs, resource_id: version-bump.yml) → confirm `conclusion: success` and read the bumped version from the commit message

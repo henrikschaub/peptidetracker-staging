@@ -507,12 +507,20 @@ function wizStepGoals(body,footer){
   html+='</div><div style="font-size:12px;color:var(--muted2);margin-top:8px;margin-bottom:16px;">Select all that apply — filters the peptide catalogue.</div>';
   var trtOn=_wiz.trt.enabled;
   html+='<div class="wiz-section">TRT</div>';
-  html+='<div class="trt-toggle" onclick="wizToggleGoalTRT()"><div class="trt-toggle-label">⚡ Testosterone protocol</div><div class="toggle-sw'+(trtOn?' on':'')+'"></div></div>';
-  html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">'+(trtOn?'Compound, dose &amp; schedule configured in the next step.':'Add Testoviron, Nebido or another ester to your cycle.')+'</div>';
+  if((window._userTier||1)>=2){
+    html+='<div class="trt-toggle" onclick="wizToggleGoalTRT()"><div class="trt-toggle-label">⚡ Testosterone protocol</div><div class="toggle-sw'+(trtOn?' on':'')+'"></div></div>';
+    html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">'+(trtOn?'Compound, dose &amp; schedule configured in the next step.':'Add Testoviron, Nebido or another ester to your cycle.')+'</div>';
+  }else{
+    html+='<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;"><div style="flex:1"><div style="font-size:13px;color:#666">⚡ Testosterone protocol</div><div style="font-size:11px;color:#444;margin-top:4px;">Requires Tier 2 access</div></div><span style="font-size:11px;background:#222;color:#555;border:1px solid #333;border-radius:5px;padding:3px 8px;">T2</span></div>';
+  }
   var enhOn=_wiz.goals.includes('enhanced');
   html+='<div class="wiz-section">Enhanced Cycle</div>';
-  html+='<div class="trt-toggle" onclick="wizToggleGoal(\'enhanced\')"><div class="trt-toggle-label">💉 Steroids &amp; prescription compounds</div><div class="toggle-sw'+(enhOn?' on':'')+'"></div></div>';
-  html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;">Controlled / prescription compounds listed in the catalogue alongside peptides.</div>';
+  if((window._userTier||1)>=3){
+    html+='<div class="trt-toggle" onclick="wizToggleGoal(\'enhanced\')"><div class="trt-toggle-label">💉 Steroids &amp; prescription compounds</div><div class="toggle-sw'+(enhOn?' on':'')+'"></div></div>';
+    html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;">Controlled / prescription compounds listed in the catalogue alongside peptides.</div>';
+  }else{
+    html+='<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;"><div style="flex:1"><div style="font-size:13px;color:#666">💉 Steroids &amp; prescription compounds</div><div style="font-size:11px;color:#444;margin-top:4px;">Requires Tier 3 access</div></div><span style="font-size:11px;background:#222;color:#555;border:1px solid #333;border-radius:5px;padding:3px 8px;">T3</span></div>';
+  }
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
 }
