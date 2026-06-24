@@ -177,6 +177,8 @@ function renderStackEditor(){
     html+=_stackTabBar(_stackViewTab,'setStackViewTab');
     if(_stackViewTab==='trt'){
       html+=_renderTRTViewTab(st);
+    }else if(_stackViewTab==='enhanced'){
+      html+=(_userTier||1)>=3?_buildEnhancementCycleSection():_renderEnhancedUpgradeCTA();
     }else{
       html+='<div class="wiz-section">Peptides</div>';
       if(!st.peptides||!st.peptides.length){
@@ -203,7 +205,6 @@ function renderStackEditor(){
         });
       }
     }
-    html+=_buildEnhancementCycleSection();
     html+='<div style="display:flex;gap:10px;margin-top:24px;padding-bottom:40px;">';
     html+='<button onclick="buildStackStore()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted2);border-radius:8px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Close</button>';
     html+='<button onclick="_editReadOnly=false;renderStackEditor()" style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Edit</button>';
@@ -236,6 +237,8 @@ function renderStackEditor(){
   html+=_stackTabBar(_editInnerTab,'setEditInnerTab');
   if(_editInnerTab==='trt'){
     html+=_renderEditTRT(st.trt);
+  }else if(_editInnerTab==='enhanced'){
+    html+=(_userTier||1)>=3?_buildEnhancementCycleSection():_renderEnhancedUpgradeCTA();
   }else{
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
     html+='<div class="wiz-section" style="margin:0;">Peptides</div>';
@@ -747,14 +750,25 @@ function _trtCompoundFromDoseId(id){
 function _isTRTDoseId(id){return !!_trtCompoundFromDoseId(id);}
 // Inner tab switcher HTML for stack view / editor
 function _stackTabBar(activeTab,setter){
-  var tabs=[{k:'peptides',label:'Peptides'},{k:'trt',label:'TRT'}];
+  var t3=(_userTier||1)>=3;
+  var tabs=[{k:'peptides',label:'Peptides'},{k:'trt',label:'TRT'},{k:'enhanced',label:'Enhanced',locked:!t3}];
   var html='<div style="display:flex;gap:0;border-radius:8px;background:var(--surface2);border:1px solid var(--border);margin-bottom:16px;overflow:hidden;">';
   tabs.forEach(function(t){
     var active=t.k===activeTab;
-    html+='<button onclick="'+setter+'(\''+t.k+'\')" style="flex:1;padding:9px;font-size:13px;font-weight:600;border:none;cursor:pointer;font-family:inherit;background:'+(active?'var(--accent)':'transparent')+';color:'+(active?'#000':'var(--muted2)')+';">'+t.label+'</button>';
+    var bg=active&&!t.locked?'var(--accent)':'transparent';
+    var color=active&&!t.locked?'#000':'var(--muted2)';
+    var opacity=t.locked?'0.45':'1';
+    html+='<button onclick="'+setter+'(\''+t.k+'\')" style="flex:1;padding:9px;font-size:13px;font-weight:600;border:none;cursor:pointer;font-family:inherit;background:'+bg+';color:'+color+';opacity:'+opacity+';">'+t.label+'</button>';
   });
   html+='</div>';
   return html;
+}
+function _renderEnhancedUpgradeCTA(){
+  return '<div style="text-align:center;padding:32px 16px;">'
+    +'<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px;">Enhanced Tier</div>'
+    +'<div style="font-size:13px;color:var(--muted2);line-height:1.6;margin-bottom:20px;">Track AAS compounds, bloodwork schedule and E2 management alongside your peptide stack.</div>'
+    +'<button onclick="document.getElementById(\'tab-btn-settings\').click()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:11px 24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Enable in Settings</button>'
+    +'</div>';
 }
 // TRT tab content for stack view (read-only): compounds + injection log
 function _renderTRTViewTab(st){
