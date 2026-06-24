@@ -178,7 +178,7 @@ function renderStackEditor(){
     if(_stackViewTab==='trt'){
       html+=_renderTRTViewTab(st);
     }else if(_stackViewTab==='enhanced'){
-      html+=(_userTier||1)>=3?_buildEnhancementCycleSection():_renderEnhancedUpgradeCTA();
+      html+=(_userTier||1)>=3?_renderEnhancedViewTab(st):_renderEnhancedUpgradeCTA();
     }else{
       html+='<div class="wiz-section">Peptides</div>';
       if(!st.peptides||!st.peptides.length){
@@ -238,7 +238,7 @@ function renderStackEditor(){
   if(_editInnerTab==='trt'){
     html+=_renderEditTRT(st.trt);
   }else if(_editInnerTab==='enhanced'){
-    html+=(_userTier||1)>=3?_buildEnhancementCycleSection():_renderEnhancedUpgradeCTA();
+    html+=(_userTier||1)>=3?_renderEditEnhanced(_editBuf.enhanced||{enabled:false,compounds:[]}):_renderEnhancedUpgradeCTA();
   }else{
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
     html+='<div class="wiz-section" style="margin:0;">Peptides</div>';
@@ -536,12 +536,6 @@ function wizStepGoals(body,footer){
     html+='<div class="wiz-section">TRT</div>';
     html+='<div class="trt-toggle" onclick="wizToggleGoalTRT()"><div class="trt-toggle-label">⚡ Testosterone protocol</div><div class="toggle-sw'+(trtOn?' on':'')+'"></div></div>';
     html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">'+(trtOn?'Compound, dose &amp; schedule configured in the next step.':'Add Testoviron, Nebido or another ester to your cycle.')+'</div>';
-  }
-  if(_wizTier()>=3){
-    var enhOn=_wiz.goals.includes('enhanced');
-    html+='<div class="wiz-section">Enhanced Cycle</div>';
-    html+='<div class="trt-toggle" onclick="wizToggleGoal(\'enhanced\')"><div class="trt-toggle-label">💉 Steroids &amp; prescription compounds</div><div class="toggle-sw'+(enhOn?' on':'')+'"></div></div>';
-    html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">Select and configure enhancement compounds in the next wizard step.</div>';
   }
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
@@ -1115,6 +1109,61 @@ function wizSetTRTFreq(id,v){var c=(_wiz.trt.compounds||[]).find(function(c){ret
 function wizSetTRTFreqUnit(id,v){var c=(_wiz.trt.compounds||[]).find(function(c){return c.id===id;});if(c)c.freqUnit=v;}
 function wizSetTRTDays(id,di){var c=(_wiz.trt.compounds||[]).find(function(c){return c.id===id;});if(!c)return;if(!c.days)c.days=[];var idx=c.days.indexOf(di);if(idx!==-1)c.days.splice(idx,1);else c.days.push(di);c.days.sort(function(a,b){return a-b;});wizStepTRT(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));}
 function editSetTRTDays(id,di){var c=((_editBuf.trt&&_editBuf.trt.compounds)||[]).find(function(c){return c.id===id;});if(!c)return;if(!c.days)c.days=[];var idx=c.days.indexOf(di);if(idx!==-1)c.days.splice(idx,1);else c.days.push(di);c.days.sort(function(a,b){return a-b;});_collectEditInputs();renderStackEditor();}
+function editToggleEnhancedCompound(id){
+  if(!_editBuf.enhanced)_editBuf.enhanced={enabled:false,compounds:[]};
+  if(!_editBuf.enhanced.compounds)_editBuf.enhanced.compounds=[];
+  var idx=_editBuf.enhanced.compounds.findIndex(function(c){return c.id===id;});
+  if(idx!==-1){_editBuf.enhanced.compounds.splice(idx,1);}
+  else{var cat=ENHANCEMENT_COMPOUNDS.find(function(c){return c.id===id;});if(cat)_editBuf.enhanced.compounds.push({id:cat.id,name:cat.name,dose:String(cat.defaultDose||''),unit:cat.unit||'mg',days:[1],dot:cat.dot});}
+  _editBuf.enhanced.enabled=_editBuf.enhanced.compounds.length>0;
+  renderStackEditor();
+}
+function editSetEnhDose(id,v){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(c)c.dose=v;}
+function editSetEnhUnit(id,v){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(c)c.unit=v;}
+function editSetEnhDays(id,di){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(!c)return;if(!c.days)c.days=[];var idx=c.days.indexOf(di);if(idx!==-1){if(c.days.length>1)c.days.splice(idx,1);}else{c.days.push(di);}c.days.sort(function(a,b){return a-b;});renderStackEditor();}
+function _renderEditEnhanced(enh){
+  if(!enh)enh={enabled:false,compounds:[]};
+  var sel=enh.compounds||[];
+  var selIds=sel.map(function(c){return c.id;});
+  var groups={};
+  ENHANCEMENT_COMPOUNDS.forEach(function(c){if(!groups[c.group])groups[c.group]=[];groups[c.group].push(c);});
+  var html='<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;">Select enhancement compounds and configure dose and frequency.</div>';
+  Object.keys(groups).forEach(function(grp){
+    html+='<div class="wiz-section" style="margin-bottom:8px;">'+_esc(grp)+'</div>';
+    groups[grp].forEach(function(c){
+      var isSel=selIds.includes(c.id);
+      var selData=isSel?sel.find(function(s){return s.id===c.id;}):null;
+      html+='<div class="pep-card'+(isSel?' sel':'')+'" onclick="editToggleEnhancedCompound(\''+c.id+'\')" style="margin-bottom:'+(isSel?'0':'8px')+';'+(isSel?'border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent;':'')+'"><div class="pep-dot-sm" style="background:'+c.dot+'"></div><div class="pep-info"><div class="pep-name">'+_esc(c.name)+'</div><div class="pep-meta">'+_esc(c.group)+'</div></div><div class="pep-chk">'+(isSel?'<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="#0a0a0a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')+'</div></div>';
+      if(isSel&&selData){
+        html+='<div style="border:1px solid var(--accent);border-top:none;border-radius:0 0 10px 10px;padding:12px 14px;margin-bottom:8px;background:rgba(232,255,60,0.015);">';
+        html+='<div class="cfg-row"><div class="cfg-lbl">Dose</div><div class="dose-row"><input class="dose-in" type="text" value="'+String(selData.dose||'')+'" oninput="editSetEnhDose(\''+c.id+'\',this.value)" placeholder="0"><select class="unit-sel" onchange="editSetEnhUnit(\''+c.id+'\',this.value)">'+['mg','ml','IU'].map(function(u){return'<option'+(u===(selData.unit||'mg')?' selected':'')+'>'+u+'</option>';}).join('')+'</select></div></div>';
+        html+='<div class="cfg-row"><div class="cfg-lbl">Days</div><div class="day-chips">'+DAYS_ORDER.map(function(di){var lbl=DAYS_SHORT[di];return'<div class="day-chip'+((selData.days||[]).includes(di)?' sel':'')+'" onclick="editSetEnhDays(\''+c.id+'\','+di+')">'+lbl+'</div>';}).join('')+'</div></div>';
+        html+=_renderEnhancedGuide(c);
+        html+='</div>';
+      }
+    });
+  });
+  return html;
+}
+function _renderEnhancedViewTab(st){
+  var enh=st.enhanced||{};
+  var compounds=enh.compounds||[];
+  var html='<div class="wiz-section" style="margin-bottom:10px;">Enhancement Compounds</div>';
+  if(!compounds.length){
+    html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">No enhancement compounds configured for this stack.</div>';
+  }else{
+    compounds.forEach(function(c){
+      var dot=c.dot||'var(--accent2)';
+      var days=c.days&&c.days.length?c.days.map(function(d){return DAYS_SHORT[d];}).join('/'):null;
+      html+='<div class="cfg-block" style="margin-bottom:8px;display:flex;align-items:center;gap:8px;">';
+      html+='<div style="width:8px;height:8px;border-radius:50%;background:'+dot+';flex-shrink:0;"></div>';
+      html+='<div style="flex:1;font-size:13px;font-weight:600;color:var(--text);">'+_esc(c.name||c.id)+'</div>';
+      html+='<div style="font-size:12px;color:var(--muted2);">'+(c.dose?c.dose+(c.unit||'mg')+(days?' · '+days:''):(days||''))+'</div>';
+      html+='</div>';
+    });
+  }
+  return html;
+}
 
 function wizStepEnhanced(body,footer){
   if(!_wiz.enhanced)_wiz.enhanced={enabled:false,compounds:[]};
