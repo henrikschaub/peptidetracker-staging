@@ -33,16 +33,26 @@ function wizStep1(body,footer){
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
 }
 // ── Updated wizard flow (insert cycle after goals removed) ──────────────────
-var WIZ_TITLES=['CYCLE','GOALS','PEPTIDES','CHECK','CONFIGURE','TRT','REVIEW'];
+// Three separate wizard flows — one per tier
+// T1: Peptides only (6 steps, no TRT)
+// T2: Peptides + TRT (7 steps)
+// T3: Peptides + TRT + Enhanced Compounds (7 steps, Enhanced toggle in Goals)
+var WIZ_TITLES_T1=['CYCLE','GOALS','PEPTIDES','CHECK','CONFIGURE','REVIEW'];
+var WIZ_TITLES_T2=['CYCLE','GOALS','PEPTIDES','CHECK','CONFIGURE','TRT','REVIEW'];
+function _wizTier(){return Math.min(3,Math.max(1,(_userTier||1)));}
+function _wizTitles(){return _wizTier()>=2?WIZ_TITLES_T2:WIZ_TITLES_T1;}
+// T1 skips step 5 (TRT), so step 6 (REVIEW) maps to title index 5
+function _wizStepToIdx(step){return(_wizTier()<2&&step>=6)?step-1:step;}
 function wizRender(){
-  var steps=7;
+  var titles=_wizTitles();
+  var idx=_wizStepToIdx(_wiz.step);
   var prog='';
-  for(var i=0;i<steps;i++){
-    var cls=i<_wiz.step?'done':i===_wiz.step?'active':'';
+  for(var i=0;i<titles.length;i++){
+    var cls=i<idx?'done':i===idx?'active':'';
     prog+='<div class="wiz-dot '+cls+'"></div>';
   }
   document.getElementById('wiz-progress').innerHTML=prog;
-  document.getElementById('wiz-title').textContent=(_wiz.editMode?'EDIT ':'BUILD ')+WIZ_TITLES[_wiz.step];
+  document.getElementById('wiz-title').textContent=(_wiz.editMode?'EDIT ':'BUILD ')+titles[idx];
   var body=document.getElementById('wiz-body');
   var footer=document.getElementById('wiz-footer');
   body.scrollTop=0;
@@ -505,21 +515,17 @@ function wizStepGoals(body,footer){
     html+='<div class="goal-chip '+sel+'" onclick="wizToggleGoal(\''+g.id+'\')">'+g.icon+' '+g.label+'</div>';
   });
   html+='</div><div style="font-size:12px;color:var(--muted2);margin-top:8px;margin-bottom:16px;">Select all that apply — filters the peptide catalogue.</div>';
-  var trtOn=_wiz.trt.enabled;
-  html+='<div class="wiz-section">TRT</div>';
-  if((window._userTier||1)>=2){
+  if(_wizTier()>=2){
+    var trtOn=_wiz.trt.enabled;
+    html+='<div class="wiz-section">TRT</div>';
     html+='<div class="trt-toggle" onclick="wizToggleGoalTRT()"><div class="trt-toggle-label">⚡ Testosterone protocol</div><div class="toggle-sw'+(trtOn?' on':'')+'"></div></div>';
     html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">'+(trtOn?'Compound, dose &amp; schedule configured in the next step.':'Add Testoviron, Nebido or another ester to your cycle.')+'</div>';
-  }else{
-    html+='<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;"><div style="flex:1"><div style="font-size:13px;color:#666">⚡ Testosterone protocol</div><div style="font-size:11px;color:#444;margin-top:4px;">Requires Tier 2 access</div></div><span style="font-size:11px;background:#222;color:#555;border:1px solid #333;border-radius:5px;padding:3px 8px;">T2</span></div>';
   }
-  var enhOn=_wiz.goals.includes('enhanced');
-  html+='<div class="wiz-section">Enhanced Cycle</div>';
-  if((window._userTier||1)>=3){
+  if(_wizTier()>=3){
+    var enhOn=_wiz.goals.includes('enhanced');
+    html+='<div class="wiz-section">Enhanced Cycle</div>';
     html+='<div class="trt-toggle" onclick="wizToggleGoal(\'enhanced\')"><div class="trt-toggle-label">💉 Steroids &amp; prescription compounds</div><div class="toggle-sw'+(enhOn?' on':'')+'"></div></div>';
-    html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;">Controlled / prescription compounds listed in the catalogue alongside peptides.</div>';
-  }else{
-    html+='<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;"><div style="flex:1"><div style="font-size:13px;color:#666">💉 Steroids &amp; prescription compounds</div><div style="font-size:11px;color:#444;margin-top:4px;">Requires Tier 3 access</div></div><span style="font-size:11px;background:#222;color:#555;border:1px solid #333;border-radius:5px;padding:3px 8px;">T3</span></div>';
+    html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">Configure compounds via the Cycles tab after saving your stack.</div>';
   }
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
@@ -546,7 +552,7 @@ function wizToggleGoal(id){
 }
 
 function wizStepPeptides(body,footer){
-  var filtered=PEPTIDE_CAT.filter(function(p){return !p.goals.every(function(g){return g==='trt';});});
+  var filtered=PEPTIDE_CAT.filter(function(p){return !p.goals.every(function(g){return g==='trt';})&&p.group!=='Enhanced';});
   if(_wiz.goals.length){filtered=filtered.filter(function(p){return p.goals.some(function(g){return _wiz.goals.includes(g);});});}
   var groups={};
   filtered.forEach(function(p){if(!groups[p.group])groups[p.group]=[];groups[p.group].push(p);});
@@ -1057,12 +1063,12 @@ function wizStepReview(body,footer){
 function closeWizard(){if(_wizOverlay){_wizOverlay.classList.remove('open');}}
 function wizBack(){
   if(_wiz.step===0){closeWizard();}
-  else if(_wiz.step===6&&!_wiz.trt.enabled){_wiz.step=4;wizRender();}
+  else if(_wiz.step===6&&(_wizTier()<2||!_wiz.trt.enabled)){_wiz.step=4;wizRender();}
   else{_wiz.step--;wizRender();}
 }
 function wizNext(){
   var next=_wiz.step+1;
-  if(next===5&&!_wiz.trt.enabled)next=6;
+  if(next===5&&(_wizTier()<2||!_wiz.trt.enabled))next=6;
   _wiz.step=Math.min(6,next);
   wizRender();
 }
