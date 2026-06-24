@@ -891,21 +891,36 @@ function _buildEnhancementCycleSection(){
     });
   }
   h+='</div>';
-  var hasMast=cmps.some(function(x){return x.name&&x.name.toLowerCase().indexOf('masteron')>=0;});
-  var hasPrimo=cmps.some(function(x){return x.name&&(x.name.toLowerCase().indexOf('primobolan')>=0||x.name.toLowerCase().indexOf('primo')>=0);});
+  var _cat=function(x){return(ENHANCEMENT_COMPOUNDS||[]).find(function(ec){return ec.name===x.name;});};
+  var catCmps=cmps.map(_cat).filter(Boolean);
+  var hasMast=catCmps.some(function(ec){return ec.id==='mast_e';});
+  var hasPrimo=catCmps.some(function(ec){return ec.id==='primo';});
+  var hasTren=catCmps.some(function(ec){return ec.id==='tren_e'||ec.id==='tren_a';});
+  var has19nor=catCmps.some(function(ec){return ec.cls==='19nor';});
+  var oralCmps=catCmps.filter(function(ec){return ec.cls==='oral';});
   h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px;">';
   h+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted2);margin-bottom:8px;">E2 Management</div>';
-  if(hasMast){
-    h+='<div style="font-size:12px;font-weight:700;color:var(--accent3);margin-bottom:4px;">Test + Masteron</div>';
-    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;">Masteron blocks aromatase competitively — pseudo-AI effect. Maintains cardioprotective E2 while reducing water retention.</div>';
-  }else if(hasPrimo){
-    h+='<div style="font-size:12px;font-weight:700;color:var(--accent3);margin-bottom:4px;">Test + Primo</div>';
-    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;">Primobolan (DHT-derived) does not aromatize. Monitor for low-E2 symptoms — joint pain, flat affect, low libido.</div>';
-  }else if(cmps.length){
-    h+='<div style="font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:4px;">Test-only — monitor E2</div>';
-    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;">Target 20-40 pg/mL. Bloat + mood swings = high E2. Flat libido + joint ache = low E2. Adjust compound ratios, not AIs.</div>';
-  }else{
+  if(!cmps.length){
     h+='<div style="font-size:12px;color:var(--muted2);">Add compounds above to see E2 strategy.</div>';
+  }else if(hasMast){
+    h+='<div style="font-size:12px;font-weight:700;color:var(--accent3);margin-bottom:4px;">Test + Masteron</div>';
+    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;">Masteron blocks aromatase competitively — pseudo-AI effect without crashing cardioprotective E2 to zero. Monitor for low-E2 symptoms (joint pain, flat affect, low libido) if Mast ratio climbs too high.</div>';
+  }else if(hasPrimo){
+    h+='<div style="font-size:12px;font-weight:700;color:var(--accent3);margin-bottom:4px;">Test + Primobolan</div>';
+    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;">Primobolan (DHT-derived) does not aromatize — reduces overall E2 load proportionally to its dose. Monitor for low-E2 symptoms (joint pain, flat affect, low libido) at high Primo ratios.</div>';
+  }else if(hasTren){
+    h+='<div style="font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:4px;">Test + Trenbolone — monitor E2 and prolactin</div>';
+    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;margin-bottom:6px;">Tren does not aromatize — keep Test at 300–400 mg/wk to limit E2 load. Target 20–40 pg/mL via Test dose adjustment. Monitor prolactin separately: Tren has ~5× stronger progestin activity than nandrolone. If prolactin exceeds upper range: cabergoline 0.25 mg 2×/week.</div>';
+    if(oralCmps.length){var on=oralCmps.map(function(ec){return ec.name.split('(')[0].trim();}).join(' + ');h+='<div style="font-size:11px;color:var(--muted2);font-style:italic;">'+on+' '+(oralCmps.length===1?'does':'do')+' not aromatize — no added E2 load from the oral component.</div>';}
+  }else if(has19nor){
+    h+='<div style="font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:4px;">Test + 19-nor — monitor E2 and prolactin</div>';
+    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;margin-bottom:6px;">19-nor compounds (Deca, NPP) do not aromatize but have progestin activity that can drive prolactin-mediated gynecomastia independently of E2. Monitor E2 (target 20–40 pg/mL) AND prolactin. If prolactin rises: cabergoline 0.25 mg 2×/week. Adjust Test dose to manage E2; adjust compound ratio to manage prolactin.</div>';
+    if(oralCmps.length){var on=oralCmps.map(function(ec){return ec.name.split('(')[0].trim();}).join(' + ');h+='<div style="font-size:11px;color:var(--muted2);font-style:italic;">'+on+' '+(oralCmps.length===1?'does':'do')+' not aromatize — no added E2 load from the oral component.</div>';}
+  }else{
+    var e2Lbl=oralCmps.length?'Test + '+oralCmps.map(function(ec){return ec.name.split(' ')[0];}).join('/')+'  — monitor E2':'Test — monitor E2';
+    h+='<div style="font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:4px;">'+e2Lbl+'</div>';
+    h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;'+(oralCmps.length?'margin-bottom:6px;':'')+'">Target 20–40 pg/mL. Bloat + mood swings = high E2. Flat libido + joint ache = low E2. Adjust Test dose or compound ratios — not AIs.</div>';
+    if(oralCmps.length){var on=oralCmps.map(function(ec){return ec.name.split('(')[0].trim();}).join(' and ');h+='<div style="font-size:11px;color:var(--muted2);font-style:italic;">'+on+' '+(oralCmps.length===1?'does':'do')+' not aromatize — no added E2 load from the oral component.</div>';}
   }
   h+='</div>';
   return h;
@@ -943,7 +958,10 @@ function stackAddAASCompound(){
 }
 function _renderEnhancedGuide(cat){
   if(!cat)return'';
-  var html=_renderDoseGuide(cat.id);
+  var html='';
+  if(cat.cadence){var cad=cat.cadence;html+='<div style="display:block;margin-top:8px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:4px">Injection Frequency</div><div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;"><div style="font-size:12px;font-weight:700;color:var(--accent);">'+cad.rec+'</div><div style="font-size:11px;color:var(--muted2);margin-top:2px;line-height:1.5;">'+cad.note+'</div><div style="font-size:10px;color:var(--muted2);margin-top:3px;font-style:italic;">½-life: '+cad.halfLife+'</div></div></div>';}
+  var tiers=(cat.doseTiers&&cat.doseTiers.length)?cat.doseTiers:(DOSE_GUIDE&&DOSE_GUIDE[cat.id]?DOSE_GUIDE[cat.id]:null);
+  if(tiers&&tiers.length){var rows=tiers.map(function(t){var bg=t.b?'background:rgba(var(--accent-rgb,60,255,160),0.08);border:1px solid rgba(var(--accent-rgb,60,255,160),0.3);':'background:var(--surface2);border:1px solid var(--border);';var doseHtml=t.d?('<span style="font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap">'+t.d+'</span>'):'';var note=t.n?('<div style="font-size:11px;color:var(--muted2);margin-top:2px;">'+t.n+'</div>'):'';var risk=t.r?('<div style="font-size:11px;color:#f59e0b;padding:2px 0 0 0">⚠ '+t.r+'</div>'):'';return'<div style="'+bg+'border-radius:6px;padding:5px 8px;margin-bottom:3px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;font-weight:700;color:'+(t.b?'var(--accent)':'var(--muted2)')+';text-transform:uppercase;min-width:62px">'+t.l+'</span>'+doseHtml+'</div>'+note+risk+'</div>';}).join('');html+='<div style="display:block;margin-top:8px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px">Recommended Doses</div>'+rows+'</div>';}
   if(cat.interaction)html+='<div style="display:block;margin-top:8px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:4px">How it works</div><div style="font-size:12px;color:var(--text);line-height:1.5;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;">'+cat.interaction+'</div></div>';
   if(cat.sides)html+='<div style="display:block;margin-top:8px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:4px">Side effects</div><div style="font-size:12px;color:var(--text);line-height:1.5;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;">'+cat.sides+'</div></div>';
   return html;
@@ -1035,9 +1053,11 @@ function _renderTRTGuide(cId,weeklyDoseMg){
   if(profile.age>0&&profile.age<25)mods.push({type:'warn',text:'Age '+profile.age+': exogenous testosterone suppresses the HPTA and may impair endogenous production long-term at this age.'});
   if(profile.age>=50)mods.push({type:'info',text:'Age '+profile.age+': natural T decline is expected — start at the standard TRT range and titrate up only if bloodwork supports it.'});
   var modHtml=mods.length?'<div style="margin-top:5px;border-top:1px solid var(--border);padding-top:5px">'+mods.map(function(m){var c=colorMap[m.type]||'#3b9eff';return'<div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:3px"><span style="color:'+c+';font-size:12px;line-height:1.4;margin-top:1px">●</span><span style="font-size:11px;color:var(--text);line-height:1.4">'+m.text+'</span></div>';}).join('')+'</div>':'';
+  var supraHtml='';
+  if(weeklyDoseMg>250){supraHtml='<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:6px;padding:7px 10px;margin-bottom:5px"><div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:2px">⚠ Supraphysiological dose</div><div style="font-size:11px;color:var(--muted2);line-height:1.5;">'+Math.round(weeklyDoseMg)+' mg/week exceeds the TRT range (100–200 mg/wk). At this dose you are running a blast, not a TRT protocol. Consider tracking this compound in the Enhanced tab instead and running TRT-range Test here.</div></div>';}
   return'<div class="cfg-row" style="display:block;margin-top:10px">'
     +'<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px">TRT Guide</div>'
-    +cadHtml+tiersHtml+modHtml+'</div>';
+    +supraHtml+cadHtml+tiersHtml+modHtml+'</div>';
 }
 function wizStepTRT(body,footer){
   var trt=_wiz.trt;
