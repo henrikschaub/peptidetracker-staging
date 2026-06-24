@@ -78,48 +78,10 @@ var CYCLE_TEMPLATES=[
    why:'',tip:'',
    compounds:[{name:'Testosterone Enanthate',dose:500,unit:'mg/week',active:true,startWeek:0}]}
 ];
-var ENHANCEMENT_COMPOUNDS=[
-  {id:'test_e',name:'Testosterone Enanthate',group:'Base',dot:'#e05050',defaultDose:300,unit:'mg/week',
-   pack:{type:'vial',conc_mg_ml:250,vol_ml:10},
-   interaction:'The foundational compound — every cycle runs on it. Aromatizes to E2; your week-5 bloodwork determines your aromatizer phenotype and all downstream compound decisions.',
-   sides:'Hematocrit elevation, E2-driven water retention, HPTA suppression. All manageable with compound ratios and bloodwork-guided dose adjustments.'},
-  {id:'test_c',name:'Testosterone Cypionate',group:'Base',dot:'#e07070',defaultDose:300,unit:'mg/week',
-   pack:{type:'vial',conc_mg_ml:200,vol_ml:10},
-   interaction:'Functionally identical to Enanthate — slightly longer half-life (8 vs 7 days), otherwise interchangeable. Same aromatization profile; use whichever is available.',
-   sides:'Identical to Testosterone Enanthate. E2 monitoring, hematocrit checks required.'},
-  {id:'primo',name:'Primobolan (Metenolone Enanthate)',group:'DHT-Derived',dot:'#3cffa0',defaultDose:500,unit:'mg/week',
-   pack:{type:'vial',conc_mg_ml:100,vol_ml:10},
-   interaction:'DHT-derived — zero aromatization. Reduces total E2 load at equivalent androgen dose. Classic synergy compound for normal/high aromatizers. Evidence-based starting ratio: 1:1 Test:Primo.',
-   sides:'Very mild — primarily androgenic at high dose. Hair loss risk in susceptible individuals. Monitor for low-E2 symptoms (joint pain, flat affect, low libido) at high primo ratios.'},
-  {id:'mast_e',name:'Masteron Enanthate',group:'DHT-Derived',dot:'#a0e030',defaultDose:500,unit:'mg/week',
-   pack:{type:'vial',conc_mg_ml:200,vol_ml:10},
-   interaction:'Competitively inhibits aromatase — pseudo-AI effect without crashing cardioprotective E2 to zero. For confirmed low aromatizers only. 2:1 Test:Mast standard; 1:1 for aggressive dry look.',
-   sides:'Androgenic: acne, accelerated hair loss. Cosmetic benefit requires BF <12%. No liver toxicity.'},
-  {id:'npp',name:'NPP (Nandrolone Phenylpropionate)',group:'19-Nor',dot:'#60b0ff',defaultDose:250,unit:'mg/week',
-   pack:{type:'vial',conc_mg_ml:100,vol_ml:10},
-   interaction:'Synergistic with Test for collagen synthesis and joint recovery. Short ester (3-5 day clearance) — fast exit if sides appear. MED 200-300 mg/week; not a size compound at this dose.',
-   sides:'Libido suppression via progestin activity — if libido tanks, reduce NPP first. Prolactin elevation. Avoid without Cabergoline at higher doses.'},
-  {id:'deca',name:'Deca (Nandrolone Decanoate)',group:'19-Nor',dot:'#4090e0',defaultDose:300,unit:'mg/week',
-   pack:{type:'vial',conc_mg_ml:250,vol_ml:10},
-   interaction:'Same anabolic mechanism as NPP — stronger joint lubrication long-term. 3-week half-life means benefits and sides both persist after stopping.',
-   sides:'"Deca-dick" — progestin-driven libido suppression can last weeks post-cycle due to long washout. Only run if you\'ve tolerated NPP without issues. Cabergoline recommended.'},
-  {id:'hgh',name:'HGH (Somatropin)',group:'GH Axis',dot:'#e8a020',defaultDose:3,unit:'IU/day',
-   pack:null,
-   interaction:'Synergistic with androgens: Test drives protein synthesis, GH drives lipolysis and new muscle cell hyperplasia. Stop CJC/Ipamorelin when on exogenous HGH — they target the same axis (redundant). Minimum 6-month run for full recomp benefit.',
-   sides:'Dose-dependent water retention and carpal tunnel (reduce dose to resolve). Hyperglycemia risk >4 IU/day — monitor fasting glucose. Longevity dosing: 1-2 IU/day. Recomp: 3-4 IU/day.'},
-  {id:'anavar',name:'Anavar (Oxandrolone)',group:'Oral',dot:'#d060d0',defaultDose:50,unit:'mg/day',
-   pack:{type:'tablet',mg_per_tab:10,tabs_per_pack:100},
-   interaction:'Mild DHT-derived oral. Enhances strength and hardness without significant mass. Clean synergy with Test at low doses — does not increase E2 load. SHBG suppression amplifies free testosterone effect.',
-   sides:'Liver stress (oral 17α-alkylated) — limit to 6-8 weeks. HDL reduction (lipid impact). Mildest oral overall; female-appropriate at 5-10 mg/day.'},
-  {id:'tren_e',name:'Trenbolone Enanthate',group:'19-Nor',dot:'#ff8c00',defaultDose:200,unit:'mg/week',
-   pack:{type:'vial',conc_mg_ml:200,vol_ml:10},
-   interaction:'Advanced 19-nor — ~5× more androgenic than testosterone, does not aromatise. Rapid simultaneous fat loss and lean mass gain. Pair with reduced Test (300-400 mg/wk) — high Test amplifies androgenic sides via the same receptor pathway. Only add after confirmed tolerance to a prior 19-nor (NPP or Deca).',
-   sides:'Significant HDL suppression and LV hypertrophy risk. Night sweats, tren cough. Progestin-driven prolactin elevation and libido suppression. Neuropsychological effects (aggression, insomnia, anxiety) are dose-dependent and real. Mandatory: full lipids, HCT, LFTs at baseline and Week 5.'},
-  {id:'tren_a',name:'Trenbolone Acetate',group:'19-Nor',dot:'#ff6b00',defaultDose:175,unit:'mg/week',
-   pack:{type:'vial',conc_mg_ml:100,vol_ml:10},
-   interaction:'Short-ester Trenbolone (3-day half-life) — preferred for a first tren run due to faster washout if sides become unmanageable. Same anabolic/androgenic potency as Enanthate. EOD injection protocol for stable blood levels. Reduce Test to 300-400 mg/wk when adding Tren.',
-   sides:'Identical side profile to Trenbolone Enanthate. Short ester = rapid onset but also rapid clearance on stopping. Tren cough more pronounced vs. Enanthate. Run Acetate until tren response is fully characterised before switching to longer ester.'}
-];
+var ENHANCEMENT_COMPOUNDS=[];
+async function syncEnhancedCompoundsFromAgent(){
+  try{var r=await fetch(AGENT_URL+'/compounds/enhanced',{headers:authHeaders()});if(!r.ok)return;ENHANCEMENT_COMPOUNDS=await r.json();}catch(e){}
+}
 var _cwiz={step:1,tpl:null,phase:'foundational',weeks:20,startDate:'',compounds:[]};
 function cycleWizardOpen(){
   if(_cycle&&_cycle.id&&!confirm('Start a new cycle? Your current cycle stays saved on the backend.'))return;
