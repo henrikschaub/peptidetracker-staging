@@ -1,6 +1,6 @@
 /* ── MACROS ── */
 var _macrosPhase='recomp';
-function loadMacros(){var bw=parseFloat(localStorage.getItem('user_weight'))||92;renderMacros(bw);}
+function loadMacros(){var bw=parseFloat(localStorage.getItem('user_weight'))||0;renderMacros(bw);}
 function switchMacrosPhase(p){_macrosPhase=p;loadMacros();}
 function calcMacros(bw,phase){
   var protein=Math.round(bw*2.2);
@@ -14,7 +14,8 @@ function saveMacrosTrainTime(val){localStorage.setItem('macros-train-time',val);
 function saveMacrosTrainDur(val){localStorage.setItem('macros-train-dur',String(val));pushPepSettingsToAgent({'macros-train-dur':val});loadMacros();}
 function renderMacros(bw){
   var body=document.getElementById('macros-body');if(!body)return;
-  var m=calcMacros(bw||92,_macrosPhase);
+  if(!bw){body.innerHTML='<div style="padding:40px 20px;text-align:center;color:var(--muted2)"><div style="font-size:32px;margin-bottom:12px">⚖️</div><div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px">Set your body weight</div><div style="font-size:13px;line-height:1.5">Log your weight in the <b>Weights</b> tab so macros can be calculated for you.</div></div>';return;}
+  var m=calcMacros(bw,_macrosPhase);
   var phases=[{id:'reset',label:'Reset',color:'var(--accent4)'},{id:'cut',label:'Cut',color:'var(--accent2)'},{id:'recomp',label:'Recomp',color:'var(--accent3)'}];
   var trainTime=localStorage.getItem('macros-train-time')||'17:00';
   var trainDur=parseInt(localStorage.getItem('macros-train-dur'))||60;
