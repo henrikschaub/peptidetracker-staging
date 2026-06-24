@@ -156,6 +156,20 @@ Henrik needs to add a `PROMOTE_TOKEN` secret (PAT with write access to
 `peptidetracker`) under Settings → Secrets and variables → Actions. Claude has
 no tool to create/edit repo secrets and cannot fix this itself.
 
+## ⚠️ NEVER HARDCODE PERSONAL USER DATA — GDPR / DATA ISOLATION ⚠️
+Personal data belonging to a specific real user must **NEVER** be hardcoded anywhere in the codebase.
+
+**What triggered this rule (2026-06-24):**
+- Backend `protocol.py` injected Henrik's personal peptide protocol into every new user's empty stack via `_repair_empty_peptides()`.
+- `tab-macros.js` used `|| 92` (Henrik's body weight) as the fallback for all users who hadn't set their weight — wrong data shown to every new user.
+
+**Rules — no exceptions:**
+- Never hardcode any real user's data (body weight, doses, compounds, dates, config) as a constant, default, or fallback
+- Neutral fallbacks only: `0`, `""`, `[]`, `null` — never a specific person's real value
+- Never write "repair" or "migration" helpers that populate missing user data from another user's values
+- Any one-time migration must be scoped to the specific target `user_id`, have a clear expiry, and be removed once confirmed complete
+- Every read/write of user data must be gated by the authenticated user's identity — never cross user boundaries
+
 ## ⚠️ AUTH WARNING — READ BEFORE TOUCHING ANY AUTH CODE ⚠️
 **PIN/passcode auth has been PERMANENTLY REMOVED.** Google Sign-In is the ONLY
 end-user authentication method across this entire ecosystem (peptidetracker,
