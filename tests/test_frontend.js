@@ -1804,3 +1804,68 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
 
   G._userTier=1;
 }
+
+// ── Edit Enhanced tab — stack editor regression ──────────────────────────────
+console.log('\n── Edit Enhanced tab — stack editor regression ─────────────');
+{
+  const G=sandbox;
+  G._userTier=3;
+
+  // Helper functions exist
+  check('editToggleEnhancedCompound defined', typeof G.editToggleEnhancedCompound==='function');
+  check('editSetEnhDose defined',             typeof G.editSetEnhDose==='function');
+  check('editSetEnhUnit defined',             typeof G.editSetEnhUnit==='function');
+  check('editSetEnhDays defined',             typeof G.editSetEnhDays==='function');
+  check('_renderEditEnhanced defined',        typeof G._renderEditEnhanced==='function');
+  check('_renderEnhancedViewTab defined',     typeof G._renderEnhancedViewTab==='function');
+
+  // _renderEditEnhanced returns string HTML
+  var editEnh=G._renderEditEnhanced({enabled:false,compounds:[]});
+  check('_renderEditEnhanced returns string', typeof editEnh==='string');
+  check('_renderEditEnhanced shows intro text', editEnh.includes('enhancement compounds'));
+
+  var testId2=(G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS[0]&&G.ENHANCEMENT_COMPOUNDS[0].id)||null;
+  if(testId2){
+    G._editBuf={name:'Test',peptides:[],trt:{enabled:false,compounds:[]},cycle_length:12};
+    G.editToggleEnhancedCompound(testId2);
+    check('editToggleEnhancedCompound: creates enhanced on _editBuf', !!G._editBuf.enhanced);
+    check('editToggleEnhancedCompound: compound added', G._editBuf.enhanced.compounds.length===1);
+    check('editToggleEnhancedCompound: enabled=true', G._editBuf.enhanced.enabled===true);
+    check('editToggleEnhancedCompound: dose is string', typeof G._editBuf.enhanced.compounds[0].dose==='string');
+    check('editToggleEnhancedCompound: days defaults to [1]', Array.isArray(G._editBuf.enhanced.compounds[0].days)&&G._editBuf.enhanced.compounds[0].days[0]===1);
+
+    G.editSetEnhDose(testId2,'200');
+    check('editSetEnhDose: updates dose', G._editBuf.enhanced.compounds[0].dose==='200');
+
+    G.editSetEnhUnit(testId2,'ml');
+    check('editSetEnhUnit: updates unit', G._editBuf.enhanced.compounds[0].unit==='ml');
+
+    G.editSetEnhDays(testId2,3);
+    check('editSetEnhDays: adds day 3', G._editBuf.enhanced.compounds[0].days.includes(3));
+
+    G._editBuf.enhanced.compounds[0].days=[1];
+    G.editSetEnhDays(testId2,1);
+    check('editSetEnhDays: cannot deselect last day', G._editBuf.enhanced.compounds[0].days.length>=1);
+
+    var viewHtml=G._renderEnhancedViewTab({enhanced:{enabled:true,compounds:[{id:testId2,name:'Test Compound',dose:'250',unit:'mg',days:[1,3],dot:'#e05050'}]}});
+    check('_renderEnhancedViewTab: contains compound name', viewHtml.includes('Test Compound'));
+    check('_renderEnhancedViewTab: contains dose', viewHtml.includes('250mg'));
+
+    var viewEmpty=G._renderEnhancedViewTab({enhanced:{enabled:false,compounds:[]}});
+    check('_renderEnhancedViewTab empty: shows no compounds message', viewEmpty.includes('No enhancement compounds'));
+
+    var viewMissing=G._renderEnhancedViewTab({});
+    check('_renderEnhancedViewTab: handles missing enhanced key', viewMissing.includes('No enhancement compounds'));
+
+    var gBody={innerHTML:''};var gFoot={innerHTML:''};
+    G.initWizard();G._wiz.goals=['enhanced'];
+    G.wizStepGoals(gBody,gFoot);
+    check('wizStepGoals: Enhanced Cycle toggle removed', !gBody.innerHTML.includes('Enhanced Cycle'));
+
+    G.editToggleEnhancedCompound(testId2);
+    check('editToggleEnhancedCompound: removes compound on second call', G._editBuf.enhanced.compounds.length===0);
+    check('editToggleEnhancedCompound: enabled=false when empty', G._editBuf.enhanced.enabled===false);
+  }
+
+  G._userTier=1;
+}
