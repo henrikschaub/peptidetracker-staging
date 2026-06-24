@@ -1651,3 +1651,93 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
   // Restore tier
   G._userTier=1;
 }
+
+// ── Enhanced wizard redesign tests ──────────────────────────────────────────
+{
+  G._userTier=3;
+
+  // wizToggleEnhancedCompound pre-populates dose, unit and days
+  G.initWizard();G._wiz.goals=['enhanced'];
+  var testId=(G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS[0]&&G.ENHANCEMENT_COMPOUNDS[0].id)||null;
+  if(testId){
+    G.wizToggleEnhancedCompound(testId);
+    var ec=G._wiz.enhanced.compounds.find(function(c){return c.id===testId;});
+    check('wizToggleEnhancedCompound: compound added to _wiz.enhanced.compounds', !!ec);
+    check('wizToggleEnhancedCompound: dose pre-populated as string', typeof ec.dose==='string');
+    check('wizToggleEnhancedCompound: days defaults to [1] (Monday)', Array.isArray(ec.days)&&ec.days.length===1&&ec.days[0]===1);
+    check('wizToggleEnhancedCompound: unit set', !!ec.unit);
+    check('wizToggleEnhancedCompound: _wiz.enhanced.enabled=true after adding', G._wiz.enhanced.enabled===true);
+    // Toggle off
+    G.wizToggleEnhancedCompound(testId);
+    check('wizToggleEnhancedCompound: removed on second click', G._wiz.enhanced.compounds.length===0);
+    check('wizToggleEnhancedCompound: _wiz.enhanced.enabled=false when empty', G._wiz.enhanced.enabled===false);
+  }
+
+  // wizSetEnhDose, wizSetEnhUnit, wizSetEnhDays setters
+  if(testId){
+    G.initWizard();G._wiz.goals=['enhanced'];
+    G.wizToggleEnhancedCompound(testId);
+    G.wizSetEnhDose(testId,'250');
+    var ec2=G._wiz.enhanced.compounds.find(function(c){return c.id===testId;});
+    check('wizSetEnhDose: dose updated', ec2&&ec2.dose==='250');
+    G.wizSetEnhUnit(testId,'ml');
+    check('wizSetEnhUnit: unit updated', ec2&&ec2.unit==='ml');
+    G.wizSetEnhDays(testId,3); // add Wednesday
+    check('wizSetEnhDays: days includes added day', ec2&&ec2.days&&ec2.days.includes(3));
+    G.wizSetEnhDays(testId,1); // remove Monday (days=[3] now, length stays >=1 since we have 2 now)
+    check('wizSetEnhDays: days still has Wed after removing Mon', ec2&&ec2.days&&ec2.days.includes(3)&&!ec2.days.includes(1));
+    // Cannot deselect last day
+    G.wizSetEnhDays(testId,3); // try removing Wed when it's the only day
+    check('wizSetEnhDays: cannot remove last day', ec2&&ec2.days&&ec2.days.length>=1);
+  }
+
+  // Duplicate compound detection: TRT + Enhanced same name → hasErrors banner
+  if(G.TRT_CAT&&G.ENHANCEMENT_COMPOUNDS){
+    var trtC=G.TRT_CAT[0];
+    var enhC=G.ENHANCEMENT_COMPOUNDS.find(function(c){return c.name.toLowerCase()===trtC.name.toLowerCase();});
+    if(trtC&&enhC){
+      G.initWizard();G._userTier=3;G._wiz.goals=['enhanced'];G._wiz.trt.enabled=true;
+      G._wiz.trt.compounds=[{id:trtC.id,name:trtC.name,dose:'125',unit:'mg',days:[1]}];
+      G._wiz.enhanced.compounds=[{id:enhC.id,name:enhC.name,dose:'300',unit:'mg',days:[1],dot:enhC.dot}];
+      G._wiz.enhanced.enabled=true;
+      var revBody={innerHTML:''};var revFoot={innerHTML:''};
+      G.wizStepReview(revBody,revFoot);
+      check('wizStepReview: dup compound triggers warning in HTML', revBody.innerHTML.includes('both TRT and Enhancement'));
+      check('wizStepReview: dup → Save Anyway label', revFoot.innerHTML.includes('Save Anyway'));
+    }
+  }
+
+  // Clean stack (no dup) → no warning
+  if(testId){
+    G.initWizard();G._userTier=3;G._wiz.goals=['enhanced'];
+    // Pick an enhanced compound whose name doesn't match any TRT compound
+    var trtCatNames=(G.TRT_CAT||[]).map(function(t){return t.name.toLowerCase();});
+    var safeEnh=G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.find(function(c){
+      return !trtCatNames.includes(c.name.toLowerCase());
+    });
+    if(safeEnh){
+      G._wiz.enhanced.compounds=[{id:safeEnh.id,name:safeEnh.name,dose:'50',unit:'mg',days:[1,2,3,4,5,6,0],dot:safeEnh.dot}];
+      G._wiz.enhanced.enabled=true;
+      var revBody2={innerHTML:''};var revFoot2={innerHTML:''};
+      G.wizStepReview(revBody2,revFoot2);
+      check('wizStepReview: no dup → no warning shown', !revBody2.innerHTML.includes('both TRT and Enhancement'));
+      check('wizStepReview: no dup + no peptide errors → Save Stack label', revFoot2.innerHTML.includes('Save Stack'));
+    }
+  }
+
+  // Enhanced summary in review shows days label
+  if(testId){
+    G.initWizard();G._userTier=3;G._wiz.goals=['enhanced'];
+    var anyEnh=G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.find(function(c){return c.id===testId;});
+    if(anyEnh){
+      G._wiz.enhanced.compounds=[{id:anyEnh.id,name:anyEnh.name,dose:'50',unit:'mg',days:[1,2,3,4,5,6,0],dot:anyEnh.dot}];
+      G._wiz.enhanced.enabled=true;
+      var revBody3={innerHTML:''};var revFoot3={innerHTML:''};
+      G.wizStepReview(revBody3,revFoot3);
+      check('wizStepReview: enhanced compound summary shows "Every day" for 7-day schedule',
+        revBody3.innerHTML.includes('Every day'));
+    }
+  }
+
+  G._userTier=1;
+}
