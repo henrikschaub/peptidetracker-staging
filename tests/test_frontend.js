@@ -232,7 +232,7 @@ check('editStack: goals inferred',         Array.isArray(G._wiz.goals));
 // ── Cycle length ──────────────────────────────────────────────────────────────
 console.log('\n── Cycle length ───────────────────────────────────────────');
 check('CYCLE_WEEKS defined',               Array.isArray(G.CYCLE_WEEKS));
-check('multiples of 3 up to 21',           [3,6,9,12,15,18,21].every(v=>G.CYCLE_WEEKS.includes(v)));
+check('multiples of 4 from 4 to 240 (60 months)', G.CYCLE_WEEKS.length===60&&G.CYCLE_WEEKS[0]===4&&G.CYCLE_WEEKS[59]===240&&G.CYCLE_WEEKS.every((v,i)=>v===(i+1)*4));
 G.initWizard();
 G.wizSetCycleLength('8');  check('wizSetCycleLength("8")=8',    G._wiz.cycle_length===8,  `got ${G._wiz.cycle_length}`);
 G.wizSetCycleLength('12'); check('wizSetCycleLength("12")=12',  G._wiz.cycle_length===12);

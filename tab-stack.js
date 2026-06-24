@@ -1,5 +1,5 @@
 // ── Cycle length suggestions ───────────────────────────────────────────────
-var CYCLE_WEEKS=[3,6,9,12,15,18,21];
+var CYCLE_WEEKS=(function(){var a=[];for(var i=4;i<=240;i+=4)a.push(i);return a;})();
 // ── Updated wizard init with cycle_length ──────────────────────────────────
 function initWizard(){
   _wiz={step:0,goals:[],peptides:[],trt:{enabled:false,compounds:[]},enhanced:{enabled:false,compounds:[]},editMode:false,stackIndex:-1,stackName:'Cycle 1',cycle_length:12};
@@ -27,7 +27,7 @@ function wizStep1(body,footer){
   var html='<div class="wiz-section">Cycle Length</div>';
   html+='<select onchange="wizSetCycleLength(this.value)" style="'+_CYCLE_SELECT_STYLE+'">';
   html+='<option value="0"'+(_wiz.cycle_length===0?' selected':'')+'>No end date</option>';
-  CYCLE_WEEKS.forEach(function(w){html+='<option value="'+w+'"'+(_wiz.cycle_length===w?' selected':'')+'>'+w+' weeks</option>';});
+  CYCLE_WEEKS.forEach(function(w){var mo=w/4;html+='<option value="'+w+'"'+(_wiz.cycle_length===w?' selected':'')+'>'+(mo===1?'1 month':mo+' months')+'</option>';});
   html+='</select>';
   html+='<div style="font-size:11px;color:var(--muted2);">Cycle length helps track when to rotate peptides and manage tapering.</div>';
   body.innerHTML=html;
@@ -231,7 +231,7 @@ function renderStackEditor(){
   html+='<div class="wiz-section">Cycle Length</div>';
   html+='<select onchange="_collectEditInputs();_editBuf.cycle_length=parseInt(this.value);renderStackEditor();" style="'+_CYCLE_SELECT_STYLE+'">';
   html+='<option value="0"'+(_noEnd?' selected':'')+'>No end date</option>';
-  CYCLE_WEEKS.forEach(function(w){html+='<option value="'+w+'"'+(cycle===w?' selected':'')+'>'+w+' weeks</option>';});
+  CYCLE_WEEKS.forEach(function(w){var mo=w/4;html+='<option value="'+w+'"'+(cycle===w?' selected':'')+'>'+(mo===1?'1 month':mo+' months')+'</option>';});
   html+='</select>';
   html+=_stackTabBar(_editInnerTab,'setEditInnerTab');
   if(_editInnerTab==='trt'){
