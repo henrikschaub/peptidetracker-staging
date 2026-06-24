@@ -1063,6 +1063,18 @@ function editSetTRTDays(id,di){var c=((_editBuf.trt&&_editBuf.trt.compounds)||[]
 
 function wizStepEnhanced(body,footer){
   if(!_wiz.enhanced)_wiz.enhanced={enabled:false,compounds:[]};
+  // Pre-fill matching TRT compounds on first entry
+  if(!_wiz.enhanced._prefilled){
+    _wiz.enhanced._prefilled=true;
+    _trtCompounds(_wiz.trt).forEach(function(tc){
+      var match=ENHANCEMENT_COMPOUNDS.find(function(ec){return ec.name.toLowerCase()===(tc.name||'').toLowerCase();});
+      if(match&&!(_wiz.enhanced.compounds||[]).some(function(c){return c.id===match.id;})){
+        if(!_wiz.enhanced.compounds)_wiz.enhanced.compounds=[];
+        _wiz.enhanced.compounds.push({id:match.id,name:match.name,dose:String(tc.dose||match.defaultDose||''),unit:tc.unit||match.unit||'mg',days:tc.days?tc.days.slice():[1],dot:match.dot});
+      }
+    });
+    _wiz.enhanced.enabled=(_wiz.enhanced.compounds||[]).length>0;
+  }
   var sel=_wiz.enhanced.compounds||[];
   var selIds=sel.map(function(c){return c.id;});
   var groups={};
@@ -1107,18 +1119,7 @@ function wizSetEnhDays(id,di){var c=(_wiz.enhanced.compounds||[]).find(function(
 function wizStepReview(body,footer){
   var pepObjs=_wiz.peptides.map(function(p){return PEPTIDE_CAT.find(function(c){return c.id===p.id;})||{id:p.id,cg:[]};});
   var hasErrors=checkStack(pepObjs).some(function(i){return i.level==='err';});
-  // Detect duplicate compounds across TRT and Enhancement sections
-  var dupWarning='';
-  if(_wizTier()>=3&&_wiz.goals.includes('enhanced')&&_wiz.enhanced&&_wiz.enhanced.compounds){
-    var trtNames=_trtCompounds(_wiz.trt).map(function(c){return (c.name||'').toLowerCase();});
-    var dups=_wiz.enhanced.compounds.filter(function(c){return trtNames.includes((c.name||'').toLowerCase());});
-    if(dups.length){
-      hasErrors=true;
-      dupWarning='<div style="background:rgba(255,80,80,0.12);border:1px solid rgba(255,80,80,0.35);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#ff6060;">⚠ '+dups.map(function(c){return _esc(c.name);}).join(', ')+' appears in both TRT and Enhancement — remove one before saving.</div>';
-    }
-  }
   var html='<div class="wiz-section">Stack Name</div><input class="trt-in" type="text" value="'+String(_wiz.stackName||'')+'" oninput="wizSetStackName(this.value)" placeholder="e.g. Cycle 1, Cutting Stack...">';
-  if(dupWarning)html+='<div style="margin-top:12px">'+dupWarning+'</div>';
   html+='<div class="wiz-section" style="margin-top:16px">Summary</div>';
   if(_wiz.peptides.length){_wiz.peptides.forEach(function(p){var dose=p.times&&p.times.includes('AM')&&p.times.includes('PM')?(p.dose_am||'?')+(p.unit_am||'')+'/'+(p.dose_pm||'?')+(p.unit_pm||''):(p.times&&p.times.includes('AM')?(p.dose_am||'?')+(p.unit_am||''):(p.dose_pm||'?')+(p.unit_pm||''));var days=p.days&&p.days.length===7?'Every day':p.days&&p.days.length?p.days.length+'x/week':'?';html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)"><div style="width:8px;height:8px;border-radius:50%;background:'+(p.dot||'#888')+';flex-shrink:0"></div><div style="flex:1;font-size:13px;color:var(--text)">'+p.name+'</div><div style="font-size:12px;color:var(--muted2)">'+dose+' · '+days+'</div></div>';});}
   else{html+='<div style="color:var(--muted2);font-size:13px;">No peptides selected.</div>';}
