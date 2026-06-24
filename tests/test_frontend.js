@@ -1462,6 +1462,23 @@ console.log('\n── dose dedup migration ────────────�
     })());
 }
 
+// ── Storage tab: copy helpers + clear button ──────────────────────────────────
+{
+  const G=sandbox;
+  check('buildStoragePage function defined',typeof G.buildStoragePage==='function');
+  check('_lsCopyText function defined',typeof G._lsCopyText==='function');
+  check('_lsFbCopy function defined (textarea fallback)',typeof G._lsFbCopy==='function');
+  check('lsDbgCopy accepts button arg (not just index)',rawScript.includes('function lsDbgCopy(i,btn)'));
+  check('lsDbgCopyAll accepts button arg',rawScript.includes('function lsDbgCopyAll(btn)'));
+  check('lsDbgClearAll function defined',typeof G.lsDbgClearAll==='function');
+  check('buildStoragePage renders Clear All button',rawScript.includes('lsDbgClearAll()'));
+  check('buildStoragePage renders Copy All with button arg (onclick passes this)',rawScript.includes('lsDbgCopyAll(this)'));
+  check('buildStoragePage per-row copy passes this to lsDbgCopy',rawScript.includes("lsDbgCopy('+i+',this)"));
+  check('buildStoragePage scrolls to top on refresh',rawScript.includes('_el.scrollTop=0'));
+  check('_lsCopyText uses clipboard API with .then() feedback (not silent catch)',rawScript.includes('.then(function(){_flash(true);})')&&rawScript.includes('.catch(function(){_lsFbCopy('));
+  check('no silent clipboard swallow (old pattern gone)',!rawScript.includes('.catch(function(){})')||rawScript.includes('_lsFbCopy'));
+}
+
 // ── Cycle wizard — compound dropdown + Tren template ─────────────────────────
 {
   const tabCyclesJs = fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'tab-cycles.js'),'utf8');
