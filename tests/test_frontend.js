@@ -1691,37 +1691,35 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
     check('wizSetEnhDays: cannot remove last day', ec2&&ec2.days&&ec2.days.length>=1);
   }
 
-  // Duplicate compound detection: TRT + Enhanced same name → hasErrors banner
-  if(G.TRT_CAT&&G.ENHANCEMENT_COMPOUNDS){
-    var trtC=G.TRT_CAT[0];
-    var enhC=G.ENHANCEMENT_COMPOUNDS.find(function(c){return c.name.toLowerCase()===trtC.name.toLowerCase();});
-    if(trtC&&enhC){
-      G.initWizard();G._userTier=3;G._wiz.goals=['enhanced'];G._wiz.trt.enabled=true;
-      G._wiz.trt.compounds=[{id:trtC.id,name:trtC.name,dose:'125',unit:'mg',days:[1]}];
-      G._wiz.enhanced.compounds=[{id:enhC.id,name:enhC.name,dose:'300',unit:'mg',days:[1],dot:enhC.dot}];
-      G._wiz.enhanced.enabled=true;
-      var revBody={innerHTML:''};var revFoot={innerHTML:''};
-      G.wizStepReview(revBody,revFoot);
-      check('wizStepReview: dup compound triggers warning in HTML', revBody.innerHTML.includes('both TRT and Enhancement'));
-      check('wizStepReview: dup → Save Anyway label', revFoot.innerHTML.includes('Save Anyway'));
-    }
+  // wizStepEnhanced prefill: TRT compound matching ENHANCEMENT_COMPOUNDS name is auto-added on first entry
+  // Uses ENHANCEMENT_COMPOUNDS[0] as the matching compound — no TRT_CAT needed since _trtCompounds returns trt.compounds directly
+  if(G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.length){
+    var enhFirst=G.ENHANCEMENT_COMPOUNDS[0];
+    G.initWizard();G._userTier=3;G._wiz.goals=['enhanced'];G._wiz.trt.enabled=true;
+    G._wiz.trt.compounds=[{id:'_trt_test',name:enhFirst.name,dose:'125',unit:'mg',days:[1,3,5]}];
+    var pfBody={innerHTML:''};var pfFoot={innerHTML:''};
+    G.wizStepEnhanced(pfBody,pfFoot);
+    var preAdded=G._wiz.enhanced.compounds.find(function(c){return c.id===enhFirst.id;});
+    check('wizStepEnhanced prefill: TRT-matching compound auto-added', !!preAdded);
+    check('wizStepEnhanced prefill: pre-filled dose matches TRT dose', preAdded&&preAdded.dose==='125');
+    check('wizStepEnhanced prefill: pre-filled days match TRT days', preAdded&&Array.isArray(preAdded.days)&&preAdded.days.length===3&&preAdded.days.includes(1)&&preAdded.days.includes(3)&&preAdded.days.includes(5));
+    check('wizStepEnhanced prefill: enabled=true after prefill', G._wiz.enhanced.enabled===true);
+    var beforeLen=G._wiz.enhanced.compounds.length;
+    var pfBody2={innerHTML:''};var pfFoot2={innerHTML:''};
+    G.wizStepEnhanced(pfBody2,pfFoot2);
+    check('wizStepEnhanced prefill: _prefilled flag prevents duplicate on re-render', G._wiz.enhanced.compounds.length===beforeLen);
   }
 
-  // Clean stack (no dup) → no warning
+  // wizStepReview: no blocking save with TRT compound also in Enhanced
   if(testId){
     G.initWizard();G._userTier=3;G._wiz.goals=['enhanced'];
-    // Pick an enhanced compound whose name doesn't match any TRT compound
-    var trtCatNames=(G.TRT_CAT||[]).map(function(t){return t.name.toLowerCase();});
-    var safeEnh=G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.find(function(c){
-      return !trtCatNames.includes(c.name.toLowerCase());
-    });
+    var safeEnh=G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.find(function(c){return c.id===testId;});
     if(safeEnh){
       G._wiz.enhanced.compounds=[{id:safeEnh.id,name:safeEnh.name,dose:'50',unit:'mg',days:[1,2,3,4,5,6,0],dot:safeEnh.dot}];
       G._wiz.enhanced.enabled=true;
       var revBody2={innerHTML:''};var revFoot2={innerHTML:''};
       G.wizStepReview(revBody2,revFoot2);
-      check('wizStepReview: no dup → no warning shown', !revBody2.innerHTML.includes('both TRT and Enhancement'));
-      check('wizStepReview: no dup + no peptide errors → Save Stack label', revFoot2.innerHTML.includes('Save Stack'));
+      check('wizStepReview: enhanced compound without peptide errors → Save Stack label', revFoot2.innerHTML.includes('Save Stack'));
     }
   }
 
