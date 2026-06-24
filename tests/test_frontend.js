@@ -1503,14 +1503,40 @@ console.log('\n── dose dedup migration ────────────�
     tabStackJs.includes('id="aas-info-block"'));
   check('_renderEnhancedGuide function defined in tab-stack.js',
     tabStackJs.includes('function _renderEnhancedGuide('));
-  check('_renderEnhancedGuide calls _renderDoseGuide for compound id',
-    tabStackJs.includes('_renderDoseGuide(cat.id)'));
+  check('_renderEnhancedGuide renders cadence block (Injection Frequency)',
+    tabStackJs.includes('cat.cadence')&&tabStackJs.includes('Injection Frequency'));
+  check('_renderEnhancedGuide renders cadence halfLife and rec fields',
+    tabStackJs.includes('cad.rec')&&tabStackJs.includes('cad.halfLife'));
+  check('_renderEnhancedGuide renders doseTiers from backend catalogue',
+    tabStackJs.includes('cat.doseTiers')&&tabStackJs.includes('doseTiers.length'));
+  check('_renderEnhancedGuide falls back to DOSE_GUIDE if no doseTiers',
+    tabStackJs.includes('_renderDoseGuide(cat.id)')||tabStackJs.includes('DOSE_GUIDE[cat.id]'));
   check('_renderEnhancedGuide renders interaction field',
     tabStackJs.includes('cat.interaction'));
   check('_renderEnhancedGuide renders sides field',
     tabStackJs.includes('cat.sides'));
   check('stackAASAutoFill populates aas-info-block on compound select',
     tabStackJs.includes('aas-info-block')&&tabStackJs.includes('_renderEnhancedGuide(cat)'));
+  // E2 management: class-based detection
+  check('E2 management uses cls field from ENHANCEMENT_COMPOUNDS catalogue',
+    tabStackJs.includes('ec.cls'));
+  check('E2 management detects 19-nor compounds (has19nor)',
+    tabStackJs.includes('has19nor'));
+  check('E2 management detects Tren specifically (hasTren)',
+    tabStackJs.includes('hasTren'));
+  check('E2 management detects oral compounds and notes no E2 impact',
+    tabStackJs.includes('oralCmps')&&tabStackJs.includes('not aromatize'));
+  check('E2 management for 19-nor shows prolactin warning',
+    tabStackJs.includes('prolactin')&&tabStackJs.includes('cabergoline'));
+  check('E2 management for Tren shows prolactin warning distinct from generic 19-nor',
+    tabStackJs.includes('tren_e')&&tabStackJs.includes('tren_a')&&tabStackJs.includes('progestin'));
+  check('E2 management label for Test+oral does not say Test-only',
+    !tabStackJs.includes('Test-only'));
+  // TRT supraphysiological warning
+  check('_renderTRTGuide shows supraphysiological warning above 250 mg/wk',
+    tabStackJs.includes('weeklyDoseMg>250')&&tabStackJs.includes('Supraphysiological'));
+  check('supraphysiological warning includes actual dose in mg',
+    tabStackJs.includes('Math.round(weeklyDoseMg)'));
   // Structural tests (don't depend on compound data)
   check('CYCLE_TEMPLATES has Tren template (id: tren)',
     G.CYCLE_TEMPLATES&&G.CYCLE_TEMPLATES.some(function(t){return t.id==='tren';}));
