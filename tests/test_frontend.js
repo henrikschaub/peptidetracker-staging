@@ -1495,6 +1495,22 @@ console.log('\n── dose dedup migration ────────────�
     tabStackJs.includes('<select id="aas-name"'));
   check('stackAddAASCompound renders grouped options via ENHANCEMENT_COMPOUNDS',
     tabStackJs.includes('optgroup')&&tabStackJs.includes('stackAASAutoFill'));
+  check('stackAddAASCompound unit select includes IU/day option',
+    tabStackJs.includes('<option>IU/day</option>'));
+  check('stackAddAASCompound unit select includes IU/week option',
+    tabStackJs.includes('<option>IU/week</option>'));
+  check('stackAddAASCompound modal has aas-info-block div for dose guidance',
+    tabStackJs.includes('id="aas-info-block"'));
+  check('_renderEnhancedGuide function defined in tab-stack.js',
+    tabStackJs.includes('function _renderEnhancedGuide('));
+  check('_renderEnhancedGuide calls _renderDoseGuide for compound id',
+    tabStackJs.includes('_renderDoseGuide(cat.id)'));
+  check('_renderEnhancedGuide renders interaction field',
+    tabStackJs.includes('cat.interaction'));
+  check('_renderEnhancedGuide renders sides field',
+    tabStackJs.includes('cat.sides'));
+  check('stackAASAutoFill populates aas-info-block on compound select',
+    tabStackJs.includes('aas-info-block')&&tabStackJs.includes('_renderEnhancedGuide(cat)'));
   // Structural tests (don't depend on compound data)
   check('CYCLE_TEMPLATES has Tren template (id: tren)',
     G.CYCLE_TEMPLATES&&G.CYCLE_TEMPLATES.some(function(t){return t.id==='tren';}));

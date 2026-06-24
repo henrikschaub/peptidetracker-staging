@@ -1,5 +1,16 @@
 # Peptide Tracker Staging — Claude Instructions
 
+## ⚠️ UI CONSISTENCY — ALL COMPOUND TIERS MUST BE IDENTICAL ⚠️
+Every compound tier (Peptides, TRT, Enhanced) must have **exactly the same UI features**. If one tier shows dose recommendations, all tiers must show dose recommendations. If one shows an info card, all must. If you add a UI element to one tier, immediately add it to all others in the same session.
+
+**Non-negotiable parity rules:**
+- Dose guidance (`_renderDoseGuide` / `_renderTRTGuide` / `_renderEnhancedGuide`) shown in BOTH the add-compound modal AND the edit/configure view for every tier
+- Unit dropdowns must include all units used by any compound in that tier (e.g. `IU/day`, `IU/week` for GH Axis; `mg/week`, `mg/day`, `mg/EOD` for androgens)
+- Info cards (mechanism, side effects) shown consistently across all three tiers
+- No tier may have a feature that another tier is silently missing
+
+When a new compound tier feature is added, check all other tiers before closing the PR.
+
 ## ⚠️ RESEARCH SCOPE — ALWAYS THE FULL CATALOGUE ⚠️
 When conducting research, building databases, or compiling reference data for these apps:
 - **Never** scope research to only the compounds Henrik is currently using

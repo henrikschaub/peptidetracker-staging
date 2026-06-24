@@ -934,17 +934,26 @@ function stackAddAASCompound(){
     +selHtml
     +'<div style="display:flex;gap:8px;">'
     +'<input id="aas-dose" type="number" min="0" step="25" placeholder="Dose" style="flex:1;padding:10px 12px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:14px;font-family:inherit;outline:none;">'
-    +'<select id="aas-unit" style="flex:1;padding:10px 8px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:13px;font-family:inherit;"><option>mg/week</option><option>mg/day</option><option>mg/EOD</option></select>'
+    +'<select id="aas-unit" style="flex:1;padding:10px 8px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:13px;font-family:inherit;"><option>mg/week</option><option>mg/day</option><option>mg/EOD</option><option>IU/day</option><option>IU/week</option></select>'
     +'</div>'
+    +'<div id="aas-info-block"></div>'
     +'<button onclick="stackConfirmAddAAS()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Add Compound</button>'
     +'</div>';
   overlay.appendChild(sheet);document.body.appendChild(overlay);
+}
+function _renderEnhancedGuide(cat){
+  if(!cat)return'';
+  var html=_renderDoseGuide(cat.id);
+  if(cat.interaction)html+='<div style="display:block;margin-top:8px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:4px">How it works</div><div style="font-size:12px;color:var(--text);line-height:1.5;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;">'+cat.interaction+'</div></div>';
+  if(cat.sides)html+='<div style="display:block;margin-top:8px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:4px">Side effects</div><div style="font-size:12px;color:var(--text);line-height:1.5;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;">'+cat.sides+'</div></div>';
+  return html;
 }
 function stackAASAutoFill(id){
   var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===id;});
   if(!cat)return;
   var dEl=document.getElementById('aas-dose');if(dEl&&cat.defaultDose)dEl.value=cat.defaultDose;
-  var uEl=document.getElementById('aas-unit');if(uEl&&cat.unit){var u=cat.unit.split('/')[0]+'/'+cat.unit.split('/')[1];Array.from(uEl.options).forEach(function(o,i){if(o.value===cat.unit||o.text===cat.unit)uEl.selectedIndex=i;});}
+  var uEl=document.getElementById('aas-unit');if(uEl&&cat.unit){Array.from(uEl.options).forEach(function(o,i){if(o.value===cat.unit||o.text===cat.unit)uEl.selectedIndex=i;});}
+  var infoEl=document.getElementById('aas-info-block');if(infoEl)infoEl.innerHTML=_renderEnhancedGuide(cat);
 }
 async function stackConfirmAddAAS(){
   var c=_cycle;if(!c||!c.id)return;
