@@ -1465,16 +1465,22 @@ console.log('\n── dose dedup migration ────────────�
 // ── Cycle wizard — compound dropdown + Tren template ─────────────────────────
 {
   const tabCyclesJs = fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'tab-cycles.js'),'utf8');
-  check('ENHANCEMENT_COMPOUNDS has Trenbolone Enanthate',
-    G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.some(function(c){return c.id==='tren_e';}));
-  check('ENHANCEMENT_COMPOUNDS has Trenbolone Acetate',
-    G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.some(function(c){return c.id==='tren_a';}));
-  check('Trenbolone Enanthate has interaction and sides text',
-    (function(){var c=G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.find(function(x){return x.id==='tren_e';});return c&&c.interaction&&c.sides&&c.interaction.length>20&&c.sides.length>20;})());
+  // Compound data compliance: must NOT be hardcoded in the public frontend repo
+  check('ENHANCEMENT_COMPOUNDS not hardcoded in tab-cycles.js (must come from backend)',
+    !(/var ENHANCEMENT_COMPOUNDS\s*=\s*\[\s*\{/).test(tabCyclesJs));
+  check('syncEnhancedCompoundsFromAgent defined in tab-cycles.js',
+    tabCyclesJs.includes('syncEnhancedCompoundsFromAgent'));
+  check('syncEnhancedCompoundsFromAgent fetches /compounds/enhanced',
+    tabCyclesJs.includes('/compounds/enhanced'));
+  // ADD COMPOUND modal uses select not text input
+  const tabStackJs = fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'tab-stack.js'),'utf8');
+  check('stackAddAASCompound uses select dropdown (not free-text input) for compound name',
+    tabStackJs.includes('<select id="aas-name"'));
+  check('stackAddAASCompound renders grouped options via ENHANCEMENT_COMPOUNDS',
+    tabStackJs.includes('optgroup')&&tabStackJs.includes('stackAASAutoFill'));
+  // Structural tests (don't depend on compound data)
   check('CYCLE_TEMPLATES has Tren template (id: tren)',
     G.CYCLE_TEMPLATES&&G.CYCLE_TEMPLATES.some(function(t){return t.id==='tren';}));
-  check('Tren template has Trenbolone Acetate compound',
-    (function(){var t=G.CYCLE_TEMPLATES&&G.CYCLE_TEMPLATES.find(function(x){return x.id==='tren';});return t&&t.compounds&&t.compounds.some(function(c){return c.name==='Trenbolone Acetate';});})());
   check('_cwizSetCmpd function defined',typeof G._cwizSetCmpd==='function');
   check('_cwizToggleInfo function defined',typeof G._cwizToggleInfo==='function');
   check('wizard step 2 uses compound dropdown (select with _cwizSetCmpd)',
@@ -1485,18 +1491,13 @@ console.log('\n── dose dedup migration ────────────�
     tabCyclesJs.includes('__custom__')&&tabCyclesJs.includes('Custom…'));
   check('_cwizSetCmpd auto-fills dose and unit from ENHANCEMENT_COMPOUNDS',
     tabCyclesJs.includes('ec.defaultDose')&&tabCyclesJs.includes('ec.unit'));
-  check('Custom Cycle template uses Testosterone Enanthate (not bare Testosterone)',
-    (function(){var t=G.CYCLE_TEMPLATES&&G.CYCLE_TEMPLATES.find(function(x){return x.id==='custom';});return t&&t.compounds&&t.compounds[0]&&t.compounds[0].name==='Testosterone Enanthate';})());
   check('optgroup labels used in compound dropdown (Base, DHT-Derived, 19-Nor)',
     tabCyclesJs.includes('optgroup label=')&&tabCyclesJs.includes('19-Nor'));
-  check('ENHANCEMENT_COMPOUNDS has pack specs for injectables (test_e)',
-    G.ENHANCEMENT_COMPOUNDS&&(function(){var e=G.ENHANCEMENT_COMPOUNDS.find(function(x){return x.id==='test_e';});return e&&e.pack&&e.pack.type==='vial'&&e.pack.conc_mg_ml===250&&e.pack.vol_ml===10;})());
-  check('ENHANCEMENT_COMPOUNDS has pack specs for tablets (anavar)',
-    G.ENHANCEMENT_COMPOUNDS&&(function(){var e=G.ENHANCEMENT_COMPOUNDS.find(function(x){return x.id==='anavar';});return e&&e.pack&&e.pack.type==='tablet'&&e.pack.mg_per_tab===10&&e.pack.tabs_per_pack===100;})());
-  check('ENHANCEMENT_COMPOUNDS tren_e has pack (200mg/mL × 10mL)',
-    G.ENHANCEMENT_COMPOUNDS&&(function(){var e=G.ENHANCEMENT_COMPOUNDS.find(function(x){return x.id==='tren_e';});return e&&e.pack&&e.pack.conc_mg_ml===200;})());
-  check('ENHANCEMENT_COMPOUNDS hgh pack is null (bridged to pricelist)',
-    G.ENHANCEMENT_COMPOUNDS&&(function(){var e=G.ENHANCEMENT_COMPOUNDS.find(function(x){return x.id==='hgh';});return e&&e.pack===null;})());
+  // Inject mock compound data so wizard behaviour tests work (fetch is noop in test sandbox)
+  G.ENHANCEMENT_COMPOUNDS=[
+    {id:'_tc_base',name:'Test Base Compound',group:'Base',dot:'#e05050',defaultDose:300,unit:'mg/week',pack:{type:'vial',conc_mg_ml:250,vol_ml:10}},
+    {id:'_tc_oral',name:'Test Oral Compound',group:'Oral',dot:'#d060d0',defaultDose:50,unit:'mg/day',pack:{type:'tablet',mg_per_tab:10,tabs_per_pack:100}}
+  ];
 }
 {
   // ── PRICELIST & Cart functions ───────────────────────────────────────────
@@ -1529,15 +1530,15 @@ console.log('\n── dose dedup migration ────────────�
       var vials=Math.ceil(totalIU/24); // ceil(10.5)=11
       return item&&item.sku==='H24'&&item.vials===vials&&item.boxes==null&&!('price' in item);
     })());
-  check('_calcEnhancementCartItem: test_e 400mg/week 16wks → 6400mg → 3 vials (250×10=2500mg each)',
+  check('_calcEnhancementCartItem: vial compound 400mg/week 16wks → 6400mg → 3 vials (250×10=2500mg each)',
     (function(){
-      var c={name:'Testosterone Enanthate',dose:400,unit:'mg/week',active:true};
+      var c={name:'Test Base Compound',dose:400,unit:'mg/week',active:true};
       var item=G._calcEnhancementCartItem(c,16);
       return item&&item.units===Math.ceil(400*16/2500)&&item.unitLabel==='vials';
     })());
-  check('_calcEnhancementCartItem: anavar 50mg/day 8wks → 2800mg → 3 packs (10×100=1000mg each)',
+  check('_calcEnhancementCartItem: tablet compound 50mg/day 8wks → 2800mg → 3 packs (10×100=1000mg each)',
     (function(){
-      var c={name:'Anavar (Oxandrolone)',dose:50,unit:'mg/day',active:true};
+      var c={name:'Test Oral Compound',dose:50,unit:'mg/day',active:true};
       var item=G._calcEnhancementCartItem(c,8);
       return item&&item.units===Math.ceil(50*7*8/1000)&&item.unitLabel==='packs';
     })());
