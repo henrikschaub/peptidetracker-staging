@@ -219,13 +219,13 @@ const testStack = {
   trt:{enabled:true,compound:'Nebido',injections:[{date:'2026-06-01',label:'Inj 1',dose:'250mg'}]}
 };
 G._userStacks=[testStack];G._activeStackIndices=[0];
-G.editStackWithCycle(0);
+G._userTier=2;G.editStackWithCycle(0);G._userTier=1;
 check('editStack: editMode=true',          G._wiz.editMode===true);
 check('editStack: stackIndex=0',           G._wiz.stackIndex===0);
 check('editStack: stackName loaded',       G._wiz.stackName==='Cutting Cycle');
 check('editStack: cycle_length=12',        G._wiz.cycle_length===12,            `got ${G._wiz.cycle_length}`);
 check('editStack: 2 peptides loaded',      G._wiz.peptides.length===2,          `got ${G._wiz.peptides.length}`);
-check('editStack: TRT compound loaded',    G._wiz.trt.compound==='Nebido');
+check('editStack: TRT compound loaded (T2)',G._wiz.trt.compound==='Nebido');
 check('editStack: deep copy (no mutation)',G._userStacks[0].peptides!==G._wiz.peptides);
 check('editStack: goals inferred',         Array.isArray(G._wiz.goals));
 
@@ -263,6 +263,24 @@ G._userTier=2;G.initWizard();G._wiz.trt.enabled=true;
 G.wizNext();G.wizNext();G.wizNext();G.wizNext();G.wizNext();
 check('wizNext: T2 step=5 after 5 calls when TRT enabled', G._wiz.step===5);
 G.initWizard();G._wiz.trt.enabled=true;G._wiz.step=6;G.wizBack();check('wizBack: T2 6→5 when TRT enabled', G._wiz.step===5);
+// T3 wizard navigation — TRT+Enhanced both enabled
+G._userTier=3;G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['enhanced'];
+G.wizNext();G.wizNext();G.wizNext();G.wizNext();G.wizNext();
+check('wizNext: T3+TRT+enhanced step=5 (TRT) after 5 calls', G._wiz.step===5);
+G.wizNext();check('wizNext: T3+TRT+enhanced step=6 (Enhanced) after 6 calls', G._wiz.step===6);
+G.wizNext();check('wizNext: T3+TRT+enhanced step=7 (Review) after 7 calls', G._wiz.step===7);
+G.wizNext();check('wizNext: T3 does not exceed 7', G._wiz.step===7);
+G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['enhanced'];G._wiz.step=7;
+G.wizBack();check('wizBack: T3 7→6 (Enhanced←Review)', G._wiz.step===6);
+G.wizBack();check('wizBack: T3 6→5 (TRT←Enhanced when TRT enabled)', G._wiz.step===5);
+// T3 Enhanced without TRT
+G._userTier=3;G.initWizard();G._wiz.goals=['enhanced'];
+G.wizNext();G.wizNext();G.wizNext();G.wizNext();G.wizNext();
+check('wizNext: T3+enhanced, TRT disabled → skips to Enhanced (step 6)', G._wiz.step===6);
+G.wizNext();check('wizNext: T3+enhanced after Enhanced → Review (step 7)', G._wiz.step===7);
+G.initWizard();G._wiz.goals=['enhanced'];G._wiz.step=7;
+G.wizBack();check('wizBack: T3 7→6 (Enhanced←Review, TRT off)', G._wiz.step===6);
+G.wizBack();check('wizBack: T3 6→4 (Configure←Enhanced, TRT off)', G._wiz.step===4);
 G._userTier=1; // restore
 G.wizSetStackName('My New Stack');
 check('wizSetStackName updates _wiz', G._wiz.stackName==='My New Stack');
@@ -1584,19 +1602,32 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
   check('T2 wizard includes TRT step', t2Titles.includes('TRT'));
   check('T2 wizard last step is REVIEW', t2Titles[t2Titles.length-1]==='REVIEW');
 
-  // T3: same 7 steps as T2 (Enhanced configured separately via Cycles tab)
-  G._userTier=3;
+  // T3 without enhanced goal: same 7 steps as T2
+  G._userTier=3;G.initWizard();
   var t3Titles=G._wizTitles();
-  check('T3 wizard has 7 steps', t3Titles.length===7, 'got '+t3Titles.length);
+  check('T3 wizard (no enhanced goal) has 7 steps', t3Titles.length===7, 'got '+t3Titles.length);
+
+  // T3 with enhanced goal: 8-step wizard
+  G._userTier=3;G.initWizard();G._wiz.goals=['enhanced'];
+  var t3EhTitles=G._wizTitles();
+  check('T3+enhanced wizard has 8 steps', t3EhTitles.length===8, 'got '+t3EhTitles.length);
+  check('T3+enhanced wizard includes ENHANCED step', t3EhTitles.includes('ENHANCED'));
+  check('T3+enhanced wizard includes TRT step', t3EhTitles.includes('TRT'));
+  check('T3+enhanced wizard last step is REVIEW', t3EhTitles[t3EhTitles.length-1]==='REVIEW');
 
   // _wizStepToIdx: T1 step 6 (REVIEW) maps to index 5
-  G._userTier=1;
+  G._userTier=1;G.initWizard();
   check('T1: _wizStepToIdx(6) === 5 (REVIEW maps to last T1 slot)', G._wizStepToIdx(6)===5);
   check('T1: _wizStepToIdx(4) === 4 (unchanged)', G._wizStepToIdx(4)===4);
 
   // T2 step indices unchanged
-  G._userTier=2;
+  G._userTier=2;G.initWizard();
   check('T2: _wizStepToIdx(6) === 6 (no shift)', G._wizStepToIdx(6)===6);
+
+  // T3+enhanced step indices are 1:1
+  G._userTier=3;G.initWizard();G._wiz.goals=['enhanced'];
+  check('T3+enhanced: _wizStepToIdx(6)===6 (Enhanced step)', G._wizStepToIdx(6)===6);
+  check('T3+enhanced: _wizStepToIdx(7)===7 (Review step)', G._wizStepToIdx(7)===7);
 
   // wizStepPeptides filter: HGH (group=Enhanced) must not appear
   G._userTier=1;
