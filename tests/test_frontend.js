@@ -228,6 +228,10 @@ check('editStack: 2 peptides loaded',      G._wiz.peptides.length===2,          
 check('editStack: TRT compound loaded (T2)',G._wiz.trt.compound==='Nebido');
 check('editStack: deep copy (no mutation)',G._userStacks[0].peptides!==G._wiz.peptides);
 check('editStack: goals inferred',         Array.isArray(G._wiz.goals));
+// T3 edit: 'enhanced' auto-included in goals so Enhanced wizard step always shows
+G._userTier=3;G.editStackWithCycle(0);
+check('editStack T3: enhanced in goals', G._wiz.goals.includes('enhanced'));
+G._userTier=1;
 
 // ── Cycle length ──────────────────────────────────────────────────────────────
 console.log('\n── Cycle length ───────────────────────────────────────────');
@@ -1662,10 +1666,11 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
   check('T2 wizard includes TRT step', t2Titles.includes('TRT'));
   check('T2 wizard last step is REVIEW', t2Titles[t2Titles.length-1]==='REVIEW');
 
-  // T3 without enhanced goal: same 7 steps as T2
+  // T3 initWizard auto-includes 'enhanced' → 8-step wizard
   G._userTier=3;G.initWizard();
   var t3Titles=G._wizTitles();
-  check('T3 wizard (no enhanced goal) has 7 steps', t3Titles.length===7, 'got '+t3Titles.length);
+  check('T3 initWizard auto-includes enhanced goal', G._wiz.goals.includes('enhanced'));
+  check('T3 initWizard → 8 steps (Enhanced auto-on)', t3Titles.length===8, 'got '+t3Titles.length);
 
   // T3 with enhanced goal: 8-step wizard
   G._userTier=3;G.initWizard();G._wiz.goals=['enhanced'];
