@@ -249,15 +249,21 @@ G.wizNext();G.wizNext();G.wizNext();
 check('wizNext: skips step 5 when TRT disabled (4→6)', G._wiz.step===6);
 G.wizNext();
 check('wizNext: does not exceed 6',  G._wiz.step===6);
-// With TRT enabled, step 5 is NOT skipped
+// T1 (default): TRT step always skipped even when trt.enabled=true
 G.initWizard();G._wiz.trt.enabled=true;
 G.wizNext();G.wizNext();G.wizNext();G.wizNext();G.wizNext();
-check('wizNext: step=5 after 5 calls when TRT enabled', G._wiz.step===5);
+check('wizNext: T1 skips step 5 even when TRT enabled (lands on 6)', G._wiz.step===6);
 G._wiz.step=2;G.wizBack();check('wizBack: 2→1',    G._wiz.step===1);
 // wizBack from REVIEW (6) with TRT disabled jumps to CONFIGURE (4)
 G.initWizard();G._wiz.step=6;G.wizBack();check('wizBack: 6→4 when TRT disabled', G._wiz.step===4);
-// wizBack from REVIEW (6) with TRT enabled goes to TRT (5)
-G.initWizard();G._wiz.trt.enabled=true;G._wiz.step=6;G.wizBack();check('wizBack: 6→5 when TRT enabled', G._wiz.step===5);
+// T1: wizBack from REVIEW (6) with TRT enabled also jumps to CONFIGURE (4) — TRT step not accessible
+G.initWizard();G._wiz.trt.enabled=true;G._wiz.step=6;G.wizBack();check('wizBack: T1 6→4 even with TRT enabled', G._wiz.step===4);
+// T2: TRT step IS accessible when trt.enabled=true
+G._userTier=2;G.initWizard();G._wiz.trt.enabled=true;
+G.wizNext();G.wizNext();G.wizNext();G.wizNext();G.wizNext();
+check('wizNext: T2 step=5 after 5 calls when TRT enabled', G._wiz.step===5);
+G.initWizard();G._wiz.trt.enabled=true;G._wiz.step=6;G.wizBack();check('wizBack: T2 6→5 when TRT enabled', G._wiz.step===5);
+G._userTier=1; // restore
 G.wizSetStackName('My New Stack');
 check('wizSetStackName updates _wiz', G._wiz.stackName==='My New Stack');
 
@@ -1550,4 +1556,67 @@ console.log('\n── dose dedup migration ────────────�
       var hasBoxRender=html.includes('item.boxes');
       return hasBoldVials&&!hasBoxRender;
     })());
+}
+
+// ── Three-tier wizard — HGH & tier-aware steps ───────────────────────────────
+console.log('\n── Three-tier wizard — HGH & tier-aware steps ──────────────');
+{
+  // HGH must NOT appear in peptides step (it is an Enhancement compound)
+  check('HGH is in PEPTIDE_CAT with group Enhanced',
+    G.PEPTIDE_CAT&&G.PEPTIDE_CAT.some(function(p){return p.id==='hgh'&&p.group==='Enhanced';}));
+
+  // _wizTier and _wizTitles helpers
+  check('_wizTier defined', typeof G._wizTier==='function');
+  check('_wizTitles defined', typeof G._wizTitles==='function');
+  check('_wizStepToIdx defined', typeof G._wizStepToIdx==='function');
+
+  // T1: 6-step titles (no TRT step)
+  G._userTier=1;
+  var t1Titles=G._wizTitles();
+  check('T1 wizard has 6 steps', t1Titles.length===6, 'got '+t1Titles.length);
+  check('T1 wizard last step is REVIEW', t1Titles[t1Titles.length-1]==='REVIEW');
+  check('T1 wizard has no TRT step', !t1Titles.includes('TRT'));
+
+  // T2: 7-step titles (includes TRT)
+  G._userTier=2;
+  var t2Titles=G._wizTitles();
+  check('T2 wizard has 7 steps', t2Titles.length===7, 'got '+t2Titles.length);
+  check('T2 wizard includes TRT step', t2Titles.includes('TRT'));
+  check('T2 wizard last step is REVIEW', t2Titles[t2Titles.length-1]==='REVIEW');
+
+  // T3: same 7 steps as T2 (Enhanced configured separately via Cycles tab)
+  G._userTier=3;
+  var t3Titles=G._wizTitles();
+  check('T3 wizard has 7 steps', t3Titles.length===7, 'got '+t3Titles.length);
+
+  // _wizStepToIdx: T1 step 6 (REVIEW) maps to index 5
+  G._userTier=1;
+  check('T1: _wizStepToIdx(6) === 5 (REVIEW maps to last T1 slot)', G._wizStepToIdx(6)===5);
+  check('T1: _wizStepToIdx(4) === 4 (unchanged)', G._wizStepToIdx(4)===4);
+
+  // T2 step indices unchanged
+  G._userTier=2;
+  check('T2: _wizStepToIdx(6) === 6 (no shift)', G._wizStepToIdx(6)===6);
+
+  // wizStepPeptides filter: HGH (group=Enhanced) must not appear
+  G._userTier=1;
+  G._wiz={step:0,goals:[],peptides:[],trt:{enabled:false,compounds:[]},editMode:false,stackIndex:-1,stackName:'Test',cycle_length:12};
+  var pepBody={innerHTML:''};
+  var pepFoot={innerHTML:''};
+  G.wizStepPeptides(pepBody,pepFoot);
+  var pepHtml=pepBody.innerHTML;
+  // Check HGH id not in rendered content - we need to check if HGH card was rendered
+  // The rendered HTML contains data-id or onclick with 'hgh' only if HGH was included
+  check('wizStepPeptides HTML does not include HGH (id=hgh excluded by group:Enhanced filter)',
+    !pepHtml.includes("wizTogglePep('hgh')"), 'HGH card found in T1 peptides step');
+
+  // Enhanced goal set: still no HGH (group filter is unconditional)
+  G._wiz.goals=['enhanced'];
+  var pepBody2={innerHTML:''};
+  G.wizStepPeptides(pepBody2,pepFoot);
+  check('wizStepPeptides with enhanced goal still excludes HGH',
+    !pepBody2.innerHTML.includes("wizTogglePep('hgh')"), 'HGH appeared with enhanced goal');
+
+  // Restore tier
+  G._userTier=1;
 }
