@@ -2175,3 +2175,483 @@ console.log('\n── Source-code structural assertions ────────
     check('_renderTRTGuide: Nebido 8wks highlights Accelerated', match8.length===1&&match8[0].l==='Accelerated');
   })();
 }
+
+// ── DOSE_GUIDE: structural validation (all 22 peptide compounds) ──────────────
+console.log('\n── DOSE_GUIDE: structural validation ────────────────────────');
+{
+  check('DOSE_GUIDE defined', typeof G.DOSE_GUIDE==='object'&&G.DOSE_GUIDE!==null);
+  if(G.DOSE_GUIDE&&G.PEPTIDE_CAT){
+    var dgKeys=Object.keys(G.DOSE_GUIDE);
+    var catIds=G.PEPTIDE_CAT.map(function(p){return p.id;});
+    check('DOSE_GUIDE has exactly 22 entries', dgKeys.length===22, 'got '+dgKeys.length);
+    check('every PEPTIDE_CAT id has a DOSE_GUIDE entry',
+      catIds.every(function(id){return!!G.DOSE_GUIDE[id];}),
+      catIds.filter(function(id){return!G.DOSE_GUIDE[id];}).join(', '));
+    check('no orphan DOSE_GUIDE keys (every key is a PEPTIDE_CAT id)',
+      dgKeys.every(function(k){return catIds.includes(k);}),
+      dgKeys.filter(function(k){return!catIds.includes(k);}).join(', '));
+
+    var badNoTiers=dgKeys.filter(function(k){return!Array.isArray(G.DOSE_GUIDE[k])||G.DOSE_GUIDE[k].length===0;});
+    check('every DOSE_GUIDE entry is a non-empty array', badNoTiers.length===0, badNoTiers.join(', '));
+
+    var badNoLabel=dgKeys.filter(function(k){return G.DOSE_GUIDE[k].some(function(t){return!t.l;});});
+    check('every DOSE_GUIDE tier has an l (label) field', badNoLabel.length===0, badNoLabel.join(', '));
+
+    var missingB=dgKeys.filter(function(k){return!G.DOSE_GUIDE[k].some(function(t){return t.b;});});
+    check('every DOSE_GUIDE compound has exactly one b:1 (baseline) tier',
+      missingB.length===0, 'missing b:1: '+missingB.join(', '));
+
+    var multiB=dgKeys.filter(function(k){return G.DOSE_GUIDE[k].filter(function(t){return t.b;}).length>1;});
+    check('no DOSE_GUIDE compound has more than one b:1 tier', multiB.length===0, 'multiple b:1: '+multiB.join(', '));
+  }
+}
+
+// ── _renderDoseGuide: runtime HTML output for every peptide compound ──────────
+console.log('\n── _renderDoseGuide: runtime HTML for all 22 compounds ──────');
+{
+  if(typeof G._renderDoseGuide==='function'&&G.DOSE_GUIDE&&G.PEPTIDE_CAT){
+    var pepIds=G.PEPTIDE_CAT.map(function(p){return p.id;});
+    var emptyRenders=pepIds.filter(function(id){var h=G._renderDoseGuide(id);return!h||h.length===0;});
+    check('_renderDoseGuide returns non-empty HTML for every peptide compound',
+      emptyRenders.length===0, 'empty for: '+emptyRenders.join(', '));
+
+    var missingHeading=pepIds.filter(function(id){return!G._renderDoseGuide(id).includes('Recommended Doses');});
+    check('_renderDoseGuide always includes Recommended Doses heading',
+      missingHeading.length===0, 'missing heading: '+missingHeading.join(', '));
+
+    // Spot-checks: baseline tier (b:1) label appears in rendered HTML
+    var spotChecks=[
+      {id:'cjc-ipa',    label:'Optimal'},
+      {id:'retatrutide',label:'Optimal'},
+      {id:'tirzepatide',label:'Optimal'},
+      {id:'semaglutide', label:'Optimal'},
+      {id:'hgh',        label:'Recomp'},
+      {id:'tesamorelin',label:'Standard'},
+      {id:'bpc-tb',     label:'Acute'},
+      {id:'bpc157',     label:'Optimal'},
+      {id:'tb500',      label:'Loading'},
+      {id:'aod9604',    label:'Standard'},
+      {id:'hcg',        label:'Standard'},
+      {id:'nad',        label:'Optimal'},
+      {id:'motsc',      label:'Optimal'},
+      {id:'epitalon',   label:'Standard'},
+      {id:'glow',       label:'Standard'},
+      {id:'klow',       label:'Standard'},
+    ];
+    spotChecks.forEach(function(sc){
+      var h=G._renderDoseGuide(sc.id);
+      check('_renderDoseGuide('+sc.id+'): baseline tier "'+sc.label+'" present in HTML',
+        h.includes(sc.label), 'HTML: '+h.slice(0,200));
+    });
+
+    // Risk warning (r field) appears for compounds that have it
+    var retaHtml=G._renderDoseGuide('retatrutide');
+    check('_renderDoseGuide(retatrutide): risk warning rendered',
+      retaHtml.includes('⚠'), 'got: '+retaHtml.slice(0,300));
+
+    var hghHtml=G._renderDoseGuide('hgh');
+    check('_renderDoseGuide(hgh): risk warning rendered', hghHtml.includes('⚠'));
+
+    // Returns empty string for unknown compound
+    check('_renderDoseGuide unknown id returns empty string', G._renderDoseGuide('not-a-compound')==='');
+  }
+}
+
+// ── TRT_GUIDE: structural validation (all 6 TRT compounds) ───────────────────
+console.log('\n── TRT_GUIDE: structural validation ─────────────────────────');
+{
+  if(G.TRT_GUIDE&&G.TRT_CAT){
+    var trtIds=G.TRT_CAT.map(function(c){return c.id;});
+    var trtKeys=Object.keys(G.TRT_GUIDE);
+
+    check('TRT_GUIDE has exactly 6 entries', trtKeys.length===6, 'got '+trtKeys.length);
+    check('every TRT_CAT id has a TRT_GUIDE entry',
+      trtIds.every(function(id){return!!G.TRT_GUIDE[id];}),
+      trtIds.filter(function(id){return!G.TRT_GUIDE[id];}).join(', '));
+    check('no orphan TRT_GUIDE keys',
+      trtKeys.every(function(k){return trtIds.includes(k);}),
+      trtKeys.filter(function(k){return!trtIds.includes(k);}).join(', '));
+
+    trtIds.forEach(function(id){
+      var g=G.TRT_GUIDE[id];
+      check('TRT_GUIDE['+id+'] has halfLife field', typeof g.halfLife==='string'&&g.halfLife.length>0);
+      check('TRT_GUIDE['+id+'] has cadence.rec field', g.cadence&&typeof g.cadence.rec==='string');
+      check('TRT_GUIDE['+id+'] has cadence.note field', g.cadence&&typeof g.cadence.note==='string');
+      check('TRT_GUIDE['+id+'] has tiers array', Array.isArray(g.tiers)&&g.tiers.length>0);
+      check('TRT_GUIDE['+id+'] has exactly one b:1 tier',
+        g.tiers.filter(function(t){return t.b;}).length===1);
+      g.tiers.forEach(function(t,i){
+        check('TRT_GUIDE['+id+'] tier '+i+' has l label', typeof t.l==='string'&&t.l.length>0);
+        check('TRT_GUIDE['+id+'] tier '+i+' has d dose', typeof t.d==='string'&&t.d.length>0);
+        check('TRT_GUIDE['+id+'] tier '+i+' has wkMin', typeof t.wkMin==='number');
+        check('TRT_GUIDE['+id+'] tier '+i+' has wkMax', typeof t.wkMax==='number');
+        check('TRT_GUIDE['+id+'] tier '+i+' wkMin <= wkMax', t.wkMin<=t.wkMax);
+      });
+      // Ranges must be non-overlapping: each tier's wkMin > previous tier's wkMax
+      var sorted=g.tiers.slice().sort(function(a,b){return a.wkMin-b.wkMin;});
+      var overlaps=false;
+      for(var i=1;i<sorted.length;i++){if(sorted[i].wkMin<=sorted[i-1].wkMax)overlaps=true;}
+      check('TRT_GUIDE['+id+'] tier ranges are non-overlapping', !overlaps);
+    });
+  }
+}
+
+// ── _renderTRTGuide: runtime HTML for all 6 TRT compounds ────────────────────
+console.log('\n── _renderTRTGuide: runtime HTML for all 6 TRT compounds ────');
+{
+  if(typeof G._renderTRTGuide==='function'&&G.TRT_GUIDE&&G.TRT_CAT){
+    function getHighlightedTierLabel(html){
+      var marker='rgba(232,160,32,0.1)';
+      var idx=html.indexOf(marker);if(idx<0)return null;
+      var after=html.slice(idx,idx+500);
+      var labels=['Performance','High-normal','Standard TRT','Clinical','Optimised','Accelerated'];
+      for(var i=0;i<labels.length;i++){if(after.includes(labels[i]))return labels[i];}
+      return null;
+    }
+
+    // --- enanthate ---
+    check('enanthate 125mg/wk → Standard TRT',
+      getHighlightedTierLabel(G._renderTRTGuide('enanthate',125))==='Standard TRT');
+    check('enanthate 200mg/wk → High-normal',
+      getHighlightedTierLabel(G._renderTRTGuide('enanthate',200))==='High-normal');
+    check('enanthate 300mg/wk → Performance',
+      getHighlightedTierLabel(G._renderTRTGuide('enanthate',300))==='Performance');
+    check('enanthate 0mg/wk → High-normal (b:1 fallback)',
+      getHighlightedTierLabel(G._renderTRTGuide('enanthate',0))==='High-normal');
+
+    // --- cypionate ---
+    check('cypionate 100mg/wk → Standard TRT',
+      getHighlightedTierLabel(G._renderTRTGuide('cypionate',100))==='Standard TRT');
+    check('cypionate 175mg/wk → High-normal',
+      getHighlightedTierLabel(G._renderTRTGuide('cypionate',175))==='High-normal');
+    check('cypionate 300mg/wk → Performance',
+      getHighlightedTierLabel(G._renderTRTGuide('cypionate',300))==='Performance');
+    check('cypionate 0mg/wk → High-normal (b:1 fallback)',
+      getHighlightedTierLabel(G._renderTRTGuide('cypionate',0))==='High-normal');
+
+    // --- propionate ---
+    check('propionate 100mg/wk → Standard TRT',
+      getHighlightedTierLabel(G._renderTRTGuide('propionate',100))==='Standard TRT');
+    check('propionate 150mg/wk → High-normal',
+      getHighlightedTierLabel(G._renderTRTGuide('propionate',150))==='High-normal');
+    check('propionate 250mg/wk → Performance',
+      getHighlightedTierLabel(G._renderTRTGuide('propionate',250))==='Performance');
+    check('propionate 0mg/wk → High-normal (b:1 fallback)',
+      getHighlightedTierLabel(G._renderTRTGuide('propionate',0))==='High-normal');
+
+    // --- sustanon ---
+    check('sustanon 100mg/wk → Standard TRT',
+      getHighlightedTierLabel(G._renderTRTGuide('sustanon',100))==='Standard TRT');
+    check('sustanon 175mg/wk → High-normal',
+      getHighlightedTierLabel(G._renderTRTGuide('sustanon',175))==='High-normal');
+    check('sustanon 300mg/wk → Performance',
+      getHighlightedTierLabel(G._renderTRTGuide('sustanon',300))==='Performance');
+    check('sustanon 0mg/wk → High-normal (b:1 fallback)',
+      getHighlightedTierLabel(G._renderTRTGuide('sustanon',0))==='High-normal');
+
+    // --- nebido (full range) ---
+    check('nebido 70mg/wk (1000mg/10.2wks) → Clinical',
+      getHighlightedTierLabel(G._renderTRTGuide('nebido',75))==='Clinical');
+    check('nebido 100mg/wk (1000mg/7wks) → Optimised',
+      getHighlightedTierLabel(G._renderTRTGuide('nebido',100))==='Optimised');
+    check('nebido 125mg/wk (1000mg/5.6wks) → Accelerated',
+      getHighlightedTierLabel(G._renderTRTGuide('nebido',125))==='Accelerated');
+    check('nebido 0mg/wk → Clinical (b:1 fallback)',
+      getHighlightedTierLabel(G._renderTRTGuide('nebido',0))==='Clinical');
+
+    // --- HTML structure: all compounds produce non-empty, well-formed output ---
+    G.TRT_CAT.forEach(function(c){
+      var html=G._renderTRTGuide(c.id,150);
+      check('_renderTRTGuide('+c.id+'): returns non-empty HTML', typeof html==='string'&&html.length>50);
+      check('_renderTRTGuide('+c.id+'): contains TRT Guide heading', html.includes('TRT Guide'));
+      check('_renderTRTGuide('+c.id+'): contains halfLife from guide', html.includes('½-life'));
+      check('_renderTRTGuide('+c.id+'): contains cadence rec', html.includes(G.TRT_GUIDE[c.id].cadence.rec.slice(0,10)));
+    });
+
+    // --- Supraphysiological warning block (distinct from Performance tier note text) ---
+    var supraNebido=G._renderTRTGuide('nebido',300);
+    check('_renderTRTGuide: supraphysiological warning block at 300mg/wk for nebido',
+      supraNebido.includes('Supraphysiological dose'));
+    var supraTesto=G._renderTRTGuide('testoviron',300);
+    check('_renderTRTGuide: supraphysiological warning block at 300mg/wk for testoviron',
+      supraTesto.includes('Supraphysiological dose'));
+    // Warning block must NOT appear at sub-250 doses
+    var noSupra=G._renderTRTGuide('testoviron',200);
+    check('_renderTRTGuide: no supraphysiological warning block at 200mg/wk',
+      !noSupra.includes('Supraphysiological dose'));
+
+    // --- Unknown compound returns empty string ---
+    check('_renderTRTGuide unknown id returns empty string', G._renderTRTGuide('not-a-compound',100)==='');
+  }
+}
+
+// ── _renderEnhancedGuide: runtime HTML with mock compound data ────────────────
+console.log('\n── _renderEnhancedGuide: runtime HTML validation ────────────');
+{
+  if(typeof G._renderEnhancedGuide==='function'){
+    // null / undefined → empty string
+    check('_renderEnhancedGuide(null) returns empty string', G._renderEnhancedGuide(null)==='');
+    check('_renderEnhancedGuide(undefined) returns empty string', G._renderEnhancedGuide(undefined)==='');
+
+    // Mock compound with full data (cadence + doseTiers + interaction + sides)
+    var mockFull={
+      id:'test-compound',
+      cadence:{rec:'Every 3.5 days',note:'Split twice weekly for stable levels',halfLife:'4.5 days'},
+      doseTiers:[
+        {l:'Conservative',d:'200 mg/wk',n:'Intro dose',freq:'2×/wk'},
+        {l:'Optimal',d:'400 mg/wk',n:'Performance range',freq:'2×/wk',b:1},
+        {l:'High',d:'600 mg/wk',n:'Advanced',freq:'2×/wk',r:'Elevated CV risk'}
+      ],
+      interaction:'Binds AR receptors; promotes nitrogen retention.',
+      sides:'Acne, hair loss, HPTA suppression.'
+    };
+    var htmlFull=G._renderEnhancedGuide(mockFull);
+    check('_renderEnhancedGuide: returns non-empty HTML for full compound', htmlFull.length>100);
+    check('_renderEnhancedGuide: renders Injection Frequency heading', htmlFull.includes('Injection Frequency'));
+    check('_renderEnhancedGuide: renders cadence rec value', htmlFull.includes('Every 3.5 days'));
+    check('_renderEnhancedGuide: renders half-life', htmlFull.includes('4.5 days'));
+    check('_renderEnhancedGuide: renders Recommended Doses heading', htmlFull.includes('Recommended Doses'));
+    check('_renderEnhancedGuide: renders tier labels', htmlFull.includes('Conservative')&&htmlFull.includes('Optimal'));
+    check('_renderEnhancedGuide: renders risk warning ⚠', htmlFull.includes('⚠'));
+    check('_renderEnhancedGuide: renders interaction section heading', htmlFull.includes('How it works'));
+    check('_renderEnhancedGuide: renders interaction text', htmlFull.includes('Binds AR receptors'));
+    check('_renderEnhancedGuide: renders side effects heading', htmlFull.includes('Side effects'));
+    check('_renderEnhancedGuide: renders sides text', htmlFull.includes('Acne, hair loss'));
+
+    // No doseTiers but has DOSE_GUIDE entry → falls back to DOSE_GUIDE
+    var mockFallback={id:'hgh',cadence:{rec:'AM injection',note:'Fasted AM',halfLife:'~20 min'}};
+    var htmlFallback=G._renderEnhancedGuide(mockFallback);
+    check('_renderEnhancedGuide: falls back to DOSE_GUIDE[hgh] when no doseTiers',
+      htmlFallback.includes('Recommended Doses'));
+    check('_renderEnhancedGuide: DOSE_GUIDE fallback shows hgh tier label (Anti-aging)',
+      htmlFallback.includes('Anti-aging'));
+
+    // No doseTiers and no DOSE_GUIDE entry → no Recommended Doses section
+    var mockNoDose={id:'unknown-compound',cadence:{rec:'Weekly',note:'Once weekly',halfLife:'7 days'}};
+    var htmlNoDose=G._renderEnhancedGuide(mockNoDose);
+    check('_renderEnhancedGuide: renders cadence even without dose tiers',
+      htmlNoDose.includes('Injection Frequency'));
+    check('_renderEnhancedGuide: no Recommended Doses section when no tiers exist',
+      !htmlNoDose.includes('Recommended Doses'));
+
+    // Empty doseTiers array → falls back to DOSE_GUIDE
+    var mockEmptyTiers={id:'bpc157',doseTiers:[],cadence:{rec:'Daily',note:'SC injection',halfLife:'~4 hrs'}};
+    var htmlEmpty=G._renderEnhancedGuide(mockEmptyTiers);
+    check('_renderEnhancedGuide: empty doseTiers falls back to DOSE_GUIDE[bpc157]',
+      htmlEmpty.includes('Optimal'));
+
+    // No cadence field → renders dose tiers but no Injection Frequency block
+    var mockNoCadence={id:'nad',doseTiers:[{l:'Maintenance',d:'100 mg/wk',n:'NAD+ support',b:1}]};
+    var htmlNoCad=G._renderEnhancedGuide(mockNoCadence);
+    check('_renderEnhancedGuide: no cadence → no Injection Frequency block',
+      !htmlNoCad.includes('Injection Frequency'));
+    check('_renderEnhancedGuide: no cadence → still renders dose tiers',
+      htmlNoCad.includes('Recommended Doses'));
+  }
+}
+
+// ── _dosePersonalization: sex, age, weight modifiers for peptides ─────────────
+console.log('\n── _dosePersonalization: sex / age / weight modifiers ───────');
+{
+  if(typeof G._dosePersonalization==='function'&&typeof G._userProfile==='function'){
+    function setProfile(sex,age,weightKg){
+      G.localStorage.setItem('user_sex',sex||'male');
+      G.localStorage.setItem('user_age',String(age||0));
+      G.localStorage.setItem('user_weight',String(weightKg||0));
+    }
+    function clearProfile(){
+      G.localStorage.removeItem('user_sex');
+      G.localStorage.removeItem('user_age');
+      G.localStorage.removeItem('user_weight');
+    }
+
+    // --- GH axis: female ---
+    setProfile('female',35,65);
+    var ghIds=['cjc-ipa','cjc-nodac','ipamorelin','sermorelin','tesamorelin','hgh'];
+    ghIds.forEach(function(id){
+      var mods=G._dosePersonalization(id,G._userProfile());
+      check('_dosePersonalization('+id+', female): lower-end adj present',
+        mods.some(function(m){return m.type==='adj'&&m.text.includes('50% more sensitive');}));
+    });
+
+    // --- GH axis: age 50+ ---
+    setProfile('male',55,80);
+    ghIds.forEach(function(id){
+      var mods=G._dosePersonalization(id,G._userProfile());
+      check('_dosePersonalization('+id+', age55): age adj present',
+        mods.some(function(m){return m.type==='adj'&&m.text.includes('Age 55');}));
+    });
+
+    // --- GH axis: age <30 ---
+    setProfile('male',22,75);
+    var modsYoung=G._dosePersonalization('cjc-ipa',G._userProfile());
+    check('_dosePersonalization(cjc-ipa, age22): standard tolerance note present',
+      modsYoung.some(function(m){return m.type==='ok'&&m.text.includes('standard doses well tolerated');}));
+
+    // --- GH axis: no mods for non-GH peptide ---
+    setProfile('female',55,65);
+    var modsNonGH=G._dosePersonalization('retatrutide',G._userProfile());
+    var hasGhMod=modsNonGH.some(function(m){return m.text&&m.text.includes('GH peptides');});
+    check('_dosePersonalization(retatrutide): no GH-axis mod (not a GH peptide)',!hasGhMod);
+
+    // --- GLP-1: heavy (>100kg) ---
+    setProfile('male',35,110);
+    var glp1Ids=['retatrutide','tirzepatide','semaglutide'];
+    glp1Ids.forEach(function(id){
+      var mods=G._dosePersonalization(id,G._userProfile());
+      check('_dosePersonalization('+id+', 110kg): higher dose / protein adj present',
+        mods.some(function(m){return m.type==='adj'&&m.text.includes('110kg')&&m.text.includes('protein');}));
+    });
+
+    // --- GLP-1: light (<65kg) ---
+    setProfile('male',35,58);
+    glp1Ids.forEach(function(id){
+      var mods=G._dosePersonalization(id,G._userProfile());
+      check('_dosePersonalization('+id+', 58kg): lighter frame ok note present',
+        mods.some(function(m){return m.type==='ok'&&m.text.includes('58kg')&&m.text.includes('lighter frame');}));
+    });
+
+    // --- GLP-1: mid-weight (65–100kg) → no weight mod ---
+    setProfile('male',35,80);
+    var modsMid=G._dosePersonalization('retatrutide',G._userProfile());
+    var hasWeightMod=modsMid.some(function(m){return m.text&&m.text.includes('kg');});
+    check('_dosePersonalization(retatrutide, 80kg): no weight-specific mod',!hasWeightMod);
+
+    // --- HCG: female warning ---
+    setProfile('female',35,65);
+    var modsHcgF=G._dosePersonalization('hcg',G._userProfile());
+    check('_dosePersonalization(hcg, female): contraindication warning present',
+      modsHcgF.some(function(m){return m.type==='warn'&&m.text.includes('not typically indicated for women');}));
+
+    // --- HCG: male → no female warning ---
+    setProfile('male',35,80);
+    var modsHcgM=G._dosePersonalization('hcg',G._userProfile());
+    var hcgFemaleWarn=modsHcgM.some(function(m){return m.text&&m.text.includes('not typically indicated');});
+    check('_dosePersonalization(hcg, male): no female warning',!hcgFemaleWarn);
+
+    // --- NAD: weight-based dose calculation ---
+    setProfile('male',35,90);
+    var modsNad=G._dosePersonalization('nad',G._userProfile());
+    check('_dosePersonalization(nad, 90kg): weight-based target includes 135mg (90*1.5)',
+      modsNad.some(function(m){return m.type==='info'&&m.text.includes('135mg');}));
+
+    // --- NAD: no weight set → no weight mod ---
+    clearProfile();
+    var modsNadNoW=G._dosePersonalization('nad',G._userProfile());
+    var hasNadWeightMod=modsNadNoW.some(function(m){return m.type==='info'&&m.text&&m.text.includes('mg SC');});
+    check('_dosePersonalization(nad, no weight): no weight-based mod',!hasNadWeightMod);
+
+    // --- Non-personalised compound: no mods ---
+    setProfile('female',55,110);
+    var modsEpitalon=G._dosePersonalization('epitalon',G._userProfile());
+    check('_dosePersonalization(epitalon): no personalization mods (epitalon has none)',
+      modsEpitalon.length===0);
+
+    clearProfile();
+  }
+}
+
+// ── _renderDoseGuide: sex/age/weight modifiers appear in HTML output ──────────
+console.log('\n── _renderDoseGuide: personalization text in HTML output ────');
+{
+  if(typeof G._renderDoseGuide==='function'&&typeof G._dosePersonalization==='function'){
+    function setProfile(sex,age,weightKg){
+      G.localStorage.setItem('user_sex',sex||'male');
+      G.localStorage.setItem('user_age',String(age||0));
+      G.localStorage.setItem('user_weight',String(weightKg||0));
+    }
+    function clearProfile(){
+      G.localStorage.removeItem('user_sex');
+      G.localStorage.removeItem('user_age');
+      G.localStorage.removeItem('user_weight');
+    }
+
+    // Female GH axis → lower-end note in rendered HTML
+    setProfile('female',35,65);
+    var htmlGhF=G._renderDoseGuide('cjc-ipa');
+    check('_renderDoseGuide(cjc-ipa, female): female GH adj text in HTML',
+      htmlGhF.includes('50% more sensitive'));
+
+    // Heavy GLP-1 → protein note in rendered HTML
+    setProfile('male',35,110);
+    var htmlGlp1Heavy=G._renderDoseGuide('retatrutide');
+    check('_renderDoseGuide(retatrutide, 110kg): heavy weight adj in HTML',
+      htmlGlp1Heavy.includes('110kg'));
+
+    // Female HCG → warning in rendered HTML
+    setProfile('female',35,65);
+    var htmlHcgF=G._renderDoseGuide('hcg');
+    check('_renderDoseGuide(hcg, female): female warning in HTML',
+      htmlHcgF.includes('not typically indicated'));
+
+    // No profile → "Add age & weight" nudge appears
+    clearProfile();
+    var htmlNoProfile=G._renderDoseGuide('cjc-ipa');
+    check('_renderDoseGuide(cjc-ipa, no profile): profile nudge shown',
+      htmlNoProfile.includes('Add age & weight'));
+
+    clearProfile();
+  }
+}
+
+// ── _renderTRTGuide: sex, age personalization modifiers ───────────────────────
+console.log('\n── _renderTRTGuide: sex / age personalization modifiers ─────');
+{
+  if(typeof G._renderTRTGuide==='function'){
+    function setProfile(sex,age,weightKg){
+      G.localStorage.setItem('user_sex',sex||'male');
+      G.localStorage.setItem('user_age',String(age||0));
+      G.localStorage.setItem('user_weight',String(weightKg||0));
+    }
+    function clearProfile(){
+      G.localStorage.removeItem('user_sex');
+      G.localStorage.removeItem('user_age');
+      G.localStorage.removeItem('user_weight');
+    }
+
+    // Female → female TRT warning in rendered HTML
+    setProfile('female',35,65);
+    var htmlTrtF=G._renderTRTGuide('testoviron',125);
+    check('_renderTRTGuide(testoviron, female): female TRT dose warning present',
+      htmlTrtF.includes('5–10 mg/week SC'));
+
+    // Age <25 → HPTA suppression personalization warning (distinct from tier risk text "HPTA shutdown")
+    setProfile('male',22,75);
+    var htmlYoung=G._renderTRTGuide('testoviron',125);
+    check('_renderTRTGuide(testoviron, age22): HPTA suppression personalization warning',
+      htmlYoung.includes('exogenous testosterone suppresses'));
+    check('_renderTRTGuide(testoviron, age22): age shown in warning text',
+      htmlYoung.includes('Age 22'));
+
+    // Age exactly 25 → no young-age personalization warning
+    setProfile('male',25,80);
+    var html25=G._renderTRTGuide('testoviron',125);
+    check('_renderTRTGuide(testoviron, age25): no young-age personalization (boundary: <25)',
+      !html25.includes('Age 25:'));
+
+    // Age >=50 → natural T decline note
+    setProfile('male',55,80);
+    var htmlOlder=G._renderTRTGuide('testoviron',125);
+    check('_renderTRTGuide(testoviron, age55): age 50+ natural T decline note',
+      htmlOlder.includes('natural T decline'));
+    check('_renderTRTGuide(testoviron, age55): age shown in note',
+      htmlOlder.includes('Age 55'));
+
+    // Male, age 35, normal profile → no personalization mods
+    setProfile('male',35,80);
+    var htmlNorm=G._renderTRTGuide('testoviron',125);
+    check('_renderTRTGuide(testoviron, male35): no HPTA suppression personalization', !htmlNorm.includes('exogenous testosterone suppresses'));
+    check('_renderTRTGuide(testoviron, male35): no female warning', !htmlNorm.includes('5–10 mg/week'));
+    check('_renderTRTGuide(testoviron, male35): no age 50+ note', !htmlNorm.includes('natural T decline'));
+
+    // Personalization works across different TRT compounds
+    setProfile('female',22,55);
+    ['nebido','enanthate','cypionate','propionate','sustanon'].forEach(function(id){
+      var h=G._renderTRTGuide(id,100);
+      check('_renderTRTGuide('+id+', female+22yo): female warning and HPTA suppression personalization',
+        h.includes('5–10 mg/week SC')&&h.includes('exogenous testosterone suppresses'));
+    });
+
+    clearProfile();
+  }
+}
