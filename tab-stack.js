@@ -926,7 +926,7 @@ function _buildEnhancementCycleSection(){
 async function stackSetCyclePhase(phase){
   var c=_cycle;if(!c||!c.id)return;
   c.phase=phase;cycleCacheSave(c);renderStackEditor();
-  try{await fetch(AGENT_URL+'/cycles/'+c.id,{method:'PATCH',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({phase:phase})});}catch(e){}
+  try{var _rph=await fetch(AGENT_URL+'/cycles/'+c.id,{method:'PATCH',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({phase:phase})});if(!_rph.ok)_logHttp('cyclePatchPhase',_rph.status,'/cycles/'+c.id);}catch(e){_logErr('cyclePatchPhase',e);}
 }
 function stackAddAASCompound(){
   var c=_cycle;if(!c||!c.id){alert('No active enhancement cycle');return;}
@@ -986,7 +986,7 @@ async function stackConfirmAddAAS(){
   var overlay=document.getElementById('aas-add-overlay');if(overlay)overlay.remove();
   c.compounds=(c.compounds||[]).concat([{name:name,dose:dose,unit:unit,active:true,startWeek:0}]);
   cycleCacheSave(c);renderStackEditor();
-  try{await fetch(AGENT_URL+'/cycles/'+c.id,{method:'PATCH',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({compounds:c.compounds})});}catch(e){}
+  try{var _rca=await fetch(AGENT_URL+'/cycles/'+c.id,{method:'PATCH',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({compounds:c.compounds})});if(!_rca.ok)_logHttp('cyclePatchCompounds',_rca.status,'/cycles/'+c.id);}catch(e){_logErr('cyclePatchCompounds',e);}
 }
 async function stackRemoveAASCompound(idx){
   var c=_cycle;if(!c||!c.id)return;
@@ -994,7 +994,7 @@ async function stackRemoveAASCompound(idx){
   if(!confirm('Remove '+name+'?'))return;
   c.compounds=(c.compounds||[]).filter(function(_,i){return i!==idx;});
   cycleCacheSave(c);renderStackEditor();
-  try{await fetch(AGENT_URL+'/cycles/'+c.id,{method:'PATCH',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({compounds:c.compounds})});}catch(e){}
+  try{var _rcr=await fetch(AGENT_URL+'/cycles/'+c.id,{method:'PATCH',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({compounds:c.compounds})});if(!_rcr.ok)_logHttp('cyclePatchCompounds',_rcr.status,'/cycles/'+c.id);}catch(e){_logErr('cyclePatchCompounds',e);}
 }
 // Generate TRT dose items for a given date from the active stack's TRT config
 function _getDynamicTRTDoses(d,withIds){
@@ -1176,13 +1176,14 @@ function wizStepEnhanced(body,footer){
   if(!ENHANCEMENT_COMPOUNDS||!ENHANCEMENT_COMPOUNDS.length){
     body.innerHTML='<div style="padding:40px 0;text-align:center;"><div style="font-size:14px;color:var(--text);font-weight:600;margin-bottom:6px;">Loading compounds…</div><div style="font-size:12px;color:var(--muted2);">Connecting to backend…</div></div>';
     footer.innerHTML='<button class="btn btn-primary" style="flex:1;opacity:0.5" disabled>Next →</button>';
-    syncEnhancedCompoundsFromAgent().then(function(){
+    syncEnhancedCompoundsFromAgent().then(function(result){
       if(_wizFlow()[_wiz.step]!=='enhanced')return;
       var b=document.getElementById('wiz-body'),f=document.getElementById('wiz-footer');
       if(!b||!f)return;
       if(ENHANCEMENT_COMPOUNDS&&ENHANCEMENT_COMPOUNDS.length){wizStepEnhanced(b,f);}
       else{
-        b.innerHTML='<div style="padding:32px 0;text-align:center;"><div style="font-size:14px;color:var(--text);font-weight:600;margin-bottom:8px;">Catalogue unavailable</div><div style="font-size:13px;color:var(--muted2);margin-bottom:20px;">Check your connection and try again.</div><button class="btn btn-primary" onclick="wizStepEnhanced(document.getElementById(\'wiz-body\'),document.getElementById(\'wiz-footer\'))">Try again</button></div>';
+        var _errDetail=result&&result.status?(' (HTTP '+result.status+')'):(result&&result.msg?' ('+result.msg+')':'');
+        b.innerHTML='<div style="padding:32px 0;text-align:center;"><div style="font-size:14px;color:var(--text);font-weight:600;margin-bottom:8px;">Catalogue unavailable</div><div style="font-size:13px;color:var(--muted2);margin-bottom:20px;">Check your connection and try again.'+_errDetail+'</div><button class="btn btn-primary" onclick="wizStepEnhanced(document.getElementById(\'wiz-body\'),document.getElementById(\'wiz-footer\'))">Try again</button></div>';
         f.innerHTML='<button class="btn btn-primary" style="flex:1;opacity:0.5" disabled>Next →</button>';
       }
     });
