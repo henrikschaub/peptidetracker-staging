@@ -1524,6 +1524,16 @@ console.log('\n── dose dedup migration ────────────�
     tabStackJs.includes('<option>IU/day</option>'));
   check('stackAddAASCompound unit select includes IU/week option',
     tabStackJs.includes('<option>IU/week</option>'));
+  // Regression: Enhanced wizard and edit dropdowns must include IU/day and IU/week
+  // so GH Axis compounds (HGH unit="IU/day") don't silently show as "mg"
+  check('Enhanced wizard unit dropdown includes IU/day (wizSetEnhUnit context)',
+    tabStackJs.split('wizSetEnhUnit').some(function(s){return s.slice(0,500).includes('IU/day');}));
+  check('Enhanced wizard unit dropdown includes IU/week (wizSetEnhUnit context)',
+    tabStackJs.split('wizSetEnhUnit').some(function(s){return s.slice(0,500).includes('IU/week');}));
+  check('Enhanced edit unit dropdown includes IU/day (editSetEnhUnit context)',
+    tabStackJs.split('editSetEnhUnit').some(function(s){return s.slice(0,500).includes('IU/day');}));
+  check('Enhanced edit unit dropdown includes IU/week (editSetEnhUnit context)',
+    tabStackJs.split('editSetEnhUnit').some(function(s){return s.slice(0,500).includes('IU/week');}));
   check('stackAddAASCompound modal has aas-info-block div for dose guidance',
     tabStackJs.includes('id="aas-info-block"'));
   check('_renderEnhancedGuide function defined in tab-stack.js',
