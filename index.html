@@ -509,13 +509,12 @@ function _findWeeklyItemInfo(baseId){
 function getDosesForDate(d){
   var dow=d.getDay();var dk=dateKey(d);var seen={};var result=[];
   _userStacks.forEach(function(st,si){
+    if(!_isActiveStack(si))return;
     if(st.cycle_start){
       var sStart=parseLocalDate(st.cycle_start);
       if(d<sStart)return;
       var sEnd=st.end_date?parseLocalDate(st.end_date):(st.cycle_length?new Date(sStart.getTime()+st.cycle_length*7*86400000):null);
       if(sEnd&&d>sEnd)return;
-    }else{
-      if(!_isActiveStack(si))return;
     }
     buildWeeklyFromProtocol(st).forEach(function(item){
       if(!item.dow.includes(dow))return;

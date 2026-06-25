@@ -1057,14 +1057,13 @@ function _getDynamicEnhancedDoses(d,withIds){
   var result=[];
   var seenIds={};
   _userStacks.forEach(function(st,si){
+    if(!_isActiveStack(si))return;
     if(!st||!st.enhanced||!st.enhanced.enabled||!st.enhanced.compounds||!st.enhanced.compounds.length)return;
     if(st.cycle_start){
       var start=parseLocalDate(st.cycle_start);
       var daysDiff=Math.floor((d-start)/86400000);
       if(daysDiff<0)return;
       if(st.cycle_length&&daysDiff>=st.cycle_length*7)return;
-    }else{
-      if(!_isActiveStack(si))return;
     }
     (st.enhanced.compounds||[]).forEach(function(c){
       if(c.days&&c.days.length&&!c.days.includes(d.getDay()))return;
