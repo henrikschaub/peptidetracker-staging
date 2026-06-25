@@ -9,7 +9,7 @@ function editStackWithCycle(idx){
   var st=_userStacks[idx];
   _wiz={
     step:0,
-    goals:(function(){var g=st.peptides?st.peptides.map(function(p){var cat=PEPTIDE_CAT.find(function(c){return c.id===p.id;});return cat?cat.goals:[]}).flat().filter(function(v,i,a){return a.indexOf(v)===i;}):[];return g;})(),
+    goals:(function(){var g=st.peptides?st.peptides.map(function(p){var cat=PEPTIDE_CAT.find(function(c){return c.id===p.id;});return cat?cat.goals:[]}).flat().filter(function(v,i,a){return a.indexOf(v)===i;}):[];if(_wizTier()>=3&&st.enhanced&&st.enhanced.compounds&&st.enhanced.compounds.length&&g.indexOf('enhanced')===-1)g.push('enhanced');return g;})(),
     peptides:st.peptides?st.peptides.map(function(p){return JSON.parse(JSON.stringify(p))}):[],
     trt:(_wizTier()>=2&&st.trt)?JSON.parse(JSON.stringify(st.trt)):{enabled:false,compounds:[]},
     enhanced:(_wizTier()>=3&&st.enhanced)?JSON.parse(JSON.stringify(st.enhanced)):{enabled:false,compounds:[]},
@@ -33,55 +33,52 @@ function wizStep1(body,footer){
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
 }
-// ── Updated wizard flow (insert cycle after goals removed) ──────────────────
-// Three separate wizard flows — one per tier
-// T1: Peptides only (6 steps, no TRT)
-// T2: Peptides + TRT (7 steps)
-// T3: Peptides + TRT + Enhanced Compounds (7 steps, Enhanced toggle in Goals)
-var WIZ_TITLES_T1=['CYCLE','GOALS','PEPTIDES','CHECK','CONFIGURE','REVIEW'];
-var WIZ_TITLES_T2=['CYCLE','GOALS','PEPTIDES','CHECK','CONFIGURE','TRT','REVIEW'];
-var WIZ_TITLES_T3=['CYCLE','GOALS','PEPTIDES','CHECK','CONFIGURE','TRT','ENHANCED','REVIEW'];
+// ── Five independent wizard flows ─────────────────────────────────────────────
+// 1. Peps only:          CYCLE GOALS PEPTIDES CHECK CONFIGURE REVIEW
+// 2. Peps + TRT:         CYCLE GOALS PEPTIDES CHECK CONFIGURE TRT VALIDATE REVIEW
+// 3. TRT only:           CYCLE GOALS TRT REVIEW
+// 4. TRT + Enhanced:     CYCLE GOALS TRT ENHANCED VALIDATE REVIEW
+// 5. Peps + TRT + Enh:   CYCLE GOALS PEPTIDES CHECK CONFIGURE TRT ENHANCED VALIDATE REVIEW
 function _wizTier(){return Math.min(3,Math.max(1,(_userTier||1)));}
-function _wizTitles(){
-  var t=_wizTier();
-  if(t>=3&&_wiz&&_wiz.goals&&_wiz.goals.includes('enhanced'))return WIZ_TITLES_T3;
-  if(t>=2)return WIZ_TITLES_T2;
-  return WIZ_TITLES_T1;
+function _wizFlow(){
+  var g=(_wiz&&_wiz.goals)||[];
+  var hasTRT=!!(_wiz&&_wiz.trt&&_wiz.trt.enabled);
+  var hasEnhanced=g.includes('enhanced');
+  var pepGoals=g.filter(function(x){return x!=='trt'&&x!=='enhanced';});
+  // hasPeps: any peptide-goal chip selected, OR nothing at all selected (show-all default)
+  var hasPeps=pepGoals.length>0||(!hasTRT&&!hasEnhanced);
+  var steps=['cycle','goals'];
+  if(hasPeps){steps.push('peptides');steps.push('check');steps.push('configure');}
+  if(hasTRT)steps.push('trt');
+  if(hasEnhanced)steps.push('enhanced');
+  // VALIDATE when combining 2+ tiers so cross-tier conflicts are caught
+  var tierCount=[hasPeps,hasTRT,hasEnhanced].filter(Boolean).length;
+  if(tierCount>=2)steps.push('validate');
+  steps.push('review');
+  return steps;
 }
-// T1 skips step 5 (TRT), so step 6 (REVIEW) maps to title index 5
-// T3+enhanced: steps 0-7 map 1:1
-function _wizStepToIdx(step){
-  if(_wizTier()>=3&&_wiz&&_wiz.goals&&_wiz.goals.includes('enhanced'))return step;
-  if(_wizTier()<2&&step>=6)return step-1;
-  return step;
-}
+var _WIZ_RENDERERS={cycle:function(b,f){wizStep1(b,f);},goals:wizStepGoals,peptides:wizStepPeptides,check:wizStepCheck,configure:wizStepConfig,trt:wizStepTRT,enhanced:wizStepEnhanced,validate:wizStepValidate,review:wizStepReview};
 function wizRender(){
-  var titles=_wizTitles();
-  var idx=_wizStepToIdx(_wiz.step);
+  var flow=_wizFlow();
+  var idx=Math.min(_wiz.step,flow.length-1);
+  _wiz.step=idx;
   var prog='';
-  for(var i=0;i<titles.length;i++){
+  for(var i=0;i<flow.length;i++){
     var cls=i<idx?'done':i===idx?'active':'';
     prog+='<div class="wiz-dot '+cls+'"></div>';
   }
   document.getElementById('wiz-progress').innerHTML=prog;
-  document.getElementById('wiz-title').textContent=(_wiz.editMode?'EDIT ':'BUILD ')+titles[idx];
+  document.getElementById('wiz-title').textContent=(_wiz.editMode?'EDIT ':'BUILD ')+flow[idx].toUpperCase();
   var body=document.getElementById('wiz-body');
   var footer=document.getElementById('wiz-footer');
   body.scrollTop=0;
-  if(_wiz.step===0)wizStep1(body,footer);
-  else if(_wiz.step===1)wizStepGoals(body,footer);
-  else if(_wiz.step===2)wizStepPeptides(body,footer);
-  else if(_wiz.step===3)wizStepCheck(body,footer);
-  else if(_wiz.step===4)wizStepConfig(body,footer);
-  else if(_wiz.step===5)wizStepTRT(body,footer);
-  else if(_wiz.step===6&&_wizTier()>=3&&_wiz.goals.includes('enhanced'))wizStepEnhanced(body,footer);
-  else wizStepReview(body,footer);
+  (_WIZ_RENDERERS[flow[idx]]||wizStepReview)(body,footer);
 }
 // ── Updated save to include cycle_length ────────────────────────────────────
 async function wizSave(){
   var btn=document.querySelector('.wiz-footer .btn.btn-primary');
   if(btn){btn.disabled=true;btn.textContent='Saving...';}
-  var proto={name:_wiz.stackName,cycle_length:_wiz.cycle_length,peptides:_wiz.peptides,trt:(_wizTier()>=2&&_wiz.trt.enabled)?_wiz.trt:{},enhanced:(_wizTier()>=3&&_wiz.goals.includes('enhanced')&&_wiz.enhanced&&_wiz.enhanced.compounds&&_wiz.enhanced.compounds.length)?_wiz.enhanced:{}};
+  var proto={name:_wiz.stackName,cycle_length:_wiz.cycle_length,peptides:_wiz.peptides,trt:(_wiz.trt&&_wiz.trt.enabled)?_wiz.trt:{},enhanced:((_wiz.goals||[]).includes('enhanced')&&_wiz.enhanced&&_wiz.enhanced.compounds&&_wiz.enhanced.compounds.length)?_wiz.enhanced:{}};
   if(_wiz.stackIndex>=0&&_wiz.stackIndex<_userStacks.length){
     _userStacks[_wiz.stackIndex]=proto;
   } else {
@@ -1226,6 +1223,31 @@ function wizToggleEnhancedCompound(id){
 function wizSetEnhDose(id,v){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(c)c.dose=v;}
 function wizSetEnhUnit(id,v){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(c)c.unit=v;}
 function wizSetEnhDays(id,di){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(!c)return;if(!c.days)c.days=[];var idx=c.days.indexOf(di);if(idx!==-1){if(c.days.length>1)c.days.splice(idx,1);}else{c.days.push(di);}c.days.sort(function(a,b){return a-b;});wizStepEnhanced(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));}
+function wizStepValidate(body,footer){
+  var g=(_wiz&&_wiz.goals)||[];
+  var pepGoals=g.filter(function(x){return x!=='trt'&&x!=='enhanced';});
+  var hasPeps=pepGoals.length>0||(!_wiz.trt.enabled&&!g.includes('enhanced'));
+  var hasTRT=!!(_wiz.trt&&_wiz.trt.enabled);
+  var hasEnhanced=g.includes('enhanced');
+  var html='<div class="wiz-section" style="margin-bottom:8px">All Compounds</div>';
+  if(hasPeps&&_wiz.peptides.length){
+    html+='<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px">Peptides</div>';
+    _wiz.peptides.forEach(function(p){html+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><div style="width:7px;height:7px;border-radius:50%;background:'+(p.dot||'#888')+';flex-shrink:0"></div><span style="font-size:13px;color:var(--text)">'+p.name+'</span></div>';});
+  }
+  if(hasTRT&&_wiz.trt.compound){
+    html+='<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin:10px 0 6px">TRT</div>';
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><div style="width:7px;height:7px;border-radius:50%;background:var(--accent4);flex-shrink:0"></div><span style="font-size:13px;color:var(--text)">'+_esc(_wiz.trt.compound)+'</span></div>';
+  }
+  if(hasEnhanced&&_wiz.enhanced&&_wiz.enhanced.compounds&&_wiz.enhanced.compounds.length){
+    html+='<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin:10px 0 6px">Enhanced</div>';
+    _wiz.enhanced.compounds.forEach(function(c){html+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><div style="width:7px;height:7px;border-radius:50%;background:'+(c.dot||'var(--accent2)')+';flex-shrink:0"></div><span style="font-size:13px;color:var(--text)">'+_esc(c.name||c.id)+'</span></div>';});
+  }
+  var pepObjs=_wiz.peptides.map(function(p){return PEPTIDE_CAT.find(function(c){return c.id===p.id;})||{id:p.id,cg:[]};});
+  html+='<div class="wiz-section" style="margin-top:16px;margin-bottom:8px">Cross-Compound Check</div>';
+  html+=renderCheckResults(pepObjs,'wizinline');
+  body.innerHTML=html;
+  footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
+}
 function wizStepReview(body,footer){
   var pepObjs=_wiz.peptides.map(function(p){return PEPTIDE_CAT.find(function(c){return c.id===p.id;})||{id:p.id,cg:[]};});
   var hasErrors=checkStack(pepObjs).some(function(i){return i.level==='err';});
@@ -1234,7 +1256,7 @@ function wizStepReview(body,footer){
   if(_wiz.peptides.length){_wiz.peptides.forEach(function(p){var dose=p.times&&p.times.includes('AM')&&p.times.includes('PM')?(p.dose_am||'?')+(p.unit_am||'')+'/'+(p.dose_pm||'?')+(p.unit_pm||''):(p.times&&p.times.includes('AM')?(p.dose_am||'?')+(p.unit_am||''):(p.dose_pm||'?')+(p.unit_pm||''));var days=p.days&&p.days.length===7?'Every day':p.days&&p.days.length?p.days.length+'x/week':'?';html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)"><div style="width:8px;height:8px;border-radius:50%;background:'+(p.dot||'#888')+';flex-shrink:0"></div><div style="flex:1;font-size:13px;color:var(--text)">'+p.name+'</div><div style="font-size:12px;color:var(--muted2)">'+dose+' · '+days+'</div></div>';});}
   else{html+='<div style="color:var(--muted2);font-size:13px;">No peptides selected.</div>';}
   _trtCompounds(_wiz.trt).forEach(function(c){var days=c.days&&c.days.length===7?'Every day':c.days&&c.days.length?c.days.length+'x/week':(c.freqVal?'every '+c.freqVal+' '+c.freqUnit:'TRT');html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)"><div style="width:8px;height:8px;border-radius:50%;background:'+(c.dot||'var(--accent4)')+';flex-shrink:0"></div><div style="flex:1;font-size:13px;color:var(--text)">'+c.name+'</div><div style="font-size:12px;color:var(--muted2)">'+(c.dose?c.dose+(c.unit||'mg')+' · ':'')+days+'</div></div>';});
-  if(_wizTier()>=3&&_wiz.goals.includes('enhanced')&&_wiz.enhanced&&_wiz.enhanced.compounds&&_wiz.enhanced.compounds.length){
+  if((_wiz.goals||[]).includes('enhanced')&&_wiz.enhanced&&_wiz.enhanced.compounds&&_wiz.enhanced.compounds.length){
     html+='<div class="wiz-section" style="margin-top:16px">Enhancement Compounds</div>';
     _wiz.enhanced.compounds.forEach(function(c){
       var days=c.days&&c.days.length===7?'Every day':c.days&&c.days.length?c.days.length+'x/week':'';
@@ -1249,17 +1271,13 @@ function wizStepReview(body,footer){
 
 function closeWizard(){if(_wizOverlay){_wizOverlay.classList.remove('open');}}
 function wizBack(){
-  if(_wiz.step===0){closeWizard();}
-  else if(_wiz.step===7){_wiz.step=6;wizRender();}
-  else if(_wiz.step===6&&(_wizTier()<2||!_wiz.trt.enabled)){_wiz.step=4;wizRender();}
-  else{_wiz.step--;wizRender();}
+  if(_wiz.step===0){closeWizard();return;}
+  _wiz.step--;
+  wizRender();
 }
 function wizNext(){
-  var next=_wiz.step+1;
-  if(next===5&&(_wizTier()<2||!_wiz.trt.enabled))next=6;
-  if(next===6&&!(_wizTier()>=3&&_wiz.goals.includes('enhanced')))next=7;
-  var maxStep=(_wizTier()>=3&&_wiz.goals.includes('enhanced'))?7:6;
-  _wiz.step=Math.min(maxStep,next);
+  var flow=_wizFlow();
+  _wiz.step=Math.min(flow.length-1,_wiz.step+1);
   wizRender();
 }
 function showWizard(editModeUnused){
