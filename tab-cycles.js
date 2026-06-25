@@ -18,7 +18,7 @@ function _cycEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/<
 function cycleCacheLoad(){return getData('pep-cycle',null);}
 function cycleCacheSave(c){_cycle=c;setData('pep-cycle',c);}
 function openCyclesTab(){_cycle=cycleCacheLoad();renderCyclesTab();syncCyclesFromAgent();}
-async function syncCyclesFromAgent(){try{var r=await fetch(AGENT_URL+'/cycles',{headers:authHeaders()});if(!r.ok)return;var list=await r.json();if(!Array.isArray(list)||!list.length)return;list.sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));});cycleCacheSave(list[0]);renderCyclesTab();}catch(e){}}
+async function syncCyclesFromAgent(){try{var r=await fetch(AGENT_URL+'/cycles',{headers:authHeaders()});if(!r.ok){_logHttp('syncCycles',r.status,'/cycles');return;}var list=await r.json();if(!Array.isArray(list)||!list.length)return;list.sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));});cycleCacheSave(list[0]);renderCyclesTab();}catch(e){_logErr('syncCycles',e);}}
 function cycleWeeks(c){if(!c||!c.startDate)return 0;return Math.max(0,Math.floor((NOW-parseLocalDate(c.startDate))/604800000));}
 function renderCyclesTab(){var c=_cycle;cycleRenderStatus(c);cycleRenderBloodwork(c);cycleRenderCompounds(c);cycleRenderE2(c);cycleRenderHgh(c);cycleUpdateBFBadge();}
 function cycleRenderStatus(c){
@@ -80,7 +80,7 @@ var CYCLE_TEMPLATES=[
 ];
 var ENHANCEMENT_COMPOUNDS=[];
 async function syncEnhancedCompoundsFromAgent(){
-  try{var r=await fetch(AGENT_URL+'/compounds/enhanced',{headers:authHeaders()});if(!r.ok)return;var d=await r.json();ENHANCEMENT_COMPOUNDS=Array.isArray(d)?d:(d.compounds||[]);}catch(e){}
+  try{var r=await fetch(AGENT_URL+'/compounds/enhanced',{headers:authHeaders()});if(!r.ok){_logHttp('syncEnhanced',r.status,'/compounds/enhanced');return{ok:false,status:r.status};}var d=await r.json();ENHANCEMENT_COMPOUNDS=Array.isArray(d)?d:(d.compounds||[]);return{ok:true};}catch(e){_logErr('syncEnhanced',e);return{ok:false,status:null,msg:String(e&&e.message||e)};}
 }
 var _cwiz={step:1,tpl:null,phase:'foundational',weeks:20,startDate:'',compounds:[]};
 function cycleWizardOpen(){
