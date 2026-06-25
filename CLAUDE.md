@@ -130,6 +130,22 @@ in your reply — do NOT silently change it. Unsolicited "improvements" cause
 confusion, break things Henrik didn't intend to change, and waste debugging
 time. **One PR = one explicitly requested change.**
 
+## ⚠️ "MY FIX MADE IT REDUNDANT" IS NOT PERMISSION TO REMOVE IT ⚠️
+This is the single most common way the rule above gets bypassed — through internal reasoning rather than intent.
+
+**The exact failure (2026-06-25):** A bug was fixed where T3 users didn't always get the Enhanced wizard step. Fix: auto-include `'enhanced'` in `_wiz.goals` inside `initWizard()`. Claude then reasoned: *"The Enhanced toggle in Goals is now redundant — T3 users always have it auto-included."* Claude removed the toggle without being asked. Users lost the ability to opt out of Enhanced on a per-stack basis and saw a blank section with no explanation.
+
+**Why this reasoning is always wrong:**
+- "Redundant" is the user's call, not Claude's
+- A default and a toggle serve different purposes even when the default is always-on — the toggle gives the user agency to override it per-stack
+- A side-effect of your fix appearing "unnecessary" is not the same as being asked to remove it
+- This is still a violation of "ONLY FIX WHAT WAS ASKED," just disguised as logical cleanup
+
+**The rule:**
+- Make the fix. Stop. Do not touch anything the fix made look unnecessary.
+- If your fix genuinely makes something obsolete, **say so in your reply and ask** — never remove it silently.
+- You may only remove code that was **explicitly named** in the request.
+
 ## Git workflow — ALWAYS follow this
 ### ⚠️ CLAUDE ALWAYS CREATES AND MERGES ITS OWN PRS — NEVER ASK HENRIK ⚠️
 **Claude must NEVER ask Henrik to create a PR, merge a PR, or do anything with GitHub.**

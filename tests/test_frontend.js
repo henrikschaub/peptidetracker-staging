@@ -1861,7 +1861,7 @@ console.log('\n── Edit Enhanced tab — stack editor regression ────
     var gBody={innerHTML:''};var gFoot={innerHTML:''};
     G.initWizard();G._wiz.goals=['enhanced'];
     G.wizStepGoals(gBody,gFoot);
-    check('wizStepGoals: Enhanced Cycle toggle removed', !gBody.innerHTML.includes('Enhanced Cycle'));
+    check('wizStepGoals T3: shows Enhanced Cycle toggle', gBody.innerHTML.includes('Enhanced Cycle'));
 
     G.editToggleEnhancedCompound(testId2);
     check('editToggleEnhancedCompound: removes compound on second call', G._editBuf.enhanced.compounds.length===0);
@@ -1906,13 +1906,14 @@ console.log('\n── Wizard step render tests ───────────
   check('wizStepGoals T2: has Testosterone protocol toggle', gB2.innerHTML.includes('Testosterone protocol'));
   check('wizStepGoals T2: no Enhanced Cycle toggle', !gB2.innerHTML.includes('Enhanced Cycle'));
 
-  // wizStepGoals T3: no Enhanced Cycle toggle (removed — auto-included via initWizard)
+  // wizStepGoals T3: Enhanced Cycle section visible + toggleable
   G._userTier=3;
   G.initWizard();
   var gB3={innerHTML:''};var gF3={innerHTML:''};
   G.wizStepGoals(gB3,gF3);
-  check('wizStepGoals T3: no Enhanced Cycle toggle (auto-included)', !gB3.innerHTML.includes('Enhanced Cycle'));
+  check('wizStepGoals T3: shows Enhanced Cycle section', gB3.innerHTML.includes('Enhanced Cycle'));
   check('wizStepGoals T3: initWizard auto-includes enhanced in goals', G._wiz.goals.includes('enhanced'));
+  check('wizStepGoals T3: Enhanced toggle starts ON (auto-included)', gB3.innerHTML.includes('toggle-sw on'));
 
   // wizStepCheck: empty peptides
   G._userTier=1;
@@ -2107,9 +2108,9 @@ console.log('\n── Source-code structural assertions ────────
   check('source: edit Enhanced branch does NOT call _buildEnhancementCycleSection',
     !(function(){var m=tsJs.match(/editInnerTab===.enhanced.[\s\S]{0,400}_buildEnhancementCycleSection/);return!!m;})());
 
-  // wizStepGoals must not contain Enhanced Cycle toggle
-  check('source: wizStepGoals has no "Enhanced Cycle" text',
-    !(function(){var fn=tsJs.match(/function wizStepGoals\([\s\S]{0,3000}/);return fn&&fn[0].includes('Enhanced Cycle');})());
+  // wizStepGoals must show Enhanced Cycle toggle for T3 (restored 2026-06-25)
+  check('source: wizStepGoals shows Enhanced Cycle for T3',
+    (function(){var fn=tsJs.match(/function wizStepGoals\([\s\S]{0,3000}/);return fn&&fn[0].includes('Enhanced Cycle');})());
 
   // All required render functions must be defined in tab-stack.js
   check('source: function _renderEnhancedViewTab( defined', tsJs.includes('function _renderEnhancedViewTab('));
