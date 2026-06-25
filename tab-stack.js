@@ -1150,7 +1150,7 @@ function editToggleEnhancedCompound(id){
   if(!_editBuf.enhanced.compounds)_editBuf.enhanced.compounds=[];
   var idx=_editBuf.enhanced.compounds.findIndex(function(c){return c.id===id;});
   if(idx!==-1){_editBuf.enhanced.compounds.splice(idx,1);}
-  else{var cat=ENHANCEMENT_COMPOUNDS.find(function(c){return c.id===id;});if(cat)_editBuf.enhanced.compounds.push({id:cat.id,name:cat.name,dose:String(cat.defaultDose||''),unit:cat.unit||'mg',days:[1],dot:cat.dot});}
+  else{var cat=ENHANCEMENT_COMPOUNDS.find(function(c){return c.id===id;});if(cat)_editBuf.enhanced.compounds.push({id:cat.id,name:cat.name,dose:String(cat.defaultDose||''),unit:cat.unit||'mg',days:cat.defaultDays?cat.defaultDays.slice():[0,1,2,3,4,5,6],dot:cat.dot});}
   _editBuf.enhanced.enabled=_editBuf.enhanced.compounds.length>0;
   renderStackEditor();
 }
@@ -1227,7 +1227,7 @@ function wizStepEnhanced(body,footer){
       var match=ENHANCEMENT_COMPOUNDS.find(function(ec){return ec.name.toLowerCase()===(tc.name||'').toLowerCase();});
       if(match&&!(_wiz.enhanced.compounds||[]).some(function(c){return c.id===match.id;})){
         if(!_wiz.enhanced.compounds)_wiz.enhanced.compounds=[];
-        _wiz.enhanced.compounds.push({id:match.id,name:match.name,dose:String(tc.dose||match.defaultDose||''),unit:tc.unit||match.unit||'mg',days:tc.days?tc.days.slice():[1],dot:match.dot});
+        _wiz.enhanced.compounds.push({id:match.id,name:match.name,dose:String(tc.dose||match.defaultDose||''),unit:tc.unit||match.unit||'mg',days:tc.days?tc.days.slice():(match.defaultDays?match.defaultDays.slice():[0,1,2,3,4,5,6]),dot:match.dot});
       }
     });
     _wiz.enhanced.enabled=(_wiz.enhanced.compounds||[]).length>0;
@@ -1272,7 +1272,7 @@ function wizToggleEnhancedCompound(id){
     _wiz.enhanced.compounds.splice(idx,1);
   }else{
     var cat=ENHANCEMENT_COMPOUNDS.find(function(c){return c.id===id;});
-    if(cat)_wiz.enhanced.compounds.push({id:cat.id,name:cat.name,dose:String(cat.defaultDose||''),unit:cat.unit||'mg',days:[1],dot:cat.dot});
+    if(cat)_wiz.enhanced.compounds.push({id:cat.id,name:cat.name,dose:String(cat.defaultDose||''),unit:cat.unit||'mg',days:cat.defaultDays?cat.defaultDays.slice():[0,1,2,3,4,5,6],dot:cat.dot});
   }
   _wiz.enhanced.enabled=_wiz.enhanced.compounds.length>0;
   wizStepEnhanced(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));

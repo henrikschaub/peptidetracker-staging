@@ -1769,7 +1769,9 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
     var ec=G._wiz.enhanced.compounds.find(function(c){return c.id===testId;});
     check('wizToggleEnhancedCompound: compound added to _wiz.enhanced.compounds', !!ec);
     check('wizToggleEnhancedCompound: dose pre-populated as string', typeof ec.dose==='string');
-    check('wizToggleEnhancedCompound: days defaults to [1] (Monday)', Array.isArray(ec.days)&&ec.days.length===1&&ec.days[0]===1);
+    var cat=G.ENHANCEMENT_COMPOUNDS.find(function(c){return c.id===testId;});
+    var expDays=cat&&cat.defaultDays?cat.defaultDays:[0,1,2,3,4,5,6];
+    check('wizToggleEnhancedCompound: days uses compound defaultDays', Array.isArray(ec.days)&&JSON.stringify(ec.days.slice().sort(function(a,b){return a-b;}))=== JSON.stringify(expDays.slice().sort(function(a,b){return a-b;})));
     check('wizToggleEnhancedCompound: unit set', !!ec.unit);
     check('wizToggleEnhancedCompound: _wiz.enhanced.enabled=true after adding', G._wiz.enhanced.enabled===true);
     // Toggle off
@@ -1787,12 +1789,14 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
     check('wizSetEnhDose: dose updated', ec2&&ec2.dose==='250');
     G.wizSetEnhUnit(testId,'ml');
     check('wizSetEnhUnit: unit updated', ec2&&ec2.unit==='ml');
-    G.wizSetEnhDays(testId,3); // add Wednesday
-    check('wizSetEnhDays: days includes added day', ec2&&ec2.days&&ec2.days.includes(3));
-    G.wizSetEnhDays(testId,1); // remove Monday (days=[3] now, length stays >=1 since we have 2 now)
-    check('wizSetEnhDays: days still has Wed after removing Mon', ec2&&ec2.days&&ec2.days.includes(3)&&!ec2.days.includes(1));
+    // Force days to a known single-day state for toggle tests
+    if(ec2)ec2.days=[3];
+    G.wizSetEnhDays(testId,1); // add Monday to [3]
+    check('wizSetEnhDays: days includes added day', ec2&&ec2.days&&ec2.days.includes(1));
+    G.wizSetEnhDays(testId,3); // remove Wednesday (days=[1] now)
+    check('wizSetEnhDays: days still has Mon after removing Wed', ec2&&ec2.days&&ec2.days.includes(1)&&!ec2.days.includes(3));
     // Cannot deselect last day
-    G.wizSetEnhDays(testId,3); // try removing Wed when it's the only day
+    G.wizSetEnhDays(testId,1); // try removing Mon when it's the only day
     check('wizSetEnhDays: cannot remove last day', ec2&&ec2.days&&ec2.days.length>=1);
   }
 
@@ -1872,7 +1876,9 @@ console.log('\n── Edit Enhanced tab — stack editor regression ────
     check('editToggleEnhancedCompound: compound added', G._editBuf.enhanced.compounds.length===1);
     check('editToggleEnhancedCompound: enabled=true', G._editBuf.enhanced.enabled===true);
     check('editToggleEnhancedCompound: dose is string', typeof G._editBuf.enhanced.compounds[0].dose==='string');
-    check('editToggleEnhancedCompound: days defaults to [1]', Array.isArray(G._editBuf.enhanced.compounds[0].days)&&G._editBuf.enhanced.compounds[0].days[0]===1);
+    var cat2=G.ENHANCEMENT_COMPOUNDS.find(function(c){return c.id===testId2;});
+    var expDays2=cat2&&cat2.defaultDays?cat2.defaultDays:[0,1,2,3,4,5,6];
+    check('editToggleEnhancedCompound: days uses compound defaultDays', Array.isArray(G._editBuf.enhanced.compounds[0].days)&&JSON.stringify(G._editBuf.enhanced.compounds[0].days.slice().sort(function(a,b){return a-b;}))=== JSON.stringify(expDays2.slice().sort(function(a,b){return a-b;})));
 
     G.editSetEnhDose(testId2,'200');
     check('editSetEnhDose: updates dose', G._editBuf.enhanced.compounds[0].dose==='200');
@@ -1880,6 +1886,8 @@ console.log('\n── Edit Enhanced tab — stack editor regression ────
     G.editSetEnhUnit(testId2,'ml');
     check('editSetEnhUnit: updates unit', G._editBuf.enhanced.compounds[0].unit==='ml');
 
+    // Force single-day state for toggle test
+    G._editBuf.enhanced.compounds[0].days=[5];
     G.editSetEnhDays(testId2,3);
     check('editSetEnhDays: adds day 3', G._editBuf.enhanced.compounds[0].days.includes(3));
 
