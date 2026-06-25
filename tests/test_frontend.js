@@ -1432,7 +1432,7 @@ console.log('\n── dose dedup migration ────────────�
 
   const cycleStack={name:'Cycle A',cycle_start:'2026-06-21',cycle_length:12,end_date:'2026-09-13',
     peptides:[{id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'3',unit_am:'mg',active:true}]};
-  G._userStacks=[cycleStack];G._activeStackIndices=[];
+  G._userStacks=[cycleStack];G._activeStackIndices=[0];
   var jun21=new Date(2026,5,21);
   var doses21=G.getDosesForDate(jun21);
   check('getDosesForDate: date-ranged stack shows doses on start date',doses21.length>0);
@@ -1478,7 +1478,7 @@ console.log('\n── dose dedup migration ────────────�
 
   const enhStack={name:'Enhanced Cycle',cycle_start:'2026-06-21',cycle_length:12,peptides:[],
     enhanced:{enabled:true,compounds:[{id:'testosterone-e',name:'Testosterone E',dose:'250',unit:'mg/week',days:[1,4],dot:'#e8a020'}]}};
-  G._userStacks=[enhStack];G._activeStackIndices=[];
+  G._userStacks=[enhStack];G._activeStackIndices=[0];
   // Mon June 22 = JS getDay() 1
   var mon22=new Date(2026,5,22);
   var enhDoses=G._getDynamicEnhancedDoses(mon22,true);
