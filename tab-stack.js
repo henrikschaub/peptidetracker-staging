@@ -523,6 +523,8 @@ var DAYS_ORDER=[1,2,3,4,5,6,0]; // display order: Mon first (Sun last)
 
 function wizStepGoals(body,footer){
   var PEPTIDE_GOALS=[{id:'muscle',label:'Muscle & Recovery',icon:'💪'},{id:'recovery',label:'Injury & Healing',icon:'🩹'},{id:'skin',label:'Skin & Anti-aging',icon:'✨'},{id:'fat',label:'Fat Loss',icon:'🔥'},{id:'cognitive',label:'Cognitive',icon:'🧠'},{id:'antiaging',label:'Longevity',icon:'⏳'}];
+  var trtOn=_wiz.trt.enabled;
+  var enhOn=_wiz.goals.includes('enhanced');
   var html='<div class="wiz-section">Peptide Goals</div><div class="goal-grid">';
   PEPTIDE_GOALS.forEach(function(g){
     var sel=_wiz.goals.includes(g.id)?'sel':'';
@@ -530,16 +532,24 @@ function wizStepGoals(body,footer){
   });
   html+='</div><div style="font-size:12px;color:var(--muted2);margin-top:8px;margin-bottom:16px;">Select all that apply — filters the peptide catalogue.</div>';
   if(_wizTier()>=2){
-    var trtOn=_wiz.trt.enabled;
     html+='<div class="wiz-section">TRT</div>';
-    html+='<div class="trt-toggle" onclick="wizToggleGoalTRT()"><div class="trt-toggle-label">⚡ Testosterone protocol</div><div class="toggle-sw'+(trtOn?' on':'')+'"></div></div>';
-    html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">'+(trtOn?'Compound, dose &amp; schedule configured in the next step.':'Add Testoviron, Nebido or another ester to your cycle.')+'</div>';
+    if(enhOn){
+      html+='<div class="trt-toggle" style="opacity:0.4;pointer-events:none"><div class="trt-toggle-label">⚡ Testosterone protocol</div><div class="toggle-sw"></div></div>';
+      html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">Not available — Testosterone is already included in the Enhanced cycle.</div>';
+    }else{
+      html+='<div class="trt-toggle" onclick="wizToggleGoalTRT()"><div class="trt-toggle-label">⚡ Testosterone protocol</div><div class="toggle-sw'+(trtOn?' on':'')+'"></div></div>';
+      html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">'+(trtOn?'Compound, dose &amp; schedule configured in the next step.':'Add Testoviron, Nebido or another ester to your cycle.')+'</div>';
+    }
   }
   if(_wizTier()>=3){
-    var enhOn=_wiz.goals.includes('enhanced');
     html+='<div class="wiz-section">Enhanced Cycle</div>';
-    html+='<div class="trt-toggle" onclick="wizToggleGoal(\'enhanced\')"><div class="trt-toggle-label">💉 Steroids &amp; prescription compounds</div><div class="toggle-sw'+(enhOn?' on':'')+'"></div></div>';
-    html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">Select and configure enhancement compounds in the next wizard step.</div>';
+    if(trtOn){
+      html+='<div class="trt-toggle" style="opacity:0.4;pointer-events:none"><div class="trt-toggle-label">💉 Steroids &amp; prescription compounds</div><div class="toggle-sw"></div></div>';
+      html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">Not available — disable the TRT protocol above first.</div>';
+    }else{
+      html+='<div class="trt-toggle" onclick="wizToggleGoal(\'enhanced\')"><div class="trt-toggle-label">💉 Steroids &amp; prescription compounds</div><div class="toggle-sw'+(enhOn?' on':'')+'"></div></div>';
+      html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">Select and configure enhancement compounds in the next wizard step.</div>';
+    }
   }
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
@@ -549,8 +559,12 @@ function wizToggleGoalTRT(){
   _wiz.trt.enabled=!_wiz.trt.enabled;
   if(!_wiz.trt.compounds)_wiz.trt.compounds=[];
   var i=_wiz.goals.indexOf('trt');
-  if(_wiz.trt.enabled){if(i===-1)_wiz.goals.push('trt');}
-  else{_wiz.trt.compounds=[];if(i!==-1)_wiz.goals.splice(i,1);}
+  if(_wiz.trt.enabled){
+    if(i===-1)_wiz.goals.push('trt');
+    var eIdx=_wiz.goals.indexOf('enhanced');
+    if(eIdx!==-1)_wiz.goals.splice(eIdx,1);
+    if(_wiz.enhanced){_wiz.enhanced.enabled=false;_wiz.enhanced.compounds=[];_wiz.enhanced._prefilled=false;}
+  }else{_wiz.trt.compounds=[];if(i!==-1)_wiz.goals.splice(i,1);}
   wizStepGoals(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
 }
 
@@ -559,9 +573,15 @@ function wizToggleGoal(id){
   if(i===-1){
     _wiz.goals.push(id);
     if(id==='trt'){_wiz.trt.enabled=true;if(!_wiz.trt.compounds)_wiz.trt.compounds=[];}
+    if(id==='enhanced'){
+      var tIdx=_wiz.goals.indexOf('trt');
+      if(tIdx!==-1)_wiz.goals.splice(tIdx,1);
+      _wiz.trt.enabled=false;_wiz.trt.compounds=[];
+    }
   } else {
     _wiz.goals.splice(i,1);
     if(id==='trt'){_wiz.trt.enabled=false;_wiz.trt.compounds=[];}
+    if(id==='enhanced'){if(_wiz.enhanced){_wiz.enhanced.enabled=false;_wiz.enhanced.compounds=[];_wiz.enhanced._prefilled=false;}}
   }
   wizStepGoals(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
 }
@@ -1223,8 +1243,15 @@ function wizStepEnhanced(body,footer){
       }
     });
   });
+  var hasTest=sel.some(function(c){
+    var cat=ENHANCEMENT_COMPOUNDS.find(function(ec){return ec.id===c.id;});
+    return cat&&cat.cls==='base';
+  });
+  if(!hasTest){
+    html='<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#f59e0b;">⚠ Testosterone (Enanthate or Cypionate) is required for an enhanced cycle.</div>'+html;
+  }
   body.innerHTML=html;
-  footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
+  footer.innerHTML='<button class="btn btn-primary" style="flex:1'+(hasTest?'':';opacity:0.5')+'" '+(hasTest?'':'disabled ')+'onclick="wizNext()">Next →</button>';
 }
 function wizToggleEnhancedCompound(id){
   if(!_wiz.enhanced)_wiz.enhanced={enabled:false,compounds:[]};
