@@ -1172,6 +1172,22 @@ function _renderEnhancedViewTab(st){
 
 function wizStepEnhanced(body,footer){
   if(!_wiz.enhanced)_wiz.enhanced={enabled:false,compounds:[]};
+  // Catalogue not yet loaded — show a visible loading state and auto-fetch
+  if(!ENHANCEMENT_COMPOUNDS||!ENHANCEMENT_COMPOUNDS.length){
+    body.innerHTML='<div style="padding:40px 0;text-align:center;"><div style="font-size:14px;color:var(--text);font-weight:600;margin-bottom:6px;">Loading compounds…</div><div style="font-size:12px;color:var(--muted2);">Connecting to backend…</div></div>';
+    footer.innerHTML='<button class="btn btn-primary" style="flex:1;opacity:0.5" disabled>Next →</button>';
+    syncEnhancedCompoundsFromAgent().then(function(){
+      if(_wizFlow()[_wiz.step]!=='enhanced')return;
+      var b=document.getElementById('wiz-body'),f=document.getElementById('wiz-footer');
+      if(!b||!f)return;
+      if(ENHANCEMENT_COMPOUNDS&&ENHANCEMENT_COMPOUNDS.length){wizStepEnhanced(b,f);}
+      else{
+        b.innerHTML='<div style="padding:32px 0;text-align:center;"><div style="font-size:14px;color:var(--text);font-weight:600;margin-bottom:8px;">Catalogue unavailable</div><div style="font-size:13px;color:var(--muted2);margin-bottom:20px;">Check your connection and try again.</div><button class="btn btn-primary" onclick="wizStepEnhanced(document.getElementById(\'wiz-body\'),document.getElementById(\'wiz-footer\'))">Try again</button></div>';
+        f.innerHTML='<button class="btn btn-primary" style="flex:1;opacity:0.5" disabled>Next →</button>';
+      }
+    });
+    return;
+  }
   // Pre-fill matching TRT compounds on first entry
   if(!_wiz.enhanced._prefilled){
     _wiz.enhanced._prefilled=true;
@@ -1192,7 +1208,6 @@ function wizStepEnhanced(body,footer){
     groups[c.group].push(c);
   });
   var html='<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;">Select enhancement compounds and configure dose and frequency for each.</div>';
-  if(!ENHANCEMENT_COMPOUNDS||!ENHANCEMENT_COMPOUNDS.length){html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">Compound catalogue unavailable — go back and try again, or check your connection.</div>';}
   Object.keys(groups).forEach(function(grp){
     html+='<div class="wiz-section" style="margin-bottom:8px;">'+_esc(grp)+'</div>';
     groups[grp].forEach(function(c){
