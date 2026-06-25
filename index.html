@@ -465,6 +465,8 @@ const STACK_RULES=[
   {id:'healing-blend-component',check:function(p){var ids=p.map(function(x){return x.id;});var blends=['glow','glow-1','klow','bpc-tb'];var parts=['bpc157','tb500','ghkcu'];return blends.some(function(b){return ids.includes(b);})&&parts.some(function(c){return ids.includes(c);});},getConflicting:function(p){var blends=['glow','glow-1','klow','bpc-tb'];var parts=['bpc157','tb500','ghkcu'];return p.filter(function(x){return blends.includes(x.id)||parts.includes(x.id);}).map(function(x){return x.id;});},level:'warn',title:'Healing blend + standalone component — double dose',msg:'Your stack includes a healing blend (Glow/Klow/BPC+TB) that already contains BPC-157, TB-500 and/or GHK-Cu. Adding the individual peptide alongside doubles that compound with no benefit. Remove the standalone or use the blend alone.'},
   {id:'cjc-ipa-double',check:function(p){var ids=p.map(function(x){return x.id;});return ids.includes('cjc-ipa')&&ids.includes('ipamorelin');},getConflicting:function(p){return p.filter(function(x){return['cjc-ipa','ipamorelin'].includes(x.id);}).map(function(x){return x.id;});},level:'warn',title:'CJC/IPA blend + standalone Ipamorelin',msg:'The CJC/IPA blend already includes Ipamorelin. Adding it separately doubles your Ipamorelin dose with no benefit. Use the blend alone, or build the stack from CJC-1295 (no DAC) + Ipamorelin separately.'},
 ];
+// Cross-stack pharmacological axis clusters — compounds sharing the same axis conflict across stacks
+const CROSS_STACK_CLUSTERS={'ghrh':'gh-axis','ghrp':'gh-axis','hgh':'gh-axis','glp1':'glp1-axis'};
 function _doseLabel(pepId,doseVal,unit){var d=parseFloat(doseVal);if(!pepId||!doseVal||isNaN(d)||d<=0)return(doseVal||'')+(unit||'');if(unit==='IU'||unit==='mcg')return doseVal+(unit||'');var rec=RECON_DB[pepId];if(!rec||rec.unit==='IU')return doseVal+(unit||'');var vi=rec.defaultVi!==undefined?rec.defaultVi:0;var wi=rec.defaultWi!==undefined?rec.defaultWi:0;var conc=(rec.vials||[])[vi]/((rec.water||[])[wi]);if(!conc||isNaN(conc))return doseVal+(unit||'');var extra='';if(unit==='mg'){var iu=Math.round(d/conc*100);if(iu>0)extra=' ('+iu+' IU)';}else if(unit==='ml'){var mg=Math.round(d*conc);var iu=Math.round(d*100);var p=[];if(mg>0)p.push(mg+'mg');if(iu>0)p.push(iu+' IU');if(p.length)extra=' ('+p.join(' · ')+')';}return doseVal+(unit||'')+extra;}
 // Returns {dose, unit, phaseIdx, totalPhases} for today based on dose_phases + cycle_start, or null if no ramp
 function _effectiveDose(p,cycleStart){if(!p||!p.dose_phases||!p.dose_phases.length||!cycleStart)return null;var sd=parseLocalDate(cycleStart);var wk=Math.floor((NOW-sd)/604800000);if(wk<0)wk=0;var phases=p.dose_phases.slice().sort(function(a,b){return a.w-b.w;});var cur=phases[0];var curIdx=0;for(var i=1;i<phases.length;i++){if(wk>=phases[i].w){cur=phases[i];curIdx=i;}}return cur?{dose:cur.d,unit:cur.u,phaseIdx:curIdx,totalPhases:phases.length}:null;}
@@ -581,6 +583,7 @@ async function loadUserStacks(){
   buildStackStore();
   buildWeekStrip();
   buildToday();
+  _scanAndShowStartupConflicts();
 }
 // ── Update WEEKLY from active stack ──────────────────────────────────────────
 function updateWEEKLY(){
@@ -619,16 +622,26 @@ async function saveStacksToBackend(){
 var _pendingConflictData=null;
 function _getStackCompounds(st){
   var out=[];
-  (st.peptides||[]).forEach(function(p){if(p.id)out.push({id:p.id,name:p.name||p.id});});
-  if(st.trt&&st.trt.compounds)(st.trt.compounds||[]).forEach(function(c){if(c.id)out.push({id:c.id,name:c.name||c.id});});
-  if(st.enhanced&&st.enhanced.compounds)(st.enhanced.compounds||[]).forEach(function(c){if(c.id)out.push({id:c.id,name:c.name||c.id});});
+  function _cgFor(id){
+    var cat=(PEPTIDE_CAT||[]).find(function(x){return x.id===id;});
+    if(cat&&cat.cg)return cat.cg;
+    var ecat=(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===id;});
+    return(ecat&&ecat.cg)||[];
+  }
+  (st.peptides||[]).forEach(function(p){if(p.id)out.push({id:p.id,name:p.name||p.id,cg:_cgFor(p.id)});});
+  if(st.trt&&st.trt.compounds)(st.trt.compounds||[]).forEach(function(c){if(c.id)out.push({id:c.id,name:c.name||c.id,cg:_cgFor(c.id)});});
+  if(st.enhanced&&st.enhanced.compounds)(st.enhanced.compounds||[]).forEach(function(c){if(c.id)out.push({id:c.id,name:c.name||c.id,cg:_cgFor(c.id)});});
   return out;
 }
 function _detectStackConflicts(newIdx){
   var newSt=_userStacks[newIdx];
   if(!newSt)return{conflicts:[],conflictingIdxs:[]};
-  var newIds={};
-  _getStackCompounds(newSt).forEach(function(c){newIds[c.id]=c.name;});
+  var newCompounds=_getStackCompounds(newSt);
+  var newIds={};var newClusters={};
+  newCompounds.forEach(function(c){
+    newIds[c.id]=c.name;
+    (c.cg||[]).forEach(function(tag){var cl=CROSS_STACK_CLUSTERS[tag];if(cl){if(!newClusters[cl])newClusters[cl]=[];newClusters[cl].push(c);}});
+  });
   var conflicts=[];var conflictingSet={};
   _activeStackIndices.forEach(function(si){
     if(si===newIdx)return;
@@ -636,10 +649,22 @@ function _detectStackConflicts(newIdx){
     _getStackCompounds(st).forEach(function(c){
       if(newIds[c.id]){
         conflictingSet[si]=st.name||('Stack '+(si+1));
-        conflicts.push({compoundId:c.id,compoundName:c.name||c.id,stackIdx:si,stackName:st.name||('Stack '+(si+1))});
+        conflicts.push({compoundId:c.id,compoundName:c.name||c.id,existingId:c.id,existingName:c.name||c.id,stackIdx:si,stackName:st.name||('Stack '+(si+1)),reason:'duplicate'});
+      } else {
+        (c.cg||[]).forEach(function(tag){
+          var cl=CROSS_STACK_CLUSTERS[tag];
+          if(cl&&newClusters[cl]){
+            newClusters[cl].forEach(function(nc){
+              conflictingSet[si]=st.name||('Stack '+(si+1));
+              conflicts.push({compoundId:nc.id,compoundName:nc.name,existingId:c.id,existingName:c.name||c.id,stackIdx:si,stackName:st.name||('Stack '+(si+1)),reason:'axis',axisLabel:cl});
+            });
+          }
+        });
       }
     });
   });
+  var seen={};
+  conflicts=conflicts.filter(function(c){var key=c.stackIdx+'|'+c.existingId+'|'+c.compoundId;if(seen[key])return false;seen[key]=true;return true;});
   return{conflicts:conflicts,conflictingIdxs:Object.keys(conflictingSet).map(Number)};
 }
 function _calcLatestActiveEnd(excludeIdx){
@@ -657,8 +682,8 @@ function _calcLatestActiveEnd(excludeIdx){
 function _showConflictModal(newIdx,conflicts,conflictingIdxs){
   var newSt=_userStacks[newIdx];
   var newName=newSt?newSt.name||('Stack '+(newIdx+1)):'New stack';
-  var seenIds={};
-  var uniqConflicts=conflicts.filter(function(c){if(seenIds[c.compoundId])return false;seenIds[c.compoundId]=true;return true;});
+  var seenKeys={};
+  var uniqConflicts=conflicts.filter(function(c){var key=c.compoundId+'|'+(c.existingId||'');if(seenKeys[key])return false;seenKeys[key]=true;return true;});
   var cStackNames={};conflicts.forEach(function(c){cStackNames[c.stackIdx]=c.stackName;});
   var cStackList=Object.values(cStackNames).join(', ');
   var latestEnd=_calcLatestActiveEnd(newIdx);
@@ -666,10 +691,13 @@ function _showConflictModal(newIdx,conflicts,conflictingIdxs){
   var schedStr=schedDate?dateKey(schedDate):null;
   var schedLabel=schedDate?schedDate.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):null;
   var conflictsHtml=uniqConflicts.map(function(c){
+    var detail=c.reason==='axis'
+      ?'<div style="font-size:11px;color:var(--muted2)">conflicts with '+c.existingName+' in '+c.stackName+' ('+c.axisLabel.replace(/-/g,' ')+')</div>'
+      :'<div style="font-size:11px;color:var(--muted2)">also active in '+c.stackName+'</div>';
     return'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">'
       +'<span style="font-size:16px">⚠️</span>'
       +'<div><div style="font-size:13px;font-weight:700;color:var(--text)">'+c.compoundName+'</div>'
-      +'<div style="font-size:11px;color:var(--muted2)">also active in '+c.stackName+'</div></div></div>';
+      +detail+'</div></div>';
   }).join('');
   var btn='display:block;width:100%;padding:13px 14px;border-radius:10px;border:none;font-size:13px;font-weight:700;text-align:left;cursor:pointer;margin-bottom:10px;';
   var schedBtn=schedStr
@@ -733,6 +761,20 @@ async function _resolveConflict(action,schedDate){
   buildToday();
   buildSchedule();
   buildStackStore();
+}
+// Scan all currently-active stacks for conflicts — runs on startup to catch
+// stacks that were already active before the conflict gate was deployed.
+function _scanAndShowStartupConflicts(){
+  if(_activeStackIndices.length<=1)return;
+  for(var i=0;i<_activeStackIndices.length;i++){
+    var idx=_activeStackIndices[i];
+    var det=_detectStackConflicts(idx);
+    if(det.conflicts.length>0){
+      _pendingConflictData={newIdx:idx,conflicts:det.conflicts,conflictingIdxs:det.conflictingIdxs};
+      _showConflictModal(idx,det.conflicts,det.conflictingIdxs);
+      return;
+    }
+  }
 }
 // ── Toggle a stack in/out of the active set ──────────────────────────────────
 async function toggleStack(idx){

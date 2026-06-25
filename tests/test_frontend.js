@@ -1544,10 +1544,11 @@ console.log('\n── dose dedup migration ────────────�
   check('_detectStackConflicts: detects peptide overlap (retatrutide in both A and B)',det.conflicts.length>0&&det.conflicts[0].compoundId==='retatrutide');
   check('_detectStackConflicts: identifies conflicting stack index',det.conflictingIdxs.includes(0));
 
-  // _detectStackConflicts — no overlap (different peptides)
-  G._userStacks=[pepA,pepC];G._activeStackIndices=[0,1];
+  // _detectStackConflicts — no overlap (peptides on different axes: glp1 vs healing)
+  const glowStack={name:'Glow Stack',peptides:[{id:'glow',name:'Glow Stack',dot:'#3b9eff',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'0.09',unit_am:'ml',active:true}]};
+  G._userStacks=[pepA,glowStack];G._activeStackIndices=[0,1];
   det=G._detectStackConflicts(1);
-  check('_detectStackConflicts: no conflict when different peptides',det.conflicts.length===0);
+  check('_detectStackConflicts: no conflict when peptides on different axes',det.conflicts.length===0);
 
   // _detectStackConflicts — TRT overlap
   G._userStacks=[trtStack,trtStack2];G._activeStackIndices=[0,1];
@@ -1594,6 +1595,33 @@ console.log('\n── dose dedup migration ────────────�
   G._userStacks=[stackEndDate];G._activeStackIndices=[0];
   le=G._calcLatestActiveEnd(0); // exclude the only active stack
   check('_calcLatestActiveEnd: excludeIdx removes that stack from calculation',le===null);
+
+  // _getStackCompounds returns cg field
+  var compsWithCg=G._getStackCompounds(pepA);
+  check('_getStackCompounds: peptide compounds include cg array',Array.isArray(compsWithCg[0].cg));
+  check('_getStackCompounds: retatrutide has glp1 cg tag',compsWithCg[0].cg.includes('glp1'));
+
+  // _detectStackConflicts: GH-axis cross-stack conflict (CJC-IPA vs HGH Somatropin)
+  const ghPepStack={name:'GH Peptides',peptides:[{id:'cjc-ipa',name:'CJC-1295/IPA',dot:'#3cffa0',days:[0,1,2,3,4,5,6],times:['AM','PM'],dose_am:'4',dose_pm:'5',unit_am:'IU',unit_pm:'IU',active:true}]};
+  const hghEnhStack={name:'HGH Stack',peptides:[],enhanced:{enabled:true,compounds:[{id:'hgh',name:'HGH (Somatropin)',dose:'3',unit:'IU/day',days:[0,1,2,3,4,5,6],dot:'#e8a020'}]}};
+  G._userStacks=[ghPepStack,hghEnhStack];G._activeStackIndices=[0,1];
+  det=G._detectStackConflicts(1);
+  check('_detectStackConflicts: detects GH-axis conflict (CJC-IPA pep + HGH enhanced)',det.conflicts.length>0);
+  check('_detectStackConflicts: GH-axis conflict reason is axis',det.conflicts[0].reason==='axis');
+  check('_detectStackConflicts: GH-axis conflict axisLabel is gh-axis',det.conflicts[0].axisLabel==='gh-axis');
+  check('_detectStackConflicts: GH-axis conflict compoundId is hgh (new stack compound)',det.conflicts[0].compoundId==='hgh');
+  check('_detectStackConflicts: GH-axis conflict existingId is cjc-ipa (existing stack compound)',det.conflicts[0].existingId==='cjc-ipa');
+  check('_detectStackConflicts: GH-axis conflictingIdxs includes stack 0',det.conflictingIdxs.includes(0));
+
+  // CROSS_STACK_CLUSTERS defined
+  check('CROSS_STACK_CLUSTERS defined in index.html',rawScript.includes('const CROSS_STACK_CLUSTERS='));
+  check('CROSS_STACK_CLUSTERS maps ghrh to gh-axis',rawScript.includes("'ghrh':'gh-axis'"));
+  check('CROSS_STACK_CLUSTERS maps hgh to gh-axis',rawScript.includes("'hgh':'gh-axis'"));
+  check('CROSS_STACK_CLUSTERS maps glp1 to glp1-axis',rawScript.includes("'glp1':'glp1-axis'"));
+
+  // _scanAndShowStartupConflicts defined and called in loadUserStacks
+  check('_scanAndShowStartupConflicts defined',typeof G._scanAndShowStartupConflicts==='function');
+  check('_scanAndShowStartupConflicts called in loadUserStacks',rawScript.includes('_scanAndShowStartupConflicts()'));
 
   // Safety: conflict detection fires in toggleStack source
   check('toggleStack calls _detectStackConflicts when activating 2nd stack',
