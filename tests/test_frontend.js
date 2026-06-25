@@ -101,6 +101,7 @@ check('8 rules defined',                   G.STACK_RULES.length===8,            
 check('checkStack defined',                typeof G.checkStack==='function');
 ['ghrh-multi','cjc-tesa','glp1-multi','ghrh-ghrp-solo','gh-hgh-overlap','healing-blend-overlap','healing-blend-component','cjc-ipa-double']
   .forEach(id=>check(`rule "${id}" exists`, G.STACK_RULES.some(r=>r.id===id)));
+if(typeof G.checkStack==='function'){
 const r1=G.checkStack([{id:'cjc-ipa',cg:['ghrh','ghrp']},{id:'tesamorelin',cg:['ghrh']}]);
 check('CJC+Tesa → err: ghrh-multi',        r1.some(r=>r.level==='err'&&r.id==='ghrh-multi'));
 check('CJC+Tesa → err: cjc-tesa',          r1.some(r=>r.level==='err'&&r.id==='cjc-tesa'));
@@ -115,6 +116,7 @@ check('Glow+bpc157 → warn: healing-blend-component', G.checkStack([{id:'glow',
 check('klow+tb500 → warn: healing-blend-component',  G.checkStack([{id:'klow',cg:[]},{id:'tb500',cg:[]}]).some(r=>r.id==='healing-blend-component'));
 check('cjc-ipa+ipa → warn: cjc-ipa-double',          G.checkStack([{id:'cjc-ipa',cg:['ghrh','ghrp']},{id:'ipamorelin',cg:['ghrp']}]).some(r=>r.id==='cjc-ipa-double'));
 check('cjc-ipa alone → no cjc-ipa-double',           !G.checkStack([{id:'cjc-ipa',cg:['ghrh','ghrp']}]).some(r=>r.id==='cjc-ipa-double'));
+}
 
 // ── buildWeeklyFromProtocol ───────────────────────────────────────────────────
 console.log('\n── buildWeeklyFromProtocol ────────────────────────────────');
@@ -140,6 +142,7 @@ check('empty protocol → empty array',         G.buildWeeklyFromProtocol({pepti
 // ── _synthesizeProtocol ───────────────────────────────────────────────────────
 console.log('\n── _synthesizeProtocol ────────────────────────────────────');
 check('function defined',                   typeof G._synthesizeProtocol==='function');
+if(typeof G._synthesizeProtocol==='function'){
 const synth=G._synthesizeProtocol(G.WEEKLY_DEFAULT);
 check('has peptides',                        synth.peptides.length>0,            `got ${synth.peptides.length}`);
 check('marked _unsaved=true',                synth._unsaved===true);
@@ -152,6 +155,7 @@ check('synth: reta maps to canonical id',   synth.peptides.some(p=>p.id==='retat
 check('synth: cjc maps to canonical id',    synth.peptides.some(p=>p.id==='cjc-ipa'));
 check('synth: glow maps to canonical id',   synth.peptides.some(p=>p.id==='glow'));
 check('synth: reta days includes Sun+Wed',  (()=>{const r=synth.peptides.find(p=>p.id==='retatrutide');return r&&r.days.includes(0)&&r.days.includes(3);})());
+}
 
 // ── WEEKLY_DEFAULT ────────────────────────────────────────────────────────────
 console.log('\n── WEEKLY_DEFAULT ─────────────────────────────────────────');
@@ -166,6 +170,7 @@ check('glow-2 removed (period ended)',     !G.WEEKLY_DEFAULT.some(w=>w.id==='glo
 
 // ── _synthesizeProtocol date propagation ──────────────────────────────────────
 console.log('\n── _synthesizeProtocol: date propagation ───────────────────');
+if(typeof G._synthesizeProtocol==='function'){
 check('synth: glow has no end_date (permanent)',
   (()=>{const g=G._synthesizeProtocol(G.WEEKLY_DEFAULT).peptides.find(p=>p.id==='glow');return g&&!g.end_date;})(),
   'glow got end_date from a temporary entry — check _synthesizeProtocol');
@@ -181,6 +186,7 @@ check('synth: permanent+timed entry → no end_date on merged peptide',
   testPep&&!testPep.end_date, `end_date: ${testPep?.end_date}`);
 check('synth: permanent+timed entry → has AM+PM times',
   testPep&&testPep.times.includes('AM')&&testPep.times.includes('PM'));
+}
 
 // ── Stack Store state & functions ─────────────────────────────────────────────
 console.log('\n── Stack Store ────────────────────────────────────────────');
@@ -198,7 +204,8 @@ check('editStackWithCycle defined',        typeof G.editStackWithCycle==='functi
 
 // ── Wizard init ───────────────────────────────────────────────────────────────
 console.log('\n── Wizard init & createNewStack ───────────────────────────');
-G.initWizard();
+check('initWizard defined',                typeof G.initWizard==='function');
+if(typeof G.initWizard==='function') G.initWizard();
 check('initWizard: step=0',                G._wiz.step===0);
 check('initWizard: peptides=[]',           G._wiz.peptides.length===0);
 check('initWizard: goals=[]',              G._wiz.goals.length===0);
@@ -206,7 +213,7 @@ check('initWizard: cycle_length set',      G._wiz.cycle_length>0,               
 check('initWizard: stackIndex=-1',         G._wiz.stackIndex===-1);
 check('initWizard: stackName is string',   typeof G._wiz.stackName==='string'&&G._wiz.stackName.length>0);
 
-G.createNewStack();
+if(typeof G.createNewStack==='function') G.createNewStack();
 check('createNewStack: editMode=false',    G._wiz.editMode===false);
 check('createNewStack: step=0',            G._wiz.step===0);
 
@@ -221,6 +228,7 @@ const testStack = {
   trt:{enabled:true,compound:'Nebido',injections:[{date:'2026-06-01',label:'Inj 1',dose:'250mg'}]}
 };
 G._userStacks=[testStack];G._activeStackIndices=[0];
+if(typeof G.editStackWithCycle==='function'){
 G._userTier=2;G.editStackWithCycle(0);G._userTier=1;
 check('editStack: editMode=true',          G._wiz.editMode===true);
 check('editStack: stackIndex=0',           G._wiz.stackIndex===0);
@@ -234,12 +242,13 @@ check('editStack: goals inferred',         Array.isArray(G._wiz.goals));
 G._userTier=3;G.editStackWithCycle(0);
 check('editStack T3: enhanced not auto-included (peptide-only stack)', !G._wiz.goals.includes('enhanced'));
 G._userTier=1;
+}
 
 // ── Cycle length ──────────────────────────────────────────────────────────────
 console.log('\n── Cycle length ───────────────────────────────────────────');
 check('CYCLE_WEEKS defined',               Array.isArray(G.CYCLE_WEEKS));
-check('multiples of 4 from 4 to 240 (60 months)', G.CYCLE_WEEKS.length===60&&G.CYCLE_WEEKS[0]===4&&G.CYCLE_WEEKS[59]===240&&G.CYCLE_WEEKS.every((v,i)=>v===(i+1)*4));
-G.initWizard();
+check('multiples of 4 from 4 to 240 (60 months)', G.CYCLE_WEEKS&&G.CYCLE_WEEKS.length===60&&G.CYCLE_WEEKS[0]===4&&G.CYCLE_WEEKS[59]===240&&G.CYCLE_WEEKS.every((v,i)=>v===(i+1)*4));
+if(typeof G.initWizard==='function') G.initWizard();
 G.wizSetCycleLength('8');  check('wizSetCycleLength("8")=8',    G._wiz.cycle_length===8,  `got ${G._wiz.cycle_length}`);
 G.wizSetCycleLength('12'); check('wizSetCycleLength("12")=12',  G._wiz.cycle_length===12);
 G.wizSetCycleLength(10);   check('wizSetCycleLength(10)=10',    G._wiz.cycle_length===10);
@@ -2764,4 +2773,50 @@ console.log('\n── _renderTRTGuide: sex / age personalization modifiers ─�
 
     clearProfile();
   }
+}
+
+// ── Dynamic dose guide highlighting (_renderDoseGuide) ───────────────────────
+{
+  // Helper: extract labels of highlighted (active) tiers from rendered HTML
+  function activeTierLabel(html){
+    var matches=html.match(/<span style="[^"]*color:var\(--accent\)[^"]*text-transform:uppercase[^"]*">([^<]+)<\/span>/g)||[];
+    return matches.map(function(m){var r=m.match(/>([^<]+)<\/span>/);return r?r[1].trim():'';});
+  }
+
+  // Retatrutide at 3 mg → Therapeutic (2–4 mg/wk), NOT Optimal
+  var htmlReta3=G._renderDoseGuide('retatrutide',3);
+  check('_renderDoseGuide: reta 3mg highlights Therapeutic tier',
+    activeTierLabel(htmlReta3).some(function(l){return l.indexOf('Therapeutic')===0;}));
+  check('_renderDoseGuide: reta 3mg does NOT highlight Optimal tier',
+    !activeTierLabel(htmlReta3).some(function(l){return l.indexOf('Optimal')===0;}));
+
+  // Retatrutide at 5 mg → Optimal (4–8 mg/wk)
+  var htmlReta5=G._renderDoseGuide('retatrutide',5);
+  check('_renderDoseGuide: reta 5mg highlights Optimal tier',
+    activeTierLabel(htmlReta5).some(function(l){return l.indexOf('Optimal')===0;}));
+
+  // Retatrutide at 1 mg → Start (0–2 mg/wk)
+  var htmlReta1=G._renderDoseGuide('retatrutide',1);
+  check('_renderDoseGuide: reta 1mg highlights Start tier',
+    activeTierLabel(htmlReta1).some(function(l){return l.indexOf('Start')===0;}));
+
+  // Retatrutide at 9 mg → Max (>=8 mg/wk)
+  var htmlReta9=G._renderDoseGuide('retatrutide',9);
+  check('_renderDoseGuide: reta 9mg highlights Max tier',
+    activeTierLabel(htmlReta9).some(function(l){return l.indexOf('Max')===0;}));
+
+  // Dose 0 → fall back to b:1 tier (Optimal for retatrutide)
+  var htmlReta0=G._renderDoseGuide('retatrutide',0);
+  check('_renderDoseGuide: reta dose=0 falls back to b:1 (Optimal)',
+    activeTierLabel(htmlReta0).some(function(l){return l.indexOf('Optimal')===0;}));
+
+  // HGH at 3 IU → Recomp (2.5–5 IU range)
+  var htmlHgh3=G._renderDoseGuide('hgh',3);
+  check('_renderDoseGuide: hgh 3 IU highlights Recomp tier',
+    activeTierLabel(htmlHgh3).some(function(l){return l.indexOf('Recomp')===0;}));
+
+  // BPC-157 at 500 mcg → Optimal (375–750 range)
+  var htmlBpc=G._renderDoseGuide('bpc157',500);
+  check('_renderDoseGuide: bpc157 500mcg highlights Optimal tier',
+    activeTierLabel(htmlBpc).some(function(l){return l.indexOf('Optimal')===0;}));
 }
