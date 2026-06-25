@@ -38,7 +38,8 @@ const patchedScript = rawScript
   .replace('const PRICELIST=',        'var PRICELIST=')
   .replace('const DOSE_GUIDE=',       'var DOSE_GUIDE=')
   .replace('const DEFAULT_PHASES=',   'var DEFAULT_PHASES=')
-  .replace('const TRT_CAT=',          'var TRT_CAT=');
+  .replace('const TRT_CAT=',          'var TRT_CAT=')
+  .replace('const TRT_GUIDE=',        'var TRT_GUIDE=');
 
 const noop = () => {};
 const mockCtx = {scale:noop,beginPath:noop,moveTo:noop,lineTo:noop,arc:noop,fill:noop,stroke:noop,fillText:noop,closePath:noop,createLinearGradient:()=>({addColorStop:noop}),save:noop,restore:noop,fillRect:noop};
@@ -2145,4 +2146,32 @@ console.log('\n── Source-code structural assertions ────────
 
   // _buildEnhancementCycleSection still exists (used by Cycles tab via stackSetCyclePhase etc.)
   check('source: _buildEnhancementCycleSection function still exists (Cycles tab)', tsJs.includes('function _buildEnhancementCycleSection('));
+
+  // _refreshTRTGuide: TRT guide highlight updates when frequency changes
+  check('source: _refreshTRTGuide function defined', tsJs.includes('function _refreshTRTGuide('));
+  check('source: wizSetTRTFreq calls _refreshTRTGuide', (function(){var m=tsJs.match(/function wizSetTRTFreq\([\s\S]{0,200}/);return m&&m[0].includes('_refreshTRTGuide');})());
+  check('source: wizSetTRTFreqUnit calls _refreshTRTGuide', (function(){var m=tsJs.match(/function wizSetTRTFreqUnit\([\s\S]{0,200}/);return m&&m[0].includes('_refreshTRTGuide');})());
+  check('source: _renderEditTRT freqVal handler calls _refreshTRTGuide', (function(){var m=tsJs.match(/function _renderEditTRT\([\s\S]{0,4000}/);return m&&m[0].includes('_refreshTRTGuide');})());
+  check('source: wizStepTRT wraps guide in trt-guide-id div', (function(){var m=tsJs.match(/function wizStepTRT\([\s\S]{0,4000}/);return m&&m[0].includes("id=\"trt-guide-");})());
+  check('source: _renderEditTRT wraps guide in trt-guide-id div', (function(){var m=tsJs.match(/function _renderEditTRT\([\s\S]{0,4000}/);return m&&m[0].includes('trt-guide-');})());
+
+  // _refreshTRTGuide logic: correct weekly dose calculation
+  (function(){
+    G.initWizard();
+    G._wiz.trt.enabled=true;
+    G._wiz.trt.compounds=[{id:'nebido',name:'Nebido',dose:'1000',unit:'mg',freqVal:12,freqUnit:'weeks'}];
+    // weeklyDoseMg at 12 weeks: 1000*7/(12*7) = 83.3 → Clinical (wkMin:60,wkMax:90)
+    var g=G.TRT_GUIDE['nebido'];
+    var freqDays=12*7;var wk=1000*7/freqDays;
+    var match12=g.tiers.filter(function(t){return wk>=(t.wkMin||0)&&wk<=(t.wkMax||9999);});
+    check('_renderTRTGuide: Nebido 12wks highlights Clinical', match12.length===1&&match12[0].l==='Clinical');
+
+    freqDays=10*7;wk=1000*7/freqDays;
+    var match10=g.tiers.filter(function(t){return wk>=(t.wkMin||0)&&wk<=(t.wkMax||9999);});
+    check('_renderTRTGuide: Nebido 10wks highlights Optimised', match10.length===1&&match10[0].l==='Optimised');
+
+    freqDays=8*7;wk=1000*7/freqDays;
+    var match8=g.tiers.filter(function(t){return wk>=(t.wkMin||0)&&wk<=(t.wkMax||9999);});
+    check('_renderTRTGuide: Nebido 8wks highlights Accelerated', match8.length===1&&match8[0].l==='Accelerated');
+  })();
 }
