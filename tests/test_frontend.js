@@ -1020,7 +1020,7 @@ const bpcTbCat = G.PEPTIDE_CAT.find(p=>p.id==='bpc-tb');
 check('glow default unit is ml',    glowCat?.dflt?.unitAm==='ml',  `got "${glowCat?.dflt?.unitAm}"`);
 check('glow default dose is 0.09',  parseFloat(glowCat?.dflt?.doseAm)===0.09, `got "${glowCat?.dflt?.doseAm}"`);
 check('klow default unit is ml',    klowCat?.dflt?.unitAm==='ml',  `got "${klowCat?.dflt?.unitAm}"`);
-check('klow default dose is 0.2',   parseFloat(klowCat?.dflt?.doseAm)===0.2, `got "${klowCat?.dflt?.doseAm}"`);
+check('klow default dose is 0.1',   parseFloat(klowCat?.dflt?.doseAm)===0.1, `got "${klowCat?.dflt?.doseAm}"`);
 check('bpc-tb default unit is mg',  bpcTbCat?.dflt?.unitAm==='mg', `got "${bpcTbCat?.dflt?.unitAm}"`);
 check('bpc-tb default dose is 1',   parseFloat(bpcTbCat?.dflt?.doseAm)===1.0, `got "${bpcTbCat?.dflt?.doseAm}"`);
 
