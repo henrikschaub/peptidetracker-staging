@@ -2062,6 +2062,62 @@ console.log('\n── Wizard step render tests ───────────
   check('wizStepReview enhanced with compound: compound name shown', rvEnhB2.innerHTML.includes('Test Compound'));
   check('wizStepReview enhanced with compound: no "No enhancement compounds" message', !rvEnhB2.innerHTML.includes('No enhancement compounds selected'));
 
+  // TRT/Enhanced mutual exclusion — enabling TRT clears Enhanced
+  G._userTier=3;
+  G.initWizard();
+  G._wiz.goals=['enhanced'];
+  if(!G._wiz.enhanced)G._wiz.enhanced={enabled:true,compounds:[]};
+  G._wiz.enhanced.compounds=[{id:'x',name:'X',dose:'100',unit:'mg',days:[1],dot:'#f00'}];
+  G._wiz.enhanced.enabled=true;
+  G.wizToggleGoalTRT(); // enable TRT → should clear Enhanced
+  check('wizToggleGoalTRT: enabling TRT removes enhanced from goals', !G._wiz.goals.includes('enhanced'));
+  check('wizToggleGoalTRT: enabling TRT clears enhanced compounds', !G._wiz.enhanced||G._wiz.enhanced.compounds.length===0);
+  check('wizToggleGoalTRT: enabling TRT sets enhanced.enabled=false', !G._wiz.enhanced||G._wiz.enhanced.enabled===false);
+
+  // TRT/Enhanced mutual exclusion — enabling Enhanced clears TRT
+  G._userTier=3;
+  G.initWizard();
+  G._wiz.trt.enabled=true;G._wiz.goals=['trt'];G._wiz.trt.compounds=[{id:'t',name:'T',dose:'125',unit:'mg',days:[1]}];
+  G.wizToggleGoal('enhanced'); // enable Enhanced → should clear TRT
+  check('wizToggleGoal enhanced: clears TRT enabled flag', G._wiz.trt.enabled===false);
+  check('wizToggleGoal enhanced: removes trt from goals', !G._wiz.goals.includes('trt'));
+  check('wizToggleGoal enhanced: clears TRT compounds', G._wiz.trt.compounds.length===0);
+
+  // wizStepGoals: TRT toggle greyed when Enhanced is on
+  G._userTier=3;
+  G.initWizard();
+  G._wiz.goals=['enhanced'];
+  var gmB={innerHTML:''};var gmF={innerHTML:''};
+  G.wizStepGoals(gmB,gmF);
+  check('wizStepGoals: TRT section visible when Enhanced is on', gmB.innerHTML.includes('TRT'));
+  check('wizStepGoals: TRT toggle greyed (pointer-events:none) when Enhanced is on', gmB.innerHTML.includes('pointer-events:none'));
+
+  // wizStepGoals: Enhanced toggle greyed when TRT is on
+  G._userTier=3;
+  G.initWizard();
+  G._wiz.trt.enabled=true;G._wiz.goals=['trt'];
+  var gmB2={innerHTML:''};var gmF2={innerHTML:''};
+  G.wizStepGoals(gmB2,gmF2);
+  check('wizStepGoals: Enhanced Cycle section visible when TRT is on', gmB2.innerHTML.includes('Enhanced Cycle'));
+  check('wizStepGoals: Enhanced toggle greyed (pointer-events:none) when TRT is on', gmB2.innerHTML.includes('pointer-events:none'));
+
+  // wizStepEnhanced: mandatory Testosterone — Next disabled when no base compound selected
+  G._userTier=3;
+  G.initWizard();G._wiz.goals=['enhanced'];
+  var savedECat=G.ENHANCEMENT_COMPOUNDS;
+  G.ENHANCEMENT_COMPOUNDS=[{id:'test_e',name:'Testosterone Enanthate',group:'Androgens',cls:'base',dot:'#e05050',defaultDose:250,unit:'mg/week'}];
+  var meB={innerHTML:''};var meF={innerHTML:''};
+  G.wizStepEnhanced(meB,meF);
+  check('wizStepEnhanced: Next disabled when no base compound selected', meF.innerHTML.includes('disabled'));
+  check('wizStepEnhanced: warning banner shown when no base compound', meB.innerHTML.includes('Testosterone'));
+  // Now select the base compound
+  G.wizToggleEnhancedCompound('test_e');
+  var meB2={innerHTML:''};var meF2={innerHTML:''};
+  G.wizStepEnhanced(meB2,meF2);
+  check('wizStepEnhanced: Next enabled after base compound selected', !meF2.innerHTML.includes('disabled'));
+  check('wizStepEnhanced: warning gone after base compound selected', !meB2.innerHTML.includes('⚠'));
+  G.ENHANCEMENT_COMPOUNDS=savedECat;
+
   G._userTier=1;
 }
 
