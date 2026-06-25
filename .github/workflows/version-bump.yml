@@ -18,6 +18,9 @@ jobs:
       actions: write
 
     steps:
+      - name: Wait for pages build to start
+        run: sleep 10
+
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
