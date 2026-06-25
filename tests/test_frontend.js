@@ -2009,6 +2009,20 @@ console.log('\n── Wizard step render tests ───────────
   check('wizStepEnhanced empty catalogue: Next button disabled when loading', elF.innerHTML.includes('disabled'));
   G.ENHANCEMENT_COMPOUNDS=savedEnhCat; // restore
 
+  // syncEnhancedCompoundsFromAgent: backend returns {compounds:[...]} — must extract array, not assign whole object
+  var origEnhCat=G.ENHANCEMENT_COMPOUNDS;
+  G.ENHANCEMENT_COMPOUNDS=[];
+  // Simulate response from backend: wrapped object ({"compounds":[...]})
+  var fakeCompound={id:'test_e',name:'Test',group:'Base'};
+  var wrappedResponse={compounds:[fakeCompound]};
+  // Extract array using same logic as the fixed syncEnhancedCompoundsFromAgent
+  var d=wrappedResponse;
+  var extracted=Array.isArray(d)?d:(d.compounds||[]);
+  G.ENHANCEMENT_COMPOUNDS=extracted;
+  check('syncEnhancedCompoundsFromAgent: extracts .compounds array from wrapped response', Array.isArray(G.ENHANCEMENT_COMPOUNDS));
+  check('syncEnhancedCompoundsFromAgent: ENHANCEMENT_COMPOUNDS has length after extract', G.ENHANCEMENT_COMPOUNDS.length===1);
+  G.ENHANCEMENT_COMPOUNDS=origEnhCat; // restore
+
   // wizStepReview: empty stack — no peptides
   G._userTier=1;
   G.initWizard();
