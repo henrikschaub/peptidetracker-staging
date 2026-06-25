@@ -37,7 +37,8 @@ const patchedScript = rawScript
   .replace('var _bcWeightHistOpen=',  'var _bcWeightHistOpen=')
   .replace('const PRICELIST=',        'var PRICELIST=')
   .replace('const DOSE_GUIDE=',       'var DOSE_GUIDE=')
-  .replace('const DEFAULT_PHASES=',   'var DEFAULT_PHASES=');
+  .replace('const DEFAULT_PHASES=',   'var DEFAULT_PHASES=')
+  .replace('const TRT_CAT=',          'var TRT_CAT=');
 
 const noop = () => {};
 const mockCtx = {scale:noop,beginPath:noop,moveTo:noop,lineTo:noop,arc:noop,fill:noop,stroke:noop,fillText:noop,closePath:noop,createLinearGradient:()=>({addColorStop:noop}),save:noop,restore:noop,fillRect:noop};
@@ -1868,4 +1869,260 @@ console.log('\n── Edit Enhanced tab — stack editor regression ────
   }
 
   G._userTier=1;
+}
+
+// ── Wizard step render tests ──────────────────────────────────────────────────
+console.log('\n── Wizard step render tests ────────────────────────────────');
+{
+  const G=sandbox;
+
+  // wizStep1: cycle length selector
+  G._userTier=1;
+  G.initWizard();
+  var s1B={innerHTML:''};var s1F={innerHTML:''};
+  G.wizStep1(s1B,s1F);
+  check('wizStep1: body not empty', s1B.innerHTML.length>0);
+  check('wizStep1: contains cycle length select', s1B.innerHTML.includes('<select'));
+  check('wizStep1: has "No end date" option', s1B.innerHTML.includes('No end date'));
+  check('wizStep1: has month option', s1B.innerHTML.includes('month'));
+  check('wizStep1: footer has Next button', s1F.innerHTML.includes('Next'));
+
+  // wizStepGoals T1: no TRT section, no Enhanced Cycle toggle
+  G._userTier=1;
+  G.initWizard();
+  var gB1={innerHTML:''};var gF1={innerHTML:''};
+  G.wizStepGoals(gB1,gF1);
+  check('wizStepGoals T1: body not empty', gB1.innerHTML.length>0);
+  check('wizStepGoals T1: contains goal-chip', gB1.innerHTML.includes('goal-chip'));
+  check('wizStepGoals T1: no Testosterone toggle (T1 has no TRT access)', !gB1.innerHTML.includes('Testosterone protocol'));
+  check('wizStepGoals T1: no Enhanced Cycle toggle', !gB1.innerHTML.includes('Enhanced Cycle'));
+  check('wizStepGoals T1: footer has Next button', gF1.innerHTML.includes('Next'));
+
+  // wizStepGoals T2: TRT toggle present, no Enhanced Cycle
+  G._userTier=2;
+  G.initWizard();
+  var gB2={innerHTML:''};var gF2={innerHTML:''};
+  G.wizStepGoals(gB2,gF2);
+  check('wizStepGoals T2: has Testosterone protocol toggle', gB2.innerHTML.includes('Testosterone protocol'));
+  check('wizStepGoals T2: no Enhanced Cycle toggle', !gB2.innerHTML.includes('Enhanced Cycle'));
+
+  // wizStepGoals T3: no Enhanced Cycle toggle (removed — auto-included via initWizard)
+  G._userTier=3;
+  G.initWizard();
+  var gB3={innerHTML:''};var gF3={innerHTML:''};
+  G.wizStepGoals(gB3,gF3);
+  check('wizStepGoals T3: no Enhanced Cycle toggle (auto-included)', !gB3.innerHTML.includes('Enhanced Cycle'));
+  check('wizStepGoals T3: initWizard auto-includes enhanced in goals', G._wiz.goals.includes('enhanced'));
+
+  // wizStepCheck: empty peptides
+  G._userTier=1;
+  G.initWizard();
+  var ckB1={innerHTML:''};var ckF1={innerHTML:''};
+  G.wizStepCheck(ckB1,ckF1);
+  check('wizStepCheck empty: mentions no peptides', ckB1.innerHTML.includes('No peptides'));
+  check('wizStepCheck empty: footer has Next', ckF1.innerHTML.includes('Next'));
+
+  // wizStepCheck: with peptide (no conflicts)
+  G.initWizard();
+  var pepCat0=G.PEPTIDE_CAT&&G.PEPTIDE_CAT.find(function(p){return p.id==='cjc-ipa';});
+  if(pepCat0){
+    var d0=pepCat0.dflt;
+    G._wiz.peptides=[{id:'cjc-ipa',name:pepCat0.name,dot:pepCat0.dot,times:['AM'],days:[1,2,3,4,5],dose_am:d0.doseAm,dose_pm:'',unit_am:d0.unitAm,note:'',active:true}];
+    var ckB2={innerHTML:''};var ckF2={innerHTML:''};
+    G.wizStepCheck(ckB2,ckF2);
+    check('wizStepCheck with peptide: lists peptide name', ckB2.innerHTML.includes(pepCat0.name));
+    check('wizStepCheck with peptide: shows Validation section', ckB2.innerHTML.includes('Validation'));
+  }
+
+  // wizStepConfig: empty peptides
+  G.initWizard();
+  var cfB1={innerHTML:''};var cfF1={innerHTML:''};
+  G.wizStepConfig(cfB1,cfF1);
+  check('wizStepConfig empty: mentions no peptides', cfB1.innerHTML.includes('No peptides'));
+
+  // wizStepConfig: with peptide — shows dose/timing/days controls
+  if(pepCat0){
+    var d0=pepCat0.dflt;
+    G.initWizard();
+    G._wiz.peptides=[{id:'cjc-ipa',name:pepCat0.name,dot:pepCat0.dot,times:['AM'],days:[1,2,3,4,5],dose_am:d0.doseAm,dose_pm:'',unit_am:d0.unitAm,note:'',active:true}];
+    var cfB2={innerHTML:''};var cfF2={innerHTML:''};
+    G.wizStepConfig(cfB2,cfF2);
+    check('wizStepConfig with peptide: shows cfg-block', cfB2.innerHTML.includes('cfg-block'));
+    check('wizStepConfig with peptide: shows peptide name', cfB2.innerHTML.includes(pepCat0.name));
+    check('wizStepConfig with peptide: shows AM Dose row', cfB2.innerHTML.includes('AM Dose'));
+    check('wizStepConfig with peptide: shows Days row', cfB2.innerHTML.includes('Days'));
+    check('wizStepConfig with peptide: footer has Next', cfF2.innerHTML.includes('Next'));
+  }
+
+  // wizStepTRT: renders TRT compound list
+  G._userTier=2;
+  G.initWizard();
+  var trtB={innerHTML:''};var trtF={innerHTML:''};
+  G.wizStepTRT(trtB,trtF);
+  check('wizStepTRT: body not empty', trtB.innerHTML.length>0);
+  if(G.TRT_CAT&&G.TRT_CAT.length){
+    check('wizStepTRT: lists first TRT compound', trtB.innerHTML.includes(G.TRT_CAT[0].name));
+  }
+  check('wizStepTRT: footer has Next', trtF.innerHTML.includes('Next'));
+
+  // wizStepEnhanced: renders compound list (T3)
+  G._userTier=3;
+  G.initWizard();
+  var eB={innerHTML:''};var eF={innerHTML:''};
+  G.wizStepEnhanced(eB,eF);
+  check('wizStepEnhanced: body not empty', eB.innerHTML.length>0);
+  check('wizStepEnhanced: footer has Next', eF.innerHTML.includes('Next'));
+  if(G.ENHANCEMENT_COMPOUNDS&&G.ENHANCEMENT_COMPOUNDS.length){
+    check('wizStepEnhanced: lists compound group', eB.innerHTML.includes(G.ENHANCEMENT_COMPOUNDS[0].group));
+  }
+
+  // wizStepReview: empty stack — no peptides
+  G._userTier=1;
+  G.initWizard();
+  var rvB={innerHTML:''};var rvF={innerHTML:''};
+  G.wizStepReview(rvB,rvF);
+  check('wizStepReview empty: body not empty', rvB.innerHTML.length>0);
+  check('wizStepReview empty: shows Stack Name input', rvB.innerHTML.includes('Stack Name'));
+  check('wizStepReview empty: shows Summary section', rvB.innerHTML.includes('Summary'));
+  check('wizStepReview empty: no peptides message', rvB.innerHTML.includes('No peptides'));
+  check('wizStepReview empty: footer has Save Stack', rvF.innerHTML.includes('Save Stack'));
+
+  G._userTier=1;
+}
+
+// ── _stackTabBar ──────────────────────────────────────────────────────────────
+console.log('\n── _stackTabBar ────────────────────────────────────────────');
+{
+  const G=sandbox;
+
+  // T1: all three tabs present; Enhanced is locked (opacity 0.45)
+  G._userTier=1;
+  var tb1=G._stackTabBar('peptides','setStackViewTab');
+  check('_stackTabBar T1: renders Peptides tab', tb1.includes('Peptides'));
+  check('_stackTabBar T1: renders TRT tab', tb1.includes('TRT'));
+  check('_stackTabBar T1: renders Enhanced tab', tb1.includes('Enhanced'));
+  check('_stackTabBar T1: Enhanced tab locked (opacity:0.45)', tb1.includes('0.45'));
+
+  // T3: Enhanced is not locked
+  G._userTier=3;
+  var tb3=G._stackTabBar('peptides','setStackViewTab');
+  check('_stackTabBar T3: Enhanced tab present', tb3.includes('Enhanced'));
+  check('_stackTabBar T3: Enhanced tab not locked (no opacity:0.45)', !tb3.includes('0.45'));
+
+  // Active tab gets accent background; others transparent
+  G._userTier=3;
+  var tbEnhActive=G._stackTabBar('enhanced','setEditInnerTab');
+  check('_stackTabBar T3: active Enhanced tab gets accent bg', tbEnhActive.includes('var(--accent)'));
+
+  // Setter propagated to onclick handlers
+  check('_stackTabBar view: onclick uses setStackViewTab', tb1.includes('setStackViewTab'));
+  var tbEdit=G._stackTabBar('trt','setEditInnerTab');
+  check('_stackTabBar edit: onclick uses setEditInnerTab', tbEdit.includes('setEditInnerTab'));
+
+  G._userTier=1;
+}
+
+// ── View & Edit tab render functions ─────────────────────────────────────────
+console.log('\n── View & Edit tab render functions ────────────────────────');
+{
+  const G=sandbox;
+
+  // _renderEnhancedUpgradeCTA: non-T3 users see upgrade call-to-action
+  var ctaHtml=G._renderEnhancedUpgradeCTA();
+  check('_renderEnhancedUpgradeCTA: returns string', typeof ctaHtml==='string');
+  check('_renderEnhancedUpgradeCTA: not empty', ctaHtml.length>0);
+  check('_renderEnhancedUpgradeCTA: mentions Enhanced Tier', ctaHtml.includes('Enhanced Tier'));
+  check('_renderEnhancedUpgradeCTA: has Enable in Settings button', ctaHtml.includes('Enable in Settings'));
+
+  // _renderTRTViewTab: no TRT configured
+  var noTRTSt={name:'T',peptides:[],trt:{enabled:false,compounds:[]},cycle_length:12};
+  var tvH1=G._renderTRTViewTab(noTRTSt);
+  check('_renderTRTViewTab empty: returns string', typeof tvH1==='string');
+  check('_renderTRTViewTab empty: mentions no TRT configured', tvH1.includes('No TRT configured'));
+  check('_renderTRTViewTab empty: shows Injection Log section', tvH1.includes('Injection Log'));
+  check('_renderTRTViewTab empty: prompts to set start date', tvH1.includes('Set a start date'));
+
+  // _renderTRTViewTab: with TRT compound (no cycle_start → injection log shows set-start-date)
+  if(G.TRT_CAT&&G.TRT_CAT.length){
+    // Use any TRT compound — both Nebido and Testoviron show name/dose/Protocol section
+    var tCat0v=G.TRT_CAT.find(function(c){return c.id!=='nebido';})||G.TRT_CAT[0];
+    var withTRTSt={name:'T',peptides:[],trt:{enabled:true,compounds:[{id:tCat0v.id,name:tCat0v.name,dose:'125',unit:'mg',days:[1,3]}]},cycle_length:12};
+    var tvH2=G._renderTRTViewTab(withTRTSt);
+    check('_renderTRTViewTab with compound: shows Protocol section', tvH2.includes('Protocol'));
+    check('_renderTRTViewTab with compound: shows compound name', tvH2.includes(tCat0v.name));
+    check('_renderTRTViewTab with compound: shows dose', tvH2.includes('125'));
+    check('_renderTRTViewTab with compound: still shows injection log area', tvH2.includes('Injection Log'));
+  }
+
+  // _renderEditTRT: null/empty → toggle is off, no compound cards visible
+  var etH1=G._renderEditTRT(null);
+  check('_renderEditTRT null: returns string', typeof etH1==='string');
+  check('_renderEditTRT null: shows TRT Protocol heading', etH1.includes('TRT Protocol'));
+  check('_renderEditTRT null: toggle is OFF (not "toggle-sw on")', etH1.includes('toggle-sw')&&!etH1.includes('toggle-sw on'));
+
+  // _renderEditTRT: enabled with compound → toggle on, dose controls
+  // Use testoviron (not nebido) so the Days row appears (nebido shows Frequency instead)
+  if(G.TRT_CAT&&G.TRT_CAT.length){
+    var tCatNonNebido=G.TRT_CAT.find(function(c){return c.id!=='nebido';})||G.TRT_CAT[0];
+    var tCat0=tCatNonNebido;
+    G._editBuf={name:'T',peptides:[],trt:{enabled:true,compounds:[{id:tCat0.id,name:tCat0.name,dose:'125',unit:'mg',days:[1,3]}]},enhanced:{enabled:false,compounds:[]},cycle_length:12};
+    var etH2=G._renderEditTRT({enabled:true,compounds:[{id:tCat0.id,name:tCat0.name,dose:'125',unit:'mg',days:[1,3]}]});
+    check('_renderEditTRT enabled: toggle is ON', etH2.includes('toggle-sw on'));
+    check('_renderEditTRT enabled: shows compound name', etH2.includes(tCat0.name));
+    check('_renderEditTRT enabled: shows Dose row', etH2.includes('Dose'));
+    check('_renderEditTRT enabled: shows Days row (non-Nebido compound)', etH2.includes('Days'));
+  }
+
+  // _renderEditPep: renders peptide config card
+  var pepCat0=G.PEPTIDE_CAT&&G.PEPTIDE_CAT.find(function(p){return p.id==='cjc-ipa';});
+  if(pepCat0){
+    G._editBuf={name:'T',peptides:[{id:'cjc-ipa',name:pepCat0.name,dot:pepCat0.dot,times:['AM'],days:[1,2,3],dose_am:'100',dose_pm:'',unit_am:'mcg',note:'',active:true}],trt:{enabled:false,compounds:[]},enhanced:{enabled:false,compounds:[]},cycle_length:12};
+    var pepCard=G._renderEditPep(G._editBuf.peptides[0],0);
+    check('_renderEditPep: returns string', typeof pepCard==='string');
+    check('_renderEditPep: shows peptide name', pepCard.includes(pepCat0.name));
+    check('_renderEditPep: shows cfg-block wrapper', pepCard.includes('cfg-block'));
+    check('_renderEditPep: shows Timing row (AM/PM chips)', pepCard.includes('AM'));
+    check('_renderEditPep: shows AM Dose field', pepCard.includes('AM Dose'));
+    check('_renderEditPep: shows Days row', pepCard.includes('Days'));
+    check('_renderEditPep: shows Note field', pepCard.includes('Note'));
+    check('_renderEditPep: shows Start date field', pepCard.includes('Start'));
+  }
+
+  G._userTier=1;
+}
+
+// ── Source-code structural assertions ─────────────────────────────────────────
+console.log('\n── Source-code structural assertions ───────────────────────');
+{
+  const tsJs=fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'tab-stack.js'),'utf8');
+
+  // Enhanced view branch must call _renderEnhancedViewTab, not _buildEnhancementCycleSection
+  check('source: _renderEnhancedViewTab(st) present in tab-stack.js',
+    tsJs.includes('_renderEnhancedViewTab(st)'));
+  check('source: _renderEditEnhanced(_editBuf.enhanced present in tab-stack.js',
+    tsJs.includes('_renderEditEnhanced(_editBuf.enhanced'));
+  // These two patterns would prove the OLD broken routing is gone:
+  check('source: view Enhanced branch does NOT call _buildEnhancementCycleSection',
+    !(function(){var m=tsJs.match(/stackViewTab===.enhanced.[\s\S]{0,400}_buildEnhancementCycleSection/);return!!m;})());
+  check('source: edit Enhanced branch does NOT call _buildEnhancementCycleSection',
+    !(function(){var m=tsJs.match(/editInnerTab===.enhanced.[\s\S]{0,400}_buildEnhancementCycleSection/);return!!m;})());
+
+  // wizStepGoals must not contain Enhanced Cycle toggle
+  check('source: wizStepGoals has no "Enhanced Cycle" text',
+    !(function(){var fn=tsJs.match(/function wizStepGoals\([\s\S]{0,3000}/);return fn&&fn[0].includes('Enhanced Cycle');})());
+
+  // All required render functions must be defined in tab-stack.js
+  check('source: function _renderEnhancedViewTab( defined', tsJs.includes('function _renderEnhancedViewTab('));
+  check('source: function _renderEditEnhanced( defined', tsJs.includes('function _renderEditEnhanced('));
+  check('source: function _renderEnhancedUpgradeCTA( defined', tsJs.includes('function _renderEnhancedUpgradeCTA('));
+  check('source: function _renderEditTRT( defined', tsJs.includes('function _renderEditTRT('));
+  check('source: function _renderTRTViewTab( defined', tsJs.includes('function _renderTRTViewTab('));
+  check('source: function _stackTabBar( defined', tsJs.includes('function _stackTabBar('));
+
+  // Tier gates confirmed in source
+  check('source: edit Enhanced branch gates on tier >=3', tsJs.includes('(_userTier||1)>=3?_renderEditEnhanced'));
+  check('source: view Enhanced branch gates on tier >=3', tsJs.includes('(_userTier||1)>=3?_renderEnhancedViewTab'));
+
+  // _buildEnhancementCycleSection still exists (used by Cycles tab via stackSetCyclePhase etc.)
+  check('source: _buildEnhancementCycleSection function still exists (Cycles tab)', tsJs.includes('function _buildEnhancementCycleSection('));
 }
