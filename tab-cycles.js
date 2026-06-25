@@ -80,7 +80,7 @@ var CYCLE_TEMPLATES=[
 ];
 var ENHANCEMENT_COMPOUNDS=[];
 async function syncEnhancedCompoundsFromAgent(){
-  try{var r=await fetch(AGENT_URL+'/compounds/enhanced',{headers:authHeaders()});if(!r.ok)return;ENHANCEMENT_COMPOUNDS=await r.json();}catch(e){}
+  try{var r=await fetch(AGENT_URL+'/compounds/enhanced',{headers:authHeaders()});if(!r.ok)return;var d=await r.json();ENHANCEMENT_COMPOUNDS=Array.isArray(d)?d:(d.compounds||[]);}catch(e){}
 }
 var _cwiz={step:1,tpl:null,phase:'foundational',weeks:20,startDate:'',compounds:[]};
 function cycleWizardOpen(){
