@@ -654,15 +654,26 @@ function wizStepCheck(body,footer){
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
 }
-function _renderDoseGuide(pepId){
+function _renderDoseGuide(pepId,currentDose){
   var tiers=DOSE_GUIDE&&DOSE_GUIDE[pepId];
   if(!tiers||!tiers.length)return'';
-  var rows=tiers.map(function(t){
-    var bg=t.b?'background:rgba(var(--accent-rgb,60,255,160),0.08);border:1px solid rgba(var(--accent-rgb,60,255,160),0.3);':'background:var(--surface2);border:1px solid var(--border);';
+  var dose=typeof currentDose==='number'&&!isNaN(currentDose)?currentDose:0;
+  var activeTierIdx=-1;
+  if(dose>0){
+    for(var ti=0;ti<tiers.length;ti++){
+      var t=tiers[ti];
+      if(typeof t.lo==='number'){
+        if(dose>=t.lo&&(typeof t.hi!=='number'||dose<t.hi)){activeTierIdx=ti;break;}
+      }
+    }
+  }
+  var rows=tiers.map(function(t,i){
+    var isActive=activeTierIdx!==-1?(i===activeTierIdx):!!t.b;
+    var bg=isActive?'background:rgba(var(--accent-rgb,60,255,160),0.08);border:1px solid rgba(var(--accent-rgb,60,255,160),0.3);':'background:var(--surface2);border:1px solid var(--border);';
     var doseHtml=t.d?('<span style="font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap">'+t.d+'</span>'):'';
     var note=t.n?('<span style="font-size:11px;color:var(--muted2);flex:1">'+t.n+'</span>'):'';
     var risk=t.r?('<div style="font-size:11px;color:#f59e0b;padding:2px 0 0 0">⚠ '+t.r+'</div>'):'';
-    return'<div style="'+bg+'border-radius:6px;padding:5px 8px;margin-bottom:3px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;font-weight:700;color:'+(t.b?'var(--accent)':'var(--muted2)')+';text-transform:uppercase;min-width:62px">'+t.l+'</span>'+doseHtml+'</div>'+note+risk+'</div>';
+    return'<div style="'+bg+'border-radius:6px;padding:5px 8px;margin-bottom:3px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;font-weight:700;color:'+(isActive?'var(--accent)':'var(--muted2)')+';text-transform:uppercase;min-width:62px">'+t.l+'</span>'+doseHtml+'</div>'+note+risk+'</div>';
   });
   var profile=_userProfile();
   var hasProfile=profile.age>0||profile.weight_kg>0;
@@ -707,7 +718,7 @@ function wizStepConfig(body,footer){
     html+='<div class="cfg-row"><div class="cfg-lbl">Days</div><div class="day-chips">';
     DAYS_ORDER.forEach(function(di){var d=DAYS_SHORT[di];html+='<div class="day-chip'+(p.days&&p.days.includes(di)?' sel':'')+'" onclick="wizToggleDay('+pi+','+di+')">'+d+'</div>';});
     html+='</div></div><div class="cfg-row"><div class="cfg-lbl">Note (optional)</div><input class="note-in" type="text" value="'+String(p.note||'')+'" oninput="wizSetNote('+pi+',this.value)" placeholder="e.g. fasted, pre-sleep..."></div>';
-    html+=_renderDoseGuide(p.id);
+    html+=_renderDoseGuide(p.id,parseFloat(p.dose_am||p.dose_pm||0)||0);
     html+=_renderRampSection(p,pi);
     html+='</div>';
   });
