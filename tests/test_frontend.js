@@ -229,9 +229,9 @@ check('editStack: 2 peptides loaded',      G._wiz.peptides.length===2,          
 check('editStack: TRT compound loaded (T2)',G._wiz.trt.compound==='Nebido');
 check('editStack: deep copy (no mutation)',G._userStacks[0].peptides!==G._wiz.peptides);
 check('editStack: goals inferred',         Array.isArray(G._wiz.goals));
-// T3 edit: 'enhanced' auto-included in goals so Enhanced wizard step always shows
+// T3 edit: 'enhanced' NOT auto-included — only present if stack has enhanced compounds
 G._userTier=3;G.editStackWithCycle(0);
-check('editStack T3: enhanced in goals', G._wiz.goals.includes('enhanced'));
+check('editStack T3: enhanced not auto-included (peptide-only stack)', !G._wiz.goals.includes('enhanced'));
 G._userTier=1;
 
 // ── Cycle length ──────────────────────────────────────────────────────────────
@@ -1667,11 +1667,11 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
   check('T2 wizard includes TRT step', t2Titles.includes('TRT'));
   check('T2 wizard last step is REVIEW', t2Titles[t2Titles.length-1]==='REVIEW');
 
-  // T3 initWizard auto-includes 'enhanced' → 8-step wizard
+  // T3 initWizard does NOT auto-include 'enhanced' — toggle defaults OFF
   G._userTier=3;G.initWizard();
   var t3Titles=G._wizTitles();
-  check('T3 initWizard auto-includes enhanced goal', G._wiz.goals.includes('enhanced'));
-  check('T3 initWizard → 8 steps (Enhanced auto-on)', t3Titles.length===8, 'got '+t3Titles.length);
+  check('T3 initWizard does not auto-include enhanced goal', !G._wiz.goals.includes('enhanced'));
+  check('T3 initWizard → 7 steps (Enhanced off by default, uses T2 titles)', t3Titles.length===7, 'got '+t3Titles.length);
 
   // T3 with enhanced goal: 8-step wizard
   G._userTier=3;G.initWizard();G._wiz.goals=['enhanced'];
@@ -1912,8 +1912,8 @@ console.log('\n── Wizard step render tests ───────────
   var gB3={innerHTML:''};var gF3={innerHTML:''};
   G.wizStepGoals(gB3,gF3);
   check('wizStepGoals T3: shows Enhanced Cycle section', gB3.innerHTML.includes('Enhanced Cycle'));
-  check('wizStepGoals T3: initWizard auto-includes enhanced in goals', G._wiz.goals.includes('enhanced'));
-  check('wizStepGoals T3: Enhanced toggle starts ON (auto-included)', gB3.innerHTML.includes('toggle-sw on'));
+  check('wizStepGoals T3: initWizard does not auto-include enhanced in goals', !G._wiz.goals.includes('enhanced'));
+  check('wizStepGoals T3: Enhanced toggle starts OFF by default', !gB3.innerHTML.includes('toggle-sw on'));
 
   // wizStepCheck: empty peptides
   G._userTier=1;
