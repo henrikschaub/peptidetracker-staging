@@ -1205,7 +1205,7 @@ function wizStepEnhanced(body,footer){
   if(!_wiz.enhanced)_wiz.enhanced={enabled:false,compounds:[]};
   // Catalogue not yet loaded — show a visible loading state and auto-fetch
   if(!ENHANCEMENT_COMPOUNDS||!ENHANCEMENT_COMPOUNDS.length){
-    body.innerHTML='<div style="padding:40px 0;text-align:center;"><div style="font-size:14px;color:var(--text);font-weight:600;margin-bottom:6px;">Loading compounds…</div><div style="font-size:12px;color:var(--muted2);">Connecting to backend…</div></div>';
+    body.innerHTML='<div style="padding:40px 0;text-align:center;"><div class="today-spinner-dot" style="margin:0 auto 16px"></div><div style="font-size:14px;color:var(--text);font-weight:600;margin-bottom:6px;">Loading compounds…</div><div style="font-size:12px;color:var(--muted2);">Connecting to backend…</div></div>';
     footer.innerHTML='<button class="btn btn-primary" style="flex:1;opacity:0.5" disabled>Next →</button>';
     syncEnhancedCompoundsFromAgent().then(function(result){
       if(_wizFlow()[_wiz.step]!=='enhanced')return;
