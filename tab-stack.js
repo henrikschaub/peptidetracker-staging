@@ -537,6 +537,12 @@ function wizStepGoals(body,footer){
     html+='<div class="trt-toggle" onclick="wizToggleGoalTRT()"><div class="trt-toggle-label">⚡ Testosterone protocol</div><div class="toggle-sw'+(trtOn?' on':'')+'"></div></div>';
     html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">'+(trtOn?'Compound, dose &amp; schedule configured in the next step.':'Add Testoviron, Nebido or another ester to your cycle.')+'</div>';
   }
+  if(_wizTier()>=3){
+    var enhOn=_wiz.goals.includes('enhanced');
+    html+='<div class="wiz-section">Enhanced Cycle</div>';
+    html+='<div class="trt-toggle" onclick="wizToggleGoal(\'enhanced\')"><div class="trt-toggle-label">💉 Steroids &amp; prescription compounds</div><div class="toggle-sw'+(enhOn?' on':'')+'"></div></div>';
+    html+='<div style="font-size:12px;color:var(--muted2);margin-top:6px;margin-bottom:16px;">Select and configure enhancement compounds in the next wizard step.</div>';
+  }
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
 }
