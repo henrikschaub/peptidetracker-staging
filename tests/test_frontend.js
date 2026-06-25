@@ -2008,6 +2008,24 @@ console.log('\n── Wizard step render tests ───────────
   check('wizStepReview empty: no peptides message', rvB.innerHTML.includes('No peptides'));
   check('wizStepReview empty: footer has Save Stack', rvF.innerHTML.includes('Save Stack'));
 
+  // wizStepReview: Enhanced-only flow — no "No peptides selected." shown
+  G._userTier=3;
+  G.initWizard();
+  G._wiz.goals=['enhanced'];
+  G._wiz.enhanced={enabled:false,compounds:[]};
+  var rvEnhB={innerHTML:''};var rvEnhF={innerHTML:''};
+  G.wizStepReview(rvEnhB,rvEnhF);
+  check('wizStepReview enhanced-only: no "No peptides" message (peptides not in flow)', !rvEnhB.innerHTML.includes('No peptides selected'));
+  check('wizStepReview enhanced-only: shows "No enhancement compounds selected"', rvEnhB.innerHTML.includes('No enhancement compounds selected'));
+  check('wizStepReview enhanced-only: shows Enhancement Compounds section heading', rvEnhB.innerHTML.includes('Enhancement Compounds'));
+
+  // wizStepReview: Enhanced-only flow with a compound — compound shown in summary
+  G._wiz.enhanced={enabled:true,compounds:[{id:'test-c',name:'Test Compound',dose:'200',unit:'mg',days:[1,4],dot:'#f00'}]};
+  var rvEnhB2={innerHTML:''};var rvEnhF2={innerHTML:''};
+  G.wizStepReview(rvEnhB2,rvEnhF2);
+  check('wizStepReview enhanced with compound: compound name shown', rvEnhB2.innerHTML.includes('Test Compound'));
+  check('wizStepReview enhanced with compound: no "No enhancement compounds" message', !rvEnhB2.innerHTML.includes('No enhancement compounds selected'));
+
   G._userTier=1;
 }
 

@@ -1192,6 +1192,7 @@ function wizStepEnhanced(body,footer){
     groups[c.group].push(c);
   });
   var html='<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;">Select enhancement compounds and configure dose and frequency for each.</div>';
+  if(!ENHANCEMENT_COMPOUNDS||!ENHANCEMENT_COMPOUNDS.length){html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">Compound catalogue unavailable — go back and try again, or check your connection.</div>';}
   Object.keys(groups).forEach(function(grp){
     html+='<div class="wiz-section" style="margin-bottom:8px;">'+_esc(grp)+'</div>';
     groups[grp].forEach(function(c){
@@ -1255,16 +1256,19 @@ function wizStepReview(body,footer){
   var hasErrors=checkStack(pepObjs).some(function(i){return i.level==='err';});
   var html='<div class="wiz-section">Stack Name</div><input class="trt-in" type="text" value="'+_esc(String(_wiz.stackName||''))+'" oninput="wizSetStackName(this.value)" placeholder="e.g. Cycle 1, Cutting Stack...">';
   html+='<div class="wiz-section" style="margin-top:16px">Summary</div>';
+  var _reviewFlow=_wizFlow();
   if(_wiz.peptides.length){_wiz.peptides.forEach(function(p){var dose=p.times&&p.times.includes('AM')&&p.times.includes('PM')?(p.dose_am||'?')+(p.unit_am||'')+'/'+(p.dose_pm||'?')+(p.unit_pm||''):(p.times&&p.times.includes('AM')?(p.dose_am||'?')+(p.unit_am||''):(p.dose_pm||'?')+(p.unit_pm||''));var days=p.days&&p.days.length===7?'Every day':p.days&&p.days.length?p.days.length+'x/week':'?';html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)"><div style="width:8px;height:8px;border-radius:50%;background:'+(p.dot||'#888')+';flex-shrink:0"></div><div style="flex:1;font-size:13px;color:var(--text)">'+_esc(p.name)+'</div><div style="font-size:12px;color:var(--muted2)">'+_esc(dose+' · '+days)+'</div></div>';});}
-  else{html+='<div style="color:var(--muted2);font-size:13px;">No peptides selected.</div>';}
+  else if(_reviewFlow.includes('peptides')){html+='<div style="color:var(--muted2);font-size:13px;">No peptides selected.</div>';}
   _trtCompounds(_wiz.trt).forEach(function(c){var days=c.days&&c.days.length===7?'Every day':c.days&&c.days.length?c.days.length+'x/week':(c.freqVal?'every '+c.freqVal+' '+c.freqUnit:'TRT');html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)"><div style="width:8px;height:8px;border-radius:50%;background:'+(c.dot||'var(--accent4)')+';flex-shrink:0"></div><div style="flex:1;font-size:13px;color:var(--text)">'+_esc(c.name)+'</div><div style="font-size:12px;color:var(--muted2)">'+_esc((c.dose?c.dose+(c.unit||'mg')+' · ':'')+days)+'</div></div>';});
-  if((_wiz.goals||[]).includes('enhanced')&&_wiz.enhanced&&_wiz.enhanced.compounds&&_wiz.enhanced.compounds.length){
+  if((_wiz.goals||[]).includes('enhanced')){
     html+='<div class="wiz-section" style="margin-top:16px">Enhancement Compounds</div>';
-    _wiz.enhanced.compounds.forEach(function(c){
-      var days=c.days&&c.days.length===7?'Every day':c.days&&c.days.length?c.days.length+'x/week':'';
-      var doseLabel=(c.dose?c.dose+(c.unit||'mg'):'')+(days?' · '+days:'');
-      html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)"><div style="width:8px;height:8px;border-radius:50%;background:'+(c.dot||'var(--accent2)')+';flex-shrink:0"></div><div style="flex:1;font-size:13px;color:var(--text)">'+_esc(c.name||c.id)+'</div><div style="font-size:12px;color:var(--muted2)">'+_esc(doseLabel)+'</div></div>';
-    });
+    if(_wiz.enhanced&&_wiz.enhanced.compounds&&_wiz.enhanced.compounds.length){
+      _wiz.enhanced.compounds.forEach(function(c){
+        var days=c.days&&c.days.length===7?'Every day':c.days&&c.days.length?c.days.length+'x/week':'';
+        var doseLabel=(c.dose?c.dose+(c.unit||'mg'):'')+(days?' · '+days:'');
+        html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)"><div style="width:8px;height:8px;border-radius:50%;background:'+(c.dot||'var(--accent2)')+';flex-shrink:0"></div><div style="flex:1;font-size:13px;color:var(--text)">'+_esc(c.name||c.id)+'</div><div style="font-size:12px;color:var(--muted2)">'+_esc(doseLabel)+'</div></div>';
+      });
+    }else{html+='<div style="color:var(--muted2);font-size:13px;">No enhancement compounds selected.</div>';}
   }
   body.innerHTML=html;
   var saveLabel=hasErrors?'Save Anyway (conflicts)':'Save Stack';
