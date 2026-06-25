@@ -80,7 +80,8 @@ var CYCLE_TEMPLATES=[
 ];
 var ENHANCEMENT_COMPOUNDS=[];
 async function syncEnhancedCompoundsFromAgent(){
-  try{var r=await fetch(AGENT_URL+'/compounds/enhanced',{headers:authHeaders()});if(!r.ok){_logHttp('syncEnhanced',r.status,'/compounds/enhanced');return{ok:false,status:r.status};}var d=await r.json();ENHANCEMENT_COMPOUNDS=Array.isArray(d)?d:(d.compounds||[]);return{ok:true};}catch(e){_logErr('syncEnhanced',e);return{ok:false,status:null,msg:String(e&&e.message||e)};}
+  var ctrl=new AbortController();var tid=setTimeout(function(){ctrl.abort();},10000);
+  try{var r=await fetch(AGENT_URL+'/compounds/enhanced',{headers:authHeaders(),signal:ctrl.signal});clearTimeout(tid);if(!r.ok){_logHttp('syncEnhanced',r.status,'/compounds/enhanced');return{ok:false,status:r.status};}var d=await r.json();ENHANCEMENT_COMPOUNDS=Array.isArray(d)?d:(d.compounds||[]);return{ok:true};}catch(e){clearTimeout(tid);_logErr('syncEnhanced',e);return{ok:false,status:null,msg:String(e&&e.message||e)};}
 }
 var _cwiz={step:1,tpl:null,phase:'foundational',weeks:20,startDate:'',compounds:[]};
 function cycleWizardOpen(){
