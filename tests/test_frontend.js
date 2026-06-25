@@ -1514,6 +1514,96 @@ console.log('\n── dose dedup migration ────────────�
     tabStackJs.includes("value=\"0\"")&&tabStackJs.includes('No end date'));
 }
 
+// ── Stack conflict detection ──────────────────────────────────────────────────
+{
+  console.log('\n── Stack conflict detection ────────────────────────────────');
+  check('_getStackCompounds defined',typeof G._getStackCompounds==='function');
+  check('_detectStackConflicts defined',typeof G._detectStackConflicts==='function');
+  check('_calcLatestActiveEnd defined',typeof G._calcLatestActiveEnd==='function');
+
+  const pepA={name:'Stack A',peptides:[{id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'3',unit_am:'mg',active:true}]};
+  const pepB={name:'Stack B',peptides:[{id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'2',unit_am:'mg',active:true},{id:'semaglutide',name:'Semaglutide',dot:'#f59e0b',days:[0],times:['AM'],dose_am:'0.5',unit_am:'mg',active:true}]};
+  const pepC={name:'Stack C',peptides:[{id:'semaglutide',name:'Semaglutide',dot:'#f59e0b',days:[0],times:['AM'],dose_am:'0.5',unit_am:'mg',active:true}]};
+  const trtStack={name:'TRT Stack',peptides:[],trt:{enabled:true,compounds:[{id:'testosterone-cyp',name:'Testosterone Cyp',dose:'100',unit:'mg/week',days:[3],dot:'#e8a020'}]}};
+  const trtStack2={name:'TRT Stack 2',peptides:[],trt:{enabled:true,compounds:[{id:'testosterone-cyp',name:'Testosterone Cyp',dose:'200',unit:'mg/week',days:[3],dot:'#e8a020'}]}};
+  const enhStack2={name:'Enhanced 2',peptides:[],enhanced:{enabled:true,compounds:[{id:'testosterone-e',name:'Testosterone E',dose:'250',unit:'mg/week',days:[1,4],dot:'#a855f7'}]}};
+  const enhStack3={name:'Enhanced 3',peptides:[],enhanced:{enabled:true,compounds:[{id:'testosterone-e',name:'Testosterone E',dose:'500',unit:'mg/week',days:[1,4],dot:'#a855f7'}]}};
+
+  // _getStackCompounds
+  var compsA=G._getStackCompounds(pepA);
+  check('_getStackCompounds: extracts peptide compounds',compsA.length===1&&compsA[0].id==='retatrutide');
+  var compsT=G._getStackCompounds(trtStack);
+  check('_getStackCompounds: extracts TRT compounds',compsT.length===1&&compsT[0].id==='testosterone-cyp');
+  var compsE=G._getStackCompounds(enhStack2);
+  check('_getStackCompounds: extracts Enhanced compounds',compsE.length===1&&compsE[0].id==='testosterone-e');
+  check('_getStackCompounds: empty stack returns []',G._getStackCompounds({peptides:[]}).length===0);
+
+  // _detectStackConflicts — peptide overlap
+  G._userStacks=[pepA,pepB];G._activeStackIndices=[0,1];
+  var det=G._detectStackConflicts(1);
+  check('_detectStackConflicts: detects peptide overlap (retatrutide in both A and B)',det.conflicts.length>0&&det.conflicts[0].compoundId==='retatrutide');
+  check('_detectStackConflicts: identifies conflicting stack index',det.conflictingIdxs.includes(0));
+
+  // _detectStackConflicts — no overlap (different peptides)
+  G._userStacks=[pepA,pepC];G._activeStackIndices=[0,1];
+  det=G._detectStackConflicts(1);
+  check('_detectStackConflicts: no conflict when different peptides',det.conflicts.length===0);
+
+  // _detectStackConflicts — TRT overlap
+  G._userStacks=[trtStack,trtStack2];G._activeStackIndices=[0,1];
+  det=G._detectStackConflicts(1);
+  check('_detectStackConflicts: detects TRT compound overlap',det.conflicts.length>0&&det.conflicts[0].compoundId==='testosterone-cyp');
+
+  // _detectStackConflicts — Enhanced overlap
+  G._userStacks=[enhStack2,enhStack3];G._activeStackIndices=[0,1];
+  det=G._detectStackConflicts(1);
+  check('_detectStackConflicts: detects Enhanced compound overlap',det.conflicts.length>0&&det.conflicts[0].compoundId==='testosterone-e');
+
+  // _detectStackConflicts — single active stack → never conflicts
+  G._userStacks=[pepA];G._activeStackIndices=[0];
+  det=G._detectStackConflicts(0);
+  check('_detectStackConflicts: single stack has no conflicts',det.conflicts.length===0);
+
+  // _detectStackConflicts — only counts stacks that are actually active
+  G._userStacks=[pepA,pepB];G._activeStackIndices=[1]; // Stack A not active
+  det=G._detectStackConflicts(1);
+  check('_detectStackConflicts: inactive stack not counted as conflict',det.conflicts.length===0);
+
+  // _calcLatestActiveEnd
+  const stackEndDate={name:'X',cycle_start:'2026-06-01',end_date:'2026-09-01',cycle_length:13,peptides:[]};
+  const stackCycleLen={name:'Y',cycle_start:'2026-07-01',cycle_length:12,peptides:[]};
+  const stackNoEnd={name:'Z',cycle_start:'2026-06-01',cycle_length:0,peptides:[]};
+
+  G._userStacks=[stackEndDate];G._activeStackIndices=[0];
+  var le=G._calcLatestActiveEnd(99); // excludeIdx not in array
+  check('_calcLatestActiveEnd: uses end_date when set',le&&G.dateKey(le)==='2026-09-01');
+
+  G._userStacks=[stackCycleLen];G._activeStackIndices=[0];
+  le=G._calcLatestActiveEnd(99);
+  // 2026-07-01 + 12 weeks = 2026-09-23
+  check('_calcLatestActiveEnd: computes end from cycle_start + cycle_length',le&&G.dateKey(le)==='2026-09-23');
+
+  G._userStacks=[stackNoEnd];G._activeStackIndices=[0];
+  le=G._calcLatestActiveEnd(99);
+  check('_calcLatestActiveEnd: stack with cycle_length 0 → no calculable end',le===null);
+
+  G._userStacks=[stackEndDate,stackCycleLen];G._activeStackIndices=[0,1];
+  le=G._calcLatestActiveEnd(99);
+  check('_calcLatestActiveEnd: returns latest of multiple stacks',le&&G.dateKey(le)==='2026-09-23');
+
+  G._userStacks=[stackEndDate];G._activeStackIndices=[0];
+  le=G._calcLatestActiveEnd(0); // exclude the only active stack
+  check('_calcLatestActiveEnd: excludeIdx removes that stack from calculation',le===null);
+
+  // Safety: conflict detection fires in toggleStack source
+  check('toggleStack calls _detectStackConflicts when activating 2nd stack',
+    rawScript.includes('_detectStackConflicts(idx)'));
+  check('toggleStack stores _pendingConflictData before showing modal',
+    rawScript.includes('_pendingConflictData={newIdx:idx'));
+  check('_resolveConflict defined in index.html',
+    rawScript.includes('async function _resolveConflict('));
+}
+
 // ── Storage tab hideable via Settings ─────────────────────────────────────────
 {
   check('TAB_LABELS uses Object.assign to conditionally include storage (IS_STAGING gate)',

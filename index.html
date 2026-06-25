@@ -615,12 +615,139 @@ async function saveStacksToBackend(){
   // Backend unavailable but data is safe in localStorage
   return {ok:true,synced:false,code:lastCode};
 }
+// ── Stack conflict detection & safety modal ──────────────────────────────────
+var _pendingConflictData=null;
+function _getStackCompounds(st){
+  var out=[];
+  (st.peptides||[]).forEach(function(p){if(p.id)out.push({id:p.id,name:p.name||p.id});});
+  if(st.trt&&st.trt.compounds)(st.trt.compounds||[]).forEach(function(c){if(c.id)out.push({id:c.id,name:c.name||c.id});});
+  if(st.enhanced&&st.enhanced.compounds)(st.enhanced.compounds||[]).forEach(function(c){if(c.id)out.push({id:c.id,name:c.name||c.id});});
+  return out;
+}
+function _detectStackConflicts(newIdx){
+  var newSt=_userStacks[newIdx];
+  if(!newSt)return{conflicts:[],conflictingIdxs:[]};
+  var newIds={};
+  _getStackCompounds(newSt).forEach(function(c){newIds[c.id]=c.name;});
+  var conflicts=[];var conflictingSet={};
+  _activeStackIndices.forEach(function(si){
+    if(si===newIdx)return;
+    var st=_userStacks[si];if(!st)return;
+    _getStackCompounds(st).forEach(function(c){
+      if(newIds[c.id]){
+        conflictingSet[si]=st.name||('Stack '+(si+1));
+        conflicts.push({compoundId:c.id,compoundName:c.name||c.id,stackIdx:si,stackName:st.name||('Stack '+(si+1))});
+      }
+    });
+  });
+  return{conflicts:conflicts,conflictingIdxs:Object.keys(conflictingSet).map(Number)};
+}
+function _calcLatestActiveEnd(excludeIdx){
+  var latest=null;
+  _activeStackIndices.forEach(function(si){
+    if(si===excludeIdx)return;
+    var st=_userStacks[si];if(!st)return;
+    var end=null;
+    if(st.end_date){end=parseLocalDate(st.end_date);}
+    else if(st.cycle_start&&st.cycle_length&&st.cycle_length>0){var s=parseLocalDate(st.cycle_start);end=new Date(s.getTime()+st.cycle_length*7*86400000);}
+    if(end&&(!latest||end>latest))latest=end;
+  });
+  return latest;
+}
+function _showConflictModal(newIdx,conflicts,conflictingIdxs){
+  var newSt=_userStacks[newIdx];
+  var newName=newSt?newSt.name||('Stack '+(newIdx+1)):'New stack';
+  var seenIds={};
+  var uniqConflicts=conflicts.filter(function(c){if(seenIds[c.compoundId])return false;seenIds[c.compoundId]=true;return true;});
+  var cStackNames={};conflicts.forEach(function(c){cStackNames[c.stackIdx]=c.stackName;});
+  var cStackList=Object.values(cStackNames).join(', ');
+  var latestEnd=_calcLatestActiveEnd(newIdx);
+  var schedDate=latestEnd?new Date(latestEnd.getTime()+86400000):null;
+  var schedStr=schedDate?dateKey(schedDate):null;
+  var schedLabel=schedDate?schedDate.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):null;
+  var conflictsHtml=uniqConflicts.map(function(c){
+    return'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">'
+      +'<span style="font-size:16px">⚠️</span>'
+      +'<div><div style="font-size:13px;font-weight:700;color:var(--text)">'+c.compoundName+'</div>'
+      +'<div style="font-size:11px;color:var(--muted2)">also active in '+c.stackName+'</div></div></div>';
+  }).join('');
+  var btn='display:block;width:100%;padding:13px 14px;border-radius:10px;border:none;font-size:13px;font-weight:700;text-align:left;cursor:pointer;margin-bottom:10px;';
+  var schedBtn=schedStr
+    ?'<button onclick="_resolveConflict(\'schedule\',\''+schedStr+'\')" style="'+btn+'background:var(--surface2);color:var(--text);border:1px solid var(--border);">'
+      +'📅 Schedule <em>'+newName+'</em> to start '+schedLabel
+      +'<div style="font-size:11px;font-weight:400;color:var(--muted2);margin-top:3px">Pushes start date to after active cycles finish</div>'
+      +'</button>':'';
+  var overlay=document.createElement('div');
+  overlay.id='stack-conflict-modal';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:9999;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 40px;';
+  overlay.innerHTML='<div style="max-width:480px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-top:20px;">'
+    +'<div style="background:#7f1d1d;padding:16px 18px;">'
+    +'<div style="font-size:17px;font-weight:800;color:#fca5a5;">⛔ Dose Conflict Detected</div>'
+    +'<div style="font-size:12px;color:#fca5a5;margin-top:4px;">Activating <strong>'+newName+'</strong> creates duplicate dosing — resolve before continuing</div>'
+    +'</div>'
+    +'<div style="padding:16px 18px;">'
+    +'<div style="font-size:12px;color:var(--muted2);margin-bottom:8px">These compounds would be dosed from multiple stacks simultaneously:</div>'
+    +conflictsHtml
+    +'<div style="font-size:12px;color:var(--muted2);margin-top:14px;margin-bottom:10px;font-weight:700;">Choose a resolution:</div>'
+    +'<button onclick="_resolveConflict(\'deactivate\',null)" style="'+btn+'background:#7f1d1d;color:#fca5a5;">'
+    +'🔴 Deactivate '+cStackList
+    +'<div style="font-size:11px;font-weight:400;opacity:0.8;margin-top:3px">Keep <em>'+newName+'</em> active, deactivate the conflicting stack(s)</div>'
+    +'</button>'
+    +'<button onclick="_resolveConflict(\'remove\',null)" style="'+btn+'background:var(--surface2);color:var(--text);border:1px solid var(--border);">'
+    +'✂️ Remove duplicates from <em>'+newName+'</em>'
+    +'<div style="font-size:11px;font-weight:400;color:var(--muted2);margin-top:3px">Removes '+uniqConflicts.map(function(c){return c.compoundName;}).join(', ')+' from <em>'+newName+'</em></div>'
+    +'</button>'
+    +schedBtn
+    +'</div></div>';
+  document.body.appendChild(overlay);
+}
+async function _resolveConflict(action,schedDate){
+  var data=_pendingConflictData;_pendingConflictData=null;
+  var overlay=document.getElementById('stack-conflict-modal');
+  if(overlay)overlay.remove();
+  if(!data)return;
+  var newIdx=data.newIdx;var conflicts=data.conflicts;var conflictingIdxs=data.conflictingIdxs;
+  if(action==='deactivate'){
+    conflictingIdxs.forEach(function(si){var pos=_activeStackIndices.indexOf(si);if(pos!==-1)_activeStackIndices.splice(pos,1);});
+  } else if(action==='remove'){
+    var newSt=_userStacks[newIdx];
+    if(newSt){
+      var toRemove={};conflicts.forEach(function(c){toRemove[c.compoundId]=true;});
+      if(newSt.peptides)newSt.peptides=newSt.peptides.filter(function(p){return!toRemove[p.id];});
+      if(newSt.trt&&newSt.trt.compounds)newSt.trt.compounds=newSt.trt.compounds.filter(function(c){return!toRemove[c.id];});
+      if(newSt.enhanced&&newSt.enhanced.compounds)newSt.enhanced.compounds=newSt.enhanced.compounds.filter(function(c){return!toRemove[c.id];});
+    }
+  } else if(action==='schedule'&&schedDate){
+    var newSt=_userStacks[newIdx];
+    if(newSt){
+      newSt.cycle_start=schedDate;
+      if(newSt.cycle_length&&newSt.cycle_length>0){
+        var s=parseLocalDate(schedDate);
+        newSt.end_date=dateKey(new Date(s.getTime()+newSt.cycle_length*7*86400000));
+      }
+    }
+  }
+  updateWEEKLY();
+  await saveStacksToBackend();
+  buildWeekStrip();
+  buildToday();
+  buildSchedule();
+  buildStackStore();
+}
 // ── Toggle a stack in/out of the active set ──────────────────────────────────
 async function toggleStack(idx){
   if(idx<0||idx>=_userStacks.length)return;
   var pos=_activeStackIndices.indexOf(idx);
   if(pos===-1){
     _activeStackIndices.push(idx);
+    if(_activeStackIndices.length>1){
+      var det=_detectStackConflicts(idx);
+      if(det.conflicts.length>0){
+        _pendingConflictData={newIdx:idx,conflicts:det.conflicts,conflictingIdxs:det.conflictingIdxs};
+        _showConflictModal(idx,det.conflicts,det.conflictingIdxs);
+        return;
+      }
+    }
   } else {
     _activeStackIndices.splice(pos,1);
   }
