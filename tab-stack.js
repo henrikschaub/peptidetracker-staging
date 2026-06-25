@@ -1053,6 +1053,32 @@ function _getDynamicTRTDoses(d,withIds){
   });
   return result;
 }
+function _getDynamicEnhancedDoses(d,withIds){
+  var result=[];
+  var seenIds={};
+  _userStacks.forEach(function(st,si){
+    if(!st||!st.enhanced||!st.enhanced.enabled||!st.enhanced.compounds||!st.enhanced.compounds.length)return;
+    if(st.cycle_start){
+      var start=parseLocalDate(st.cycle_start);
+      var daysDiff=Math.floor((d-start)/86400000);
+      if(daysDiff<0)return;
+      if(st.cycle_length&&daysDiff>=st.cycle_length*7)return;
+    }else{
+      if(!_isActiveStack(si))return;
+    }
+    (st.enhanced.compounds||[]).forEach(function(c){
+      if(c.days&&c.days.length&&!c.days.includes(d.getDay()))return;
+      var key=c.id+'_'+si;
+      if(seenIds[key])return;
+      seenIds[key]=true;
+      var unitLabel=c.unit?(' '+c.unit):'';
+      var entry={name:c.name,detail:(c.dose?c.dose+unitLabel:''),time:null,dot:c.dot||'#a855f7'};
+      if(withIds)entry.id=c.id+'_'+si+'_'+dateKey(d);
+      result.push(entry);
+    });
+  });
+  return result;
+}
 function _renderTRTGuide(cId,weeklyDoseMg){
   var g=TRT_GUIDE&&TRT_GUIDE[cId];
   if(!g)return'';

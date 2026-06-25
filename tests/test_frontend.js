@@ -1471,6 +1471,43 @@ console.log('\n── dose dedup migration ────────────�
     todayJs.includes('getDosesForDate(d).forEach'));
   check('buildWeekStrip uses getPastDoses + _findWeeklyItemInfo for past dots',
     todayJs.includes('getPastDoses(d)') && todayJs.includes('_findWeeklyItemInfo(bid)'));
+
+  // ── _getDynamicEnhancedDoses ──────────────────────────────────────────────
+  check('_getDynamicEnhancedDoses defined in tab-stack.js',
+    typeof G._getDynamicEnhancedDoses === 'function');
+
+  const enhStack={name:'Enhanced Cycle',cycle_start:'2026-06-21',cycle_length:12,peptides:[],
+    enhanced:{enabled:true,compounds:[{id:'testosterone-e',name:'Testosterone E',dose:'250',unit:'mg/week',days:[1,4],dot:'#e8a020'}]}};
+  G._userStacks=[enhStack];G._activeStackIndices=[];
+  // Mon June 22 = JS getDay() 1
+  var mon22=new Date(2026,5,22);
+  var enhDoses=G._getDynamicEnhancedDoses(mon22,true);
+  check('_getDynamicEnhancedDoses: returns dose on scheduled day',enhDoses.length===1);
+  check('_getDynamicEnhancedDoses: dose has correct name',enhDoses[0]&&enhDoses[0].name==='Testosterone E');
+  check('_getDynamicEnhancedDoses: dose id includes date',enhDoses[0]&&enhDoses[0].id&&enhDoses[0].id.includes('2026-06-22'));
+
+  // Wed June 24 = JS getDay() 3 — not in days:[1,4]
+  var wed24=new Date(2026,5,24);
+  check('_getDynamicEnhancedDoses: no dose on unscheduled day',G._getDynamicEnhancedDoses(wed24,true).length===0);
+
+  // Before cycle_start
+  check('_getDynamicEnhancedDoses: no dose before cycle_start',G._getDynamicEnhancedDoses(new Date(2026,4,1),true).length===0);
+
+  // Stack with no cycle_start — requires _activeStackIndices
+  const enhNoDate={name:'Enhanced No Date',peptides:[],enhanced:{enabled:true,compounds:[{id:'testosterone-e',name:'Testosterone E',dose:'250',unit:'mg/week',days:[1,4],dot:'#e8a020'}]}};
+  G._userStacks=[enhNoDate];G._activeStackIndices=[];
+  check('_getDynamicEnhancedDoses: no-date enhanced stack inactive → no doses',G._getDynamicEnhancedDoses(mon22,true).length===0);
+  G._activeStackIndices=[0];
+  check('_getDynamicEnhancedDoses: no-date enhanced stack active → shows doses',G._getDynamicEnhancedDoses(mon22,true).length===1);
+
+  // buildToday and showDayInline must call _getDynamicEnhancedDoses
+  check('buildToday calls _getDynamicEnhancedDoses(NOW,true)',
+    todayJs.includes('_getDynamicEnhancedDoses(NOW,true)'));
+  check('showDayInline future branch calls _getDynamicEnhancedDoses(d,true)',
+    todayJs.includes('_getDynamicEnhancedDoses(d,true)'));
+  check('buildWeekStrip calls _getDynamicEnhancedDoses for future dots',
+    todayJs.includes('_getDynamicEnhancedDoses(d,false)'));
+
   check('tab-stack.js edit view has no Cycle End field (removed — use cycle length instead)',
     !tabStackJs.includes("id='edit-cycle-end'")&&!tabStackJs.includes('id="edit-cycle-end"'));
   check('tab-stack.js Cycle Length select has No end date option (value 0)',
