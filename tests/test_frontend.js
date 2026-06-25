@@ -1997,6 +1997,18 @@ console.log('\n── Wizard step render tests ───────────
     check('wizStepEnhanced: lists compound group', eB.innerHTML.includes(G.ENHANCEMENT_COMPOUNDS[0].group));
   }
 
+  // wizStepEnhanced: empty catalogue shows visible loading state (not invisible muted text)
+  var savedEnhCat=G.ENHANCEMENT_COMPOUNDS;
+  G.ENHANCEMENT_COMPOUNDS=[];
+  G._userTier=3;
+  G.initWizard();
+  G._wiz.step=2; // simulate being on Enhanced step in the flow
+  var elB={innerHTML:''};var elF={innerHTML:''};
+  G.wizStepEnhanced(elB,elF);
+  check('wizStepEnhanced empty catalogue: shows loading text (not silent blank)', elB.innerHTML.includes('Loading compounds'));
+  check('wizStepEnhanced empty catalogue: Next button disabled when loading', elF.innerHTML.includes('disabled'));
+  G.ENHANCEMENT_COMPOUNDS=savedEnhCat; // restore
+
   // wizStepReview: empty stack — no peptides
   G._userTier=1;
   G.initWizard();
