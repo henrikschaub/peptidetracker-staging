@@ -60,7 +60,13 @@ function _tcLoadProfile() {
   // Fetch extra catalog entries (no auth required — generic PK reference data)
   fetch(AGENT_URL + '/trt-catalog')
     .then(function(r){ return r.ok ? r.json() : []; })
-    .then(function(d) { if (Array.isArray(d)) { _tcExtraCatalog = d; buildTCalc(); } })
+    .then(function(d) {
+      if (!Array.isArray(d)) return;
+      _tcExtraCatalog = d;
+      buildTCalc();
+      // If the inventory overlay was opened before this fetch resolved, refresh it
+      if (document.getElementById('tc-inv-overlay')) _tcOpenInventory();
+    })
     .catch(function(){});
   var h = (typeof authHeaders === 'function') ? authHeaders() : null;
   if (!h) return;
