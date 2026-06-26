@@ -344,8 +344,11 @@ function _tcOptimize() {
   var reqMgPerWeek = ovDose > 0 ? ovDose : autoMgPerWeek;
 
   // ── Allocate dose across all compounds ────────────────────────────────────
-  var totalStock = testInv.reduce(function(s, inv){ return s + (parseFloat(inv.totalMg) || 0); }, 0);
-  var equalSplit = (totalStock === 0);
+  // Use proportional split only when EVERY compound has stock entered; otherwise equal split
+  // so that compounds without stock data still participate in the optimized plan.
+  var allHaveStock = testInv.every(function(inv){ return (parseFloat(inv.totalMg) || 0) > 0; });
+  var totalStock   = allHaveStock ? testInv.reduce(function(s, inv){ return s + (parseFloat(inv.totalMg) || 0); }, 0) : 0;
+  var equalSplit   = !allHaveStock;
 
   var effectiveCycle = _tcp.cycleDays;
   var compoundPlans  = [];
@@ -922,13 +925,72 @@ function buildTCalc() {
     });
     html += '</div>';
 
-    html += '<div style="padding:0 16px 12px;font-size:12px;color:var(--muted2)">';
-    html += 'SS: ' + Math.round(stats.ssTrough) + '–' + Math.round(stats.ssPeak) + ' mg';
-    if (stats.firstInBandWeek !== null) html += ' · steady state ~W' + stats.firstInBandWeek;
+    // ── Validation block ─────────────────────────────────────────────────────
+    var _vRows = [];
+
+    // Row 1: SS free T vs target (if calibration available)
     if (plan.ftFrac && stats.ssTrough > 0) {
-      html += ' · est. free T ' + Math.round(stats.ssTrough * plan.ftFrac * 1000) + '–' + Math.round(stats.ssPeak * plan.ftFrac * 1000) + ' pmol/L';
+      var _ssMinFT = Math.round(stats.ssTrough * plan.ftFrac * 1000);
+      var _ssMaxFT = Math.round(stats.ssPeak   * plan.ftFrac * 1000);
+      var _tgtFT   = parseFloat(_tcp.targetFT) || 0;
+      var _ftRange = Math.round(_ssMinFT/1000) + 'k–' + Math.round(_ssMaxFT/1000) + 'k pmol/L';
+      if (_tgtFT > 0) {
+        var _inRange = _tgtFT >= _ssMinFT && _tgtFT <= _ssMaxFT;
+        var _close   = !_inRange && _tgtFT >= _ssMinFT * 0.8 && _tgtFT <= _ssMaxFT * 1.2;
+        _vRows.push({
+          label: 'SS FREE T',
+          value: (_inRange?'✓ ':_close?'≈ ':'✗ ') + _ftRange,
+          detail: 'target ' + Math.round(_tgtFT/1000) + 'k pmol/L',
+          color: _inRange?'#44cc88':_close?'#e8a020':'#cc4444'
+        });
+      } else {
+        _vRows.push({label:'SS FREE T', value: _ftRange, color:'var(--muted2)'});
+      }
+    } else {
+      var _ssStr = Math.round(stats.ssTrough) + '–' + Math.round(stats.ssPeak) + ' mg (sim)';
+      _vRows.push({label:'SS LEVEL', value: _ssStr, color:'var(--muted2)'});
     }
-    html += '</div></div>';
+
+    // Row 2: peak:trough stability
+    var _ptrPass = ptr <= 1.5, _ptrWarn = ptr > 1.5 && ptr <= 2.5;
+    _vRows.push({
+      label: 'STABILITY',
+      value: ptr.toFixed(1) + '× P:T · ' + (_ptrPass?'✓ excellent':_ptrWarn?'⚠ moderate':'✗ high variability'),
+      color: _ptrPass?'#44cc88':_ptrWarn?'#e8a020':'#cc4444'
+    });
+
+    // Row 3: ramp — does SS land within the cycle?
+    var _cycleWks = Math.round(plan.cycleDays / 7);
+    if (stats.firstInBandWeek !== null) {
+      var _rampOk = stats.firstInBandWeek <= _cycleWks * 0.75;
+      _vRows.push({
+        label: 'SS REACHED',
+        value: (_rampOk?'✓ W':'⚠ W') + stats.firstInBandWeek + ' of ' + _cycleWks + ' wks',
+        color: _rampOk?'#44cc88':'#e8a020'
+      });
+    } else {
+      _vRows.push({label:'SS REACHED', value:'✗ Beyond ' + _cycleWks + ' wk cycle', color:'#cc4444'});
+    }
+
+    // Row 4: combined dose summary
+    _vRows.push({
+      label: 'COMBINED',
+      value: Math.round(plan.totalMgPerWeek) + ' mg/wk · ' + plan.compounds.length + ' compound' + (plan.compounds.length===1?'':'s'),
+      color: 'var(--muted2)'
+    });
+
+    html += '<div style="padding:0 16px 14px;display:flex;flex-direction:column;gap:5px">';
+    _vRows.forEach(function(row) {
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:7px;background:var(--surface2)">';
+      html += '<span style="font-size:10px;font-weight:700;letter-spacing:0.8px;color:var(--muted2);flex-shrink:0">' + _esc(row.label) + '</span>';
+      html += '<div style="text-align:right;margin-left:8px">';
+      html += '<div style="font-size:12px;font-weight:700;color:' + row.color + '">' + _esc(row.value) + '</div>';
+      if (row.detail) html += '<div style="font-size:10px;color:var(--muted2);margin-top:1px">' + _esc(row.detail) + '</div>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+
+    html += '</div>'; // close card
 
     var rampWeeks    = Math.min(6, Math.max(2, Math.round(plan.cycleDays / 7 / 4)));
     var showCompound = plan.compounds.length > 1;
