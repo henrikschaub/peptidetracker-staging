@@ -152,24 +152,6 @@ function _drawPkChart(canvas, curve, color, unit, cycleLen) {
   }
 }
 
-function _updateBloodTabVis() {
-  var hasTier23 = false;
-  _userStacks.forEach(function(st, si) {
-    if (!_isActiveStack(si)) return;
-    if ((st.trt && st.trt.enabled && (st.trt.compounds || []).length) ||
-        (st.enhanced && st.enhanced.enabled && (st.enhanced.compounds || []).length)) {
-      hasTier23 = true;
-    }
-  });
-  var btn = document.getElementById('tab-btn-blood');
-  if (!btn) return;
-  btn.style.display = hasTier23 ? '' : 'none';
-  if (!hasTier23 && typeof _currentTab !== 'undefined' && _currentTab === 'blood') {
-    var tb = document.getElementById('tab-btn-today');
-    if (tb) switchTab('today', tb);
-  }
-}
-
 function buildBloodLevels() {
   var el = document.getElementById('blood-body');
   if (!el) return;
@@ -240,7 +222,8 @@ function buildBloodLevels() {
   });
 
   if (!items.length) {
-    el.innerHTML = '<div style="padding:48px 20px;text-align:center;"><div style="font-size:32px;margin-bottom:12px;">📈</div><div style="color:var(--muted2);font-size:13px;line-height:1.6">No TRT or enhanced compounds with doses configured.<br>Add compounds in your stack to see plasma concentration curves.</div></div>';
+    el.innerHTML = '';
+    alert('Blood Levels requires at least one active stack with TRT or Enhanced compounds configured with a dose.');
     return;
   }
 
