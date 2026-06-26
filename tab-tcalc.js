@@ -343,20 +343,26 @@ function _tcOptimize() {
   if (isManual) doseSource = 'manual';
   var reqMgPerWeek = ovDose > 0 ? ovDose : autoMgPerWeek;
 
-  // ── Allocate dose across all compounds ────────────────────────────────────
-  // Use proportional split only when EVERY compound has stock entered; otherwise equal split
-  // so that compounds without stock data still participate in the optimized plan.
-  var allHaveStock = testInv.every(function(inv){ return (parseFloat(inv.totalMg) || 0) > 0; });
-  var totalStock   = allHaveStock ? testInv.reduce(function(s, inv){ return s + (parseFloat(inv.totalMg) || 0); }, 0) : 0;
-  var equalSplit   = !allHaveStock;
+  // ── Dose allocation: PK-optimal (equal SS trough per ester) ─────────────
+  // w_i = (e^(k_i × iv_i) − 1) / iv_i.  Short esters clear faster so they
+  // need more mg/week to hold the same trough — the weight reflects that.
+  // This minimises combined peak:trough regardless of which esters are equipped.
+  // Stock amounts only drive coverage warnings — they never cap the cycle.
+  var pkWeights = testInv.map(function(inv) {
+    var cd = _tcCompInfo(inv.compId);
+    var k  = Math.LN2 / cd.halfLifeDays;
+    var iv = _tcSnapInterval(0.585 * cd.halfLifeDays);
+    return (Math.exp(k * iv) - 1) / iv;
+  });
+  var totalPkWeight = pkWeights.reduce(function(a, b){ return a + b; }, 0);
 
-  var effectiveCycle = _tcp.cycleDays;
+  var effectiveCycle = _tcp.cycleDays;  // never capped by stock
   var compoundPlans  = [];
 
-  testInv.forEach(function(inv) {
-    var cd    = _tcCompInfo(inv.compId);
-    var stock = parseFloat(inv.totalMg) || 0;
-    var frac  = equalSplit ? (1 / testInv.length) : (stock / totalStock);
+  testInv.forEach(function(inv, idx) {
+    var cd       = _tcCompInfo(inv.compId);
+    var frac     = totalPkWeight > 0 ? pkWeights[idx] / totalPkWeight : 1 / testInv.length;
+    var stock    = parseFloat(inv.totalMg) || 0;
     var compMgWk = reqMgPerWeek * frac;
 
     var optInterval  = 0.585 * cd.halfLifeDays;
@@ -364,15 +370,15 @@ function _tcOptimize() {
                      : _tcp.preferredFreqDays !== 'auto' ? _tcSnapInterval(parseFloat(_tcp.preferredFreqDays) || optInterval)
                      : _tcSnapInterval(optInterval);
 
+    // Warn when stock runs short — never shorten the cycle; user can reorder
     if (stock > 0) {
       var weeksAvail = stock / compMgWk;
       if (weeksAvail < _tcp.cycleDays / 7 * 0.9) {
-        var capDays = Math.max(28, Math.floor(weeksAvail) * 7);
-        if (capDays < effectiveCycle) effectiveCycle = capDays;
         result.suggestions.push({
           type: 'insufficient-inventory', priority: 1,
-          message: cd.name + ' stock (' + Math.round(stock) + ' mg) covers ~' +
-                   Math.floor(weeksAvail) + ' wks at ' + Math.round(compMgWk) + ' mg/wk.'
+          message: '⚠ ' + cd.name + ' stock (' + Math.round(stock) + ' mg) covers ~' +
+                   Math.floor(weeksAvail) + ' wk at ' + Math.round(compMgWk) + ' mg/wk' +
+                   ' — reorder before W' + (Math.floor(weeksAvail) + 1) + '.'
         });
       }
     }
