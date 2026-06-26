@@ -20,6 +20,7 @@ var _tcp = {
 
 var _tcpSessionLoaded = false;
 var _tcCurrentPlan    = null;
+var _tcExtraCatalog   = [];   // extra compounds fetched from /trt-catalog at runtime
 
 // ── Frequency options ─────────────────────────────────────────────────────────
 
@@ -56,6 +57,11 @@ function _tcLoadProfile() {
   if (cached) {
     try { Object.assign(_tcp, JSON.parse(cached)); } catch(e) {}
   }
+  // Fetch extra catalog entries (no auth required — generic PK reference data)
+  fetch(AGENT_URL + '/trt-catalog')
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(d) { if (Array.isArray(d)) { _tcExtraCatalog = d; buildTCalc(); } })
+    .catch(function(){});
   var h = (typeof authHeaders === 'function') ? authHeaders() : null;
   if (!h) return;
   fetch(AGENT_URL + '/tcalc-profile', {headers: h})
@@ -85,6 +91,18 @@ function _tcSaveProfile() {
 function _tcCompInfo(compId) {
   if (compId === 'hcg') {
     return {id:'hcg', name:'HCG', dot:'#44cc88', halfLifeDays:2.5, halfLifeStr:'~60 hours'};
+  }
+  // Extra catalog entries (fetched from backend) take priority over hardcoded fallbacks
+  var extra = _tcExtraCatalog.find(function(x){ return x.id === compId; });
+  if (extra) {
+    return {
+      id:              compId,
+      name:            extra.name,
+      dot:             extra.dot,
+      halfLifeDays:    extra.halfLifeDays || 1,
+      halfLifeStr:     extra.halfLife || '',
+      bioavailability: extra.bioavailability || 1
+    };
   }
   var cat   = (typeof TRT_CAT   !== 'undefined') ? TRT_CAT.find(function(x){ return x.id === compId; })   : null;
   var guide = (typeof TRT_GUIDE !== 'undefined') ? TRT_GUIDE[compId] : null;
@@ -138,7 +156,8 @@ function _tcCategorizeComps() {
     {label:'LONG ESTERS',   borderColor:'#8866cc', ids:[]},
     {label:'DEPOT',         borderColor:'#44aa88', ids:[]}
   ];
-  var trtIds = (typeof TRT_CAT !== 'undefined') ? TRT_CAT.map(function(c){ return c.id; }) : [];
+  var trtIds = ((typeof TRT_CAT !== 'undefined') ? TRT_CAT.map(function(c){ return c.id; }) : [])
+    .concat(_tcExtraCatalog.map(function(c){ return c.id; }));
   trtIds.forEach(function(id) {
     var hl = _tcCompInfo(id).halfLifeDays;
     if      (hl < 3)  cats[0].ids.push(id);
@@ -362,9 +381,11 @@ function _tcOptimize() {
 
   testInv.forEach(function(inv, idx) {
     var cd       = _tcCompInfo(inv.compId);
+    var bioav    = cd.bioavailability || 1;
     var frac     = totalPkWeight > 0 ? pkWeights[idx] / totalPkWeight : 1 / testInv.length;
     var stock    = parseFloat(inv.totalMg) || 0;
-    var compMgWk = reqMgPerWeek * frac;
+    var compMgWkBioav  = reqMgPerWeek * frac;        // bioavailable mg/week for this compound
+    var compMgWkApplied = compMgWkBioav / bioav;     // applied mg/week (what the user actually uses)
 
     var optInterval  = 0.585 * cd.halfLifeDays;
     var compInterval = ovInterval > 0         ? ovInterval
@@ -373,12 +394,12 @@ function _tcOptimize() {
 
     // Warn when stock runs short — never shorten the cycle; user can reorder
     if (stock > 0) {
-      var weeksAvail = stock / compMgWk;
+      var weeksAvail = stock / compMgWkApplied;
       if (weeksAvail < _tcp.cycleDays / 7 * 0.9) {
         result.suggestions.push({
           type: 'insufficient-inventory', priority: 1,
           message: '⚠ ' + cd.name + ' stock (' + Math.round(stock) + ' mg) covers ~' +
-                   Math.floor(weeksAvail) + ' wk at ' + Math.round(compMgWk) + ' mg/wk' +
+                   Math.floor(weeksAvail) + ' wk at ' + Math.round(compMgWkApplied) + ' mg/wk applied' +
                    ' — reorder before W' + (Math.floor(weeksAvail) + 1) + '.'
         });
       }
@@ -392,18 +413,18 @@ function _tcOptimize() {
       });
     }
 
-    // Cost per mg from user-entered purchase price
+    // Cost per mg from user-entered purchase price (cost is per applied mg)
     var costTotal  = parseFloat(inv.costTotal) || 0;
     var costPerMg  = (costTotal > 0 && stock > 0) ? costTotal / stock : null;
-    var costPerWeek = costPerMg !== null ? compMgWk * costPerMg : null;
+    var costPerWeek = costPerMg !== null ? compMgWkApplied * costPerMg : null;
 
     compoundPlans.push({
       compId:           cd.id,
       cd:               cd,
       intervalDays:     compInterval,
       autoIntervalDays: _tcSnapInterval(optInterval),
-      dosePerInj:       Math.round(compMgWk * compInterval / 7 * 10) / 10,
-      mgPerWeek:        Math.round(compMgWk),
+      dosePerInj:       Math.round(compMgWkApplied * compInterval / 7 * 10) / 10,  // applied mg per dose
+      mgPerWeek:        Math.round(compMgWkBioav),                                   // bioavailable mg/week shown in summary
       costPerMg:        costPerMg,
       costPerWeek:      costPerWeek !== null ? Math.round(costPerWeek * 100) / 100 : null
     });
@@ -439,14 +460,15 @@ function _tcBuildSchedule(plan) {
   if (nonHCG.length === 0) return [];
 
   function makeInj(cp, day, dose) {
+    var bioav = cp.cd.bioavailability || 1;
     return {
       day:          Math.round(day),
-      dose:         Math.round(dose * 10) / 10,
+      dose:         Math.round(dose * bioav * 10) / 10,  // bioavailable dose drives PK curve
       compId:       cp.compId,
       halfLifeDays: cp.cd.halfLifeDays,
       dot:          cp.cd.dot,
       name:         cp.cd.name,
-      dosePerInj:   cp.dosePerInj
+      dosePerInj:   cp.dosePerInj                        // applied dose shown in schedule
     };
   }
 
@@ -896,7 +918,11 @@ function buildTCalc() {
       }
       html += '</div>';
       html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">';
-      [{label:'Per injection', value: cp.dosePerInj + ' mg'},
+      var _bioav = cp.cd.bioavailability;
+      var _injLabel = _bioav && _bioav < 1
+        ? cp.dosePerInj + ' mg applied<br><span style="color:var(--muted2);font-size:11px">' + Math.round(cp.dosePerInj * _bioav) + ' mg absorbed</span>'
+        : cp.dosePerInj + ' mg';
+      [{label:'Per injection', value: _injLabel},
        {label:'Per week',      value: cp.mgPerWeek + ' mg'},
        {label: _isBackbone ? 'Interval' : 'Min interval', value: _tcIntervalLabel(cp.intervalDays)}
       ].forEach(function(s) {
