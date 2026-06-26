@@ -14,7 +14,8 @@ var _tcp = {
   preferredFreqDays:   'auto',
   overrideDoseMgWk:    '',
   overrideIntervalDays: '',
-  planCompId:          ''   // kept for backward-compat with saved profiles; ignored
+  planCompId:          '',  // kept for backward-compat with saved profiles; ignored
+  backboneStartDay:    0    // days into cycle before first backbone injection (default 0)
 };
 
 var _tcpSessionLoaded = false;
@@ -433,28 +434,74 @@ function _tcOptimize() {
 // ── PK schedule + curve ───────────────────────────────────────────────────────
 
 function _tcBuildSchedule(plan) {
-  var rampWeeks = Math.min(6, Math.max(2, Math.round(plan.cycleDays / 7 / 4)));
+  var cycleDays = plan.cycleDays;
+  var nonHCG = plan.compounds.filter(function(c){ return c.compId !== 'hcg'; });
+  if (nonHCG.length === 0) return [];
+
+  function makeInj(cp, day, dose) {
+    return {
+      day:          Math.round(day),
+      dose:         Math.round(dose * 10) / 10,
+      compId:       cp.compId,
+      halfLifeDays: cp.cd.halfLifeDays,
+      dot:          cp.cd.dot,
+      name:         cp.cd.name,
+      dosePerInj:   cp.dosePerInj
+    };
+  }
+
+  // Single compound — simple periodic
+  if (nonHCG.length === 1) {
+    var cp0 = nonHCG[0], s0 = [], d0 = 0;
+    while (d0 < cycleDays) { s0.push(makeInj(cp0, d0, cp0.dosePerInj)); d0 += cp0.intervalDays; }
+    return s0;
+  }
+
+  // ── Multi-compound: backbone + compensatory forward simulation ──────────────
+  // Backbone = longest half-life; compensators sorted slowest-first (prefer coverage)
+  var sorted      = nonHCG.slice().sort(function(a,b){ return b.cd.halfLifeDays - a.cd.halfLifeDays; });
+  var backbone    = sorted[0];
+  var compensators = sorted.slice(1);
+
+  var backboneStart = Math.max(0, parseInt(_tcp.backboneStartDay) || 0);
+
+  // Floor = 60% of backbone's single injection dose.
+  // Compensators fire whenever the total plasma curve drops below this.
+  var T_floor = backbone.dosePerInj * 0.60;
+
+  // 1. Schedule backbone at its standard interval starting at backboneStart
   var sched = [];
+  var d = backboneStart;
+  while (d < cycleDays) { sched.push(makeInj(backbone, d, backbone.dosePerInj)); d += backbone.intervalDays; }
 
-  plan.compounds.forEach(function(cp) {
-    var d = 0;
-    while (d < plan.cycleDays) {
-      var prog = Math.min(1, (d / 7) / rampWeeks);
-      var dose = cp.dosePerInj * (0.3 + 0.7 * prog);
-      sched.push({
-        day:          Math.round(d),
-        dose:         Math.round(dose * 10) / 10,
-        compId:       cp.compId,
-        halfLifeDays: cp.cd.halfLifeDays,
-        dot:          cp.cd.dot,
-        name:         cp.cd.name,
-        dosePerInj:   cp.dosePerInj
-      });
-      d += cp.intervalDays;
+  // 2. Build backbone plasma curve
+  var curve = new Float64Array(cycleDays + 1);
+  function addToCurve(inj) {
+    var k = Math.LN2 / inj.halfLifeDays;
+    for (var t = inj.day; t <= cycleDays; t++)
+      curve[t] += inj.dose * Math.exp(-k * (t - inj.day));
+  }
+  sched.forEach(addToCurve);
+
+  // 3. Forward simulation — inject compensators on demand when curve < T_floor
+  var lastInjDay = {};
+  compensators.forEach(function(cp){ lastInjDay[cp.compId] = -9999; });
+
+  for (var day = 0; day <= cycleDays; day++) {
+    if (curve[day] >= T_floor) continue;
+    // Below floor — try compensators slowest-first (maximises coverage per injection)
+    for (var ci = 0; ci < compensators.length; ci++) {
+      var cp = compensators[ci];
+      if (day - lastInjDay[cp.compId] < cp.intervalDays) continue;
+      var inj = makeInj(cp, day, cp.dosePerInj);
+      sched.push(inj);
+      addToCurve(inj);
+      lastInjDay[cp.compId] = day;
+      if (curve[day] >= T_floor) break;
     }
-  });
+  }
 
-  sched.sort(function(a, b) { return a.day - b.day; });
+  sched.sort(function(a,b){ return a.day - b.day || a.compId.localeCompare(b.compId); });
   return sched;
 }
 
@@ -475,33 +522,44 @@ function _tcBuildCurve(sched, plan) {
 }
 
 function _tcComputeStats(total, sched, plan) {
-  var ssTrough = 0, ssPeak = 0;
-  plan.compounds.forEach(function(cp) {
-    var k   = Math.LN2 / cp.cd.halfLifeDays;
-    var eKT = Math.exp(k * cp.intervalDays);
-    var t   = cp.dosePerInj / (eKT - 1);
-    ssTrough += t;
-    ssPeak   += t + cp.dosePerInj;
-  });
-  var bandFloor = ssTrough * 0.85, bandCeil = ssPeak * 1.15;
+  var n = plan.cycleDays + 1;
 
-  var n = plan.cycleDays + 1, peak = 0, trough = Infinity, inBand = 0;
+  // Full-cycle peak/trough
+  var peak = 0, trough = Infinity;
   for (var t = 0; t < n; t++) {
-    var v = total[t];
-    if (v > peak)   peak   = v;
-    if (v < trough) trough = v;
-    if (v >= bandFloor && v <= bandCeil) inBand++;
+    if (total[t] > peak)   peak   = total[t];
+    if (total[t] < trough) trough = total[t];
   }
   if (trough === Infinity) trough = 0;
 
+  // Use second half of cycle for "settled" band (avoids ramp-up distortion)
+  var midDay = Math.floor(n / 2);
+  var latePeak = 0, lateTrough = Infinity;
+  for (var t2 = midDay; t2 < n; t2++) {
+    if (total[t2] > latePeak)   latePeak   = total[t2];
+    if (total[t2] < lateTrough) lateTrough = total[t2];
+  }
+  if (lateTrough === Infinity) lateTrough = trough;
+
+  var ssTrough  = lateTrough;
+  var ssPeak    = latePeak;
+  var bandFloor = ssTrough * 0.85;
+  var bandCeil  = ssPeak   * 1.15;
+
+  var inBand = 0;
+  for (var t3 = 0; t3 < n; t3++)
+    if (total[t3] >= bandFloor && total[t3] <= bandCeil) inBand++;
+
   var firstInBand = null;
-  for (var t2 = 7; t2 < n; t2++) {
-    if (total[t2] >= ssTrough * 0.9 && firstInBand === null) firstInBand = Math.ceil(t2 / 7);
+  for (var t4 = 7; t4 < n; t4++) {
+    if (total[t4] >= ssTrough * 0.90 && firstInBand === null)
+      firstInBand = Math.ceil(t4 / 7);
   }
 
   return {
-    peak:peak, trough:trough, ssTrough:ssTrough, ssPeak:ssPeak,
-    bandFloor:bandFloor, bandCeil:bandCeil,
+    peak: peak, trough: trough,
+    ssTrough: ssTrough, ssPeak: ssPeak,
+    bandFloor: bandFloor, bandCeil: bandCeil,
     peakTroughRatio:  trough > 0 ? peak / trough : 0,
     inBandPct:        Math.round(inBand / n * 100),
     totalMg:          Math.round(sched.reduce(function(s, inj){ return s + inj.dose; }, 0)),
@@ -785,6 +843,14 @@ function buildTCalc() {
   });
   html += '</select></div></div>';
 
+  if (plan && plan.compounds.length >= 2) {
+    html += '<div><label style="' + lSty + '">Backbone start (days into cycle)</label>';
+    html += '<input type="number" min="0" max="84" step="1" value="' + (_tcp.backboneStartDay || 0) + '" placeholder="0 = Day 1 of cycle" oninput="_tcp.backboneStartDay=+this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '">';
+    var _bk = plan.compounds.slice().sort(function(a,b){ return b.cd.halfLifeDays - a.cd.halfLifeDays; })[0];
+    html += '<div style="font-size:11px;color:var(--muted2);margin-top:5px">Backbone: <strong>' + _esc(_bk.cd.name) + '</strong> (t½ ' + _esc(_bk.cd.halfLifeStr||'') + '). Compensatory esters pre-fill from Day 0 until backbone fires.</div>';
+    html += '</div>';
+  }
+
   html += '<div><label style="' + lSty + '">End strategy</label>';
   html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
   [{id:'trt',label:'Permanent TRT'},{id:'blast-cruise',label:'Blast & Cruise'},{id:'pct',label:'Full PCT'}].forEach(function(s) {
@@ -812,17 +878,27 @@ function buildTCalc() {
     html += '</div>';
     html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:14px">';
 
+    var _planBackboneId = (plan.compounds.length > 1)
+      ? plan.compounds.slice().sort(function(a,b){ return b.cd.halfLifeDays - a.cd.halfLifeDays; })[0].compId
+      : null;
+
     plan.compounds.forEach(function(cp) {
+      var _isBackbone = _planBackboneId && cp.compId === _planBackboneId;
       html += '<div style="background:var(--surface2);border-radius:10px;padding:14px">';
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
       html += '<span style="width:9px;height:9px;border-radius:50%;background:' + cp.cd.dot + ';flex-shrink:0;display:inline-block;box-shadow:0 0 8px ' + cp.cd.dot + '88"></span>';
       html += '<span style="font-size:16px;font-weight:700;color:var(--text)">' + _esc(cp.cd.name) + '</span>';
       if (cp.cd.halfLifeStr) html += '<span style="font-size:12px;color:var(--muted2)">t½ ' + _esc(cp.cd.halfLifeStr) + '</span>';
+      if (_planBackboneId) {
+        var _roleLabel = _isBackbone ? 'BACKBONE' : 'FILL';
+        var _roleClr   = _isBackbone ? '#e8a020' : '#6688cc';
+        html += '<span style="font-size:10px;background:' + _roleClr + '22;color:' + _roleClr + ';border:1px solid ' + _roleClr + '66;border-radius:4px;padding:2px 6px;font-weight:700;letter-spacing:0.5px;margin-left:auto">' + _roleLabel + '</span>';
+      }
       html += '</div>';
       html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">';
       [{label:'Per injection', value: cp.dosePerInj + ' mg'},
        {label:'Per week',      value: cp.mgPerWeek + ' mg'},
-       {label:'Interval',      value: _tcIntervalLabel(cp.intervalDays)}
+       {label: _isBackbone ? 'Interval' : 'Min interval', value: _tcIntervalLabel(cp.intervalDays)}
       ].forEach(function(s) {
         html += '<div style="text-align:center">';
         html += '<div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">' + s.label + '</div>';
@@ -998,7 +1074,9 @@ function buildTCalc() {
 
     html += '</div>'; // close card
 
-    var rampWeeks    = Math.min(6, Math.max(2, Math.round(plan.cycleDays / 7 / 4)));
+    var _schedBackboneId = (plan.compounds.length > 1)
+      ? plan.compounds.slice().sort(function(a,b){ return b.cd.halfLifeDays - a.cd.halfLifeDays; })[0].compId
+      : null;
     var showCompound = plan.compounds.length > 1;
 
     html += '<div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:#888"></div>';
@@ -1014,9 +1092,9 @@ function buildTCalc() {
     html += '</tr></thead><tbody>';
 
     sched.forEach(function(inj, i) {
-      var isLast  = i === sched.length - 1;
-      var weekNum = Math.floor(inj.day / 7) + 1;
-      var isRamp  = inj.day < rampWeeks * 7 && inj.dose < inj.dosePerInj * 0.98;
+      var isLast      = i === sched.length - 1;
+      var weekNum     = Math.floor(inj.day / 7) + 1;
+      var isBackbone  = _schedBackboneId && inj.compId === _schedBackboneId;
       html += '<tr style="border-bottom:' + (isLast ? 'none' : '1px solid var(--border)') + '">';
       html += '<td style="padding:8px 16px;color:var(--text);font-size:14px">Day ' + (inj.day + 1) + '</td>';
       html += '<td style="padding:8px 16px;color:var(--muted);font-size:14px">W' + weekNum + '</td>';
@@ -1027,7 +1105,7 @@ function buildTCalc() {
         html += '<span style="color:var(--muted)">' + _esc(inj.name) + '</span></span></td>';
       }
       html += '<td style="padding:8px 16px;text-align:right;font-weight:700;color:var(--text);font-size:14px">' + inj.dose + ' mg</td>';
-      html += '<td style="padding:8px 16px;color:var(--muted2);font-size:11px">' + (isRamp ? 'ramp' : '') + '</td>';
+      html += '<td style="padding:8px 16px;color:var(--muted2);font-size:11px">' + (isBackbone ? 'backbone' : '') + '</td>';
       html += '</tr>';
     });
 
