@@ -13,7 +13,8 @@ var _tcp = {
   cycleDays:           168,
   preferredFreqDays:   'auto',
   overrideDoseMgWk:    '',
-  overrideIntervalDays: ''
+  overrideIntervalDays: '',
+  planCompId:          ''
 };
 
 var _tcpSessionLoaded = false;
@@ -170,22 +171,26 @@ function _tcOptimize() {
     return result;
   }
 
-  var prefDays = (_tcp.preferredFreqDays === 'auto') ? null : (parseFloat(_tcp.preferredFreqDays) || 3.5);
+  var prefDays = (_tcp.preferredFreqDays === 'auto') ? 3.5 : (parseFloat(_tcp.preferredFreqDays) || 3.5);
 
-  var bestInv = null, bestScore = Infinity;
-  testInv.forEach(function(inv) {
-    var cd    = _tcCompInfo(inv.compId);
-    var opt   = 0.585 * cd.halfLifeDays;
-    var score;
-    if (prefDays === null) {
-      // Auto: prefer compound with most stock (use what you have); ties broken by longest half-life (fewer injections)
-      var stock = parseFloat(inv.totalMg) || 0;
-      score = -stock * 1e6 - cd.halfLifeDays;
-    } else {
-      score = Math.abs(opt - prefDays);
+  // If user pinned a specific compound for the PLAN, use it directly
+  var bestInv = null;
+  if (_tcp.planCompId) {
+    var pinned = testInv.find(function(inv){ return inv.compId === _tcp.planCompId; });
+    if (pinned) {
+      var pcd = _tcCompInfo(pinned.compId);
+      bestInv = {inv: pinned, cd: pcd, optInterval: 0.585 * pcd.halfLifeDays};
     }
-    if (score < bestScore) { bestScore = score; bestInv = {inv:inv, cd:cd, optInterval:opt}; }
-  });
+  }
+  if (!bestInv) {
+    var bestScore = Infinity;
+    testInv.forEach(function(inv) {
+      var cd  = _tcCompInfo(inv.compId);
+      var opt = 0.585 * cd.halfLifeDays;
+      var score = Math.abs(opt - prefDays);
+      if (score < bestScore) { bestScore = score; bestInv = {inv:inv, cd:cd, optInterval:opt}; }
+    });
+  }
 
   var autoInterval = _tcSnapInterval(bestInv.optInterval);
 
@@ -631,6 +636,19 @@ function buildTCalc() {
     }
     html += '</div>';
     html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:14px">';
+
+    // Compound selector (only when 2+ non-HCG compounds in inventory)
+    var planableComps = _tcp.inventory.filter(function(inv){ return inv.compId !== 'hcg'; });
+    if (planableComps.length > 1) {
+      html += '<div><label style="' + lSty + '">Compound</label>';
+      html += '<select onchange="_tcp.planCompId=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '">';
+      html += '<option value=""' + (!_tcp.planCompId ? ' selected' : '') + '>Auto</option>';
+      planableComps.forEach(function(inv) {
+        var cd = _tcCompInfo(inv.compId);
+        html += '<option value="' + _esc(inv.compId) + '"' + (_tcp.planCompId === inv.compId ? ' selected' : '') + '>' + _esc(cd.name) + '</option>';
+      });
+      html += '</select></div>';
+    }
 
     // Compound + key stats summary
     html += '<div style="background:var(--surface2);border-radius:10px;padding:14px">';
