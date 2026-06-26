@@ -107,7 +107,9 @@ function _tcCompInfo(compId) {
       dot:             extra.dot,
       halfLifeDays:    extra.halfLifeDays || 1,
       halfLifeStr:     extra.halfLife || '',
-      bioavailability: extra.bioavailability || 1
+      bioavailability: extra.bioavailability || 1,
+      maxDailyDoseMg:  extra.maxDailyDoseMg || null,
+      usageNote:       extra.usageNote || ''
     };
   }
   var cat   = (typeof TRT_CAT   !== 'undefined') ? TRT_CAT.find(function(x){ return x.id === compId; })   : null;
@@ -208,6 +210,7 @@ function _tcOpenInventory() {
             '<input type="number" min="0" step="0.01" value="' + _esc(inv.costTotal || '') + '" placeholder="e.g. 45" onchange="_tcInvSetField(\'' + id + '\',\'costTotal\',this.value)" style="' + iSty + '">' +
           '</div>' +
         '</div>' +
+        (cd.usageNote ? '<div style="font-size:10px;color:#555;margin-top:10px;line-height:1.4">' + _esc(cd.usageNote) + '</div>' : '') +
       '</div>';
     } else {
       return '<div onclick="_tcToggleCompound(\'' + id + '\')" style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:14px;cursor:pointer;position:relative;overflow:hidden">' +
@@ -397,6 +400,16 @@ function _tcOptimize() {
     var compInterval = ovInterval > 0         ? ovInterval
                      : _tcp.preferredFreqDays !== 'auto' ? _tcSnapInterval(parseFloat(_tcp.preferredFreqDays) || optInterval)
                      : _tcSnapInterval(optInterval);
+
+    // Cap applied dose per application when the compound has a physical maximum
+    // (e.g. transdermal gel: 2 sachets × 50 mg = 100 mg per application)
+    if (cd.maxDailyDoseMg) {
+      var rawDosePerInj = compMgWkApplied * compInterval / 7;
+      if (rawDosePerInj > cd.maxDailyDoseMg) {
+        compMgWkApplied = cd.maxDailyDoseMg * 7 / compInterval;
+        compMgWkBioav   = compMgWkApplied * bioav;
+      }
+    }
 
     // Warn when stock runs short — never shorten the cycle; user can reorder
     if (stock > 0) {
