@@ -170,13 +170,20 @@ function _tcOptimize() {
     return result;
   }
 
-  var prefDays = (_tcp.preferredFreqDays === 'auto') ? 3.5 : (parseFloat(_tcp.preferredFreqDays) || 3.5);
+  var prefDays = (_tcp.preferredFreqDays === 'auto') ? null : (parseFloat(_tcp.preferredFreqDays) || 3.5);
 
   var bestInv = null, bestScore = Infinity;
   testInv.forEach(function(inv) {
-    var cd  = _tcCompInfo(inv.compId);
-    var opt = 0.585 * cd.halfLifeDays;
-    var score = Math.abs(opt - prefDays);
+    var cd    = _tcCompInfo(inv.compId);
+    var opt   = 0.585 * cd.halfLifeDays;
+    var score;
+    if (prefDays === null) {
+      // Auto: prefer compound with most stock (use what you have); ties broken by longest half-life (fewer injections)
+      var stock = parseFloat(inv.totalMg) || 0;
+      score = -stock * 1e6 - cd.halfLifeDays;
+    } else {
+      score = Math.abs(opt - prefDays);
+    }
     if (score < bestScore) { bestScore = score; bestInv = {inv:inv, cd:cd, optInterval:opt}; }
   });
 
