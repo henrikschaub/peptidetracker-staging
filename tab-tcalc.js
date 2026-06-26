@@ -14,7 +14,7 @@ var _tcp = {
   preferredFreqDays:   'auto',
   overrideDoseMgWk:    '',
   overrideIntervalDays: '',
-  planCompId:          ''
+  planCompId:          ''   // kept for backward-compat with saved profiles; ignored by optimizer
 };
 
 var _tcpSessionLoaded = false;
@@ -166,34 +166,12 @@ function _tcOptimize() {
   if (testInv.length === 0) {
     result.suggestions.push({
       type: 'no-inventory', priority: 2,
-      message: 'Add your testosterone compounds above — T-Calc will pick the best ester and schedule.'
+      message: 'Add your testosterone compounds above — T-Calc will build an optimised multi-ester schedule.'
     });
     return result;
   }
 
-  var prefDays = (_tcp.preferredFreqDays === 'auto') ? 3.5 : (parseFloat(_tcp.preferredFreqDays) || 3.5);
-
-  // If user pinned a specific compound for the PLAN, use it directly
-  var bestInv = null;
-  if (_tcp.planCompId) {
-    var pinned = testInv.find(function(inv){ return inv.compId === _tcp.planCompId; });
-    if (pinned) {
-      var pcd = _tcCompInfo(pinned.compId);
-      bestInv = {inv: pinned, cd: pcd, optInterval: 0.585 * pcd.halfLifeDays};
-    }
-  }
-  if (!bestInv) {
-    var bestScore = Infinity;
-    testInv.forEach(function(inv) {
-      var cd  = _tcCompInfo(inv.compId);
-      var opt = 0.585 * cd.halfLifeDays;
-      var score = Math.abs(opt - prefDays);
-      if (score < bestScore) { bestScore = score; bestInv = {inv:inv, cd:cd, optInterval:opt}; }
-    });
-  }
-
-  var autoInterval = _tcSnapInterval(bestInv.optInterval);
-
+  // ── Determine total weekly dose ───────────────────────────────────────────
   var autoMgPerWeek, doseSource;
   if (targetTT !== null && mgToNmol !== null) {
     autoMgPerWeek = targetTT / mgToNmol;
@@ -223,62 +201,73 @@ function _tcOptimize() {
 
   autoMgPerWeek = Math.max(50, Math.min(600, autoMgPerWeek));
 
-  // Apply user overrides
   var ovDose     = parseFloat(_tcp.overrideDoseMgWk)    || 0;
   var ovInterval = parseFloat(_tcp.overrideIntervalDays) || 0;
-  var reqMgPerWeek   = ovDose     > 0 ? ovDose     : autoMgPerWeek;
-  var chosenInterval = ovInterval > 0 ? ovInterval : autoInterval;
-  var isManual       = ovDose > 0 || ovInterval > 0;
+  var isManual   = ovDose > 0 || ovInterval > 0;
   if (isManual) doseSource = 'manual';
+  var reqMgPerWeek = ovDose > 0 ? ovDose : autoMgPerWeek;
 
-  var ptr = _tcPeakTroughRatio(bestInv.cd.halfLifeDays, chosenInterval);
+  // ── Allocate dose across all compounds ────────────────────────────────────
+  // Split proportionally by available stock; equal split when no stock entered
+  var totalStock = testInv.reduce(function(s, inv){ return s + (parseFloat(inv.totalMg) || 0); }, 0);
+  var equalSplit = (totalStock === 0);
 
-  var availableMg    = parseFloat(bestInv.inv.totalMg) || 0;
   var effectiveCycle = _tcp.cycleDays;
-  if (availableMg > 0) {
-    var weeksAvail = availableMg / reqMgPerWeek;
-    if (weeksAvail < _tcp.cycleDays / 7 * 0.9) {
-      effectiveCycle = Math.max(28, Math.floor(weeksAvail) * 7);
-      result.suggestions.push({
-        type: 'insufficient-inventory', priority: 1,
-        message: bestInv.cd.name + ' stock (' + Math.round(availableMg) + ' mg) covers ~' +
-                 Math.floor(weeksAvail) + ' wks at ' + Math.round(reqMgPerWeek) + ' mg/wk.'
-      });
+  var compoundPlans  = [];
+
+  testInv.forEach(function(inv) {
+    var cd    = _tcCompInfo(inv.compId);
+    var stock = parseFloat(inv.totalMg) || 0;
+    var frac  = equalSplit ? (1 / testInv.length) : (stock / totalStock);
+    var compMgWk = reqMgPerWeek * frac;
+
+    // Each compound uses its own optimal injection interval
+    var optInterval  = 0.585 * cd.halfLifeDays;
+    var compInterval = ovInterval > 0         ? ovInterval
+                     : _tcp.preferredFreqDays !== 'auto' ? _tcSnapInterval(parseFloat(_tcp.preferredFreqDays) || optInterval)
+                     : _tcSnapInterval(optInterval);
+
+    // Stock coverage check
+    if (stock > 0) {
+      var weeksAvail = stock / compMgWk;
+      if (weeksAvail < _tcp.cycleDays / 7 * 0.9) {
+        var capDays = Math.max(28, Math.floor(weeksAvail) * 7);
+        if (capDays < effectiveCycle) effectiveCycle = capDays;
+        result.suggestions.push({
+          type: 'insufficient-inventory', priority: 1,
+          message: cd.name + ' stock (' + Math.round(stock) + ' mg) covers ~' +
+                   Math.floor(weeksAvail) + ' wks at ' + Math.round(compMgWk) + ' mg/wk.'
+        });
+      }
     }
-  }
 
-  if (ptr > 2.5) {
-    result.warnings.push({
-      type: 'high-peak-trough',
-      message: 'Peak:trough ' + ptr.toFixed(1) + '× exceeds 2.5× threshold — inject more frequently or use a shorter ester.'
-    });
-  }
-
-  if (targetTT !== null) {
-    var dpi         = reqMgPerWeek * chosenInterval / 7;
-    var eKT         = Math.exp(Math.LN2 / bestInv.cd.halfLifeDays * chosenInterval);
-    var ssTrough_mg = dpi / (eKT - 1);
-    if (mgToNmol !== null && ssTrough_mg * mgToNmol / (7 / chosenInterval) < targetTT * 0.60) {
+    // Per-compound P:T warning
+    var ptr = _tcPeakTroughRatio(cd.halfLifeDays, compInterval);
+    if (ptr > 2.5) {
       result.warnings.push({
-        type: 'trough-below-target',
-        message: 'Trough is below 60% of target total T — increase injection frequency to raise the floor.'
+        type: 'high-peak-trough',
+        message: cd.name + ' peak:trough ' + ptr.toFixed(1) + '× exceeds 2.5× — increase frequency or use a shorter ester.'
       });
     }
-  }
+
+    compoundPlans.push({
+      compId:          cd.id,
+      cd:              cd,
+      intervalDays:    compInterval,
+      autoIntervalDays: _tcSnapInterval(optInterval),
+      dosePerInj:      Math.round(compMgWk * compInterval / 7 * 10) / 10,
+      mgPerWeek:       Math.round(compMgWk)
+    });
+  });
 
   result.plan = {
-    compId:           bestInv.cd.id,
-    cd:               bestInv.cd,
-    intervalDays:     chosenInterval,
-    autoIntervalDays: autoInterval,
-    dosePerInj:       Math.round(reqMgPerWeek * chosenInterval / 7 * 10) / 10,
-    reqMgPerWeek:     Math.round(reqMgPerWeek),
-    autoMgPerWeek:    Math.round(autoMgPerWeek),
-    peakTroughRatio:  ptr,
-    cycleDays:        effectiveCycle,
-    doseSource:       doseSource,
-    isManual:         isManual,
-    ftFrac:           ftFrac
+    compounds:       compoundPlans,
+    totalMgPerWeek:  Math.round(reqMgPerWeek),
+    autoMgPerWeek:   Math.round(autoMgPerWeek),
+    cycleDays:       effectiveCycle,
+    doseSource:      doseSource,
+    isManual:        isManual,
+    ftFrac:          ftFrac
   };
 
   return result;
@@ -288,24 +277,40 @@ function _tcOptimize() {
 
 function _tcBuildSchedule(plan) {
   var rampWeeks = Math.min(6, Math.max(2, Math.round(plan.cycleDays / 7 / 4)));
-  var sched = [], d = 0;
-  while (d < plan.cycleDays) {
-    var prog = Math.min(1, (d / 7) / rampWeeks);
-    var dose = plan.dosePerInj * (0.3 + 0.7 * prog);
-    sched.push({day: Math.round(d), dose: Math.round(dose * 10) / 10, compId: plan.compId});
-    d += plan.intervalDays;
-  }
+  var sched = [];
+
+  plan.compounds.forEach(function(cp) {
+    var d = 0;
+    while (d < plan.cycleDays) {
+      var prog = Math.min(1, (d / 7) / rampWeeks);
+      var dose = cp.dosePerInj * (0.3 + 0.7 * prog);
+      sched.push({
+        day:          Math.round(d),
+        dose:         Math.round(dose * 10) / 10,
+        compId:       cp.compId,
+        halfLifeDays: cp.cd.halfLifeDays,
+        dot:          cp.cd.dot,
+        name:         cp.cd.name,
+        dosePerInj:   cp.dosePerInj
+      });
+      d += cp.intervalDays;
+    }
+  });
+
+  sched.sort(function(a, b) { return a.day - b.day; });
   return sched;
 }
 
 function _tcBuildCurve(sched, plan) {
-  var k = Math.LN2 / plan.cd.halfLifeDays;
   var n = plan.cycleDays + 1;
   var total = new Float64Array(n);
   for (var t = 0; t < n; t++) {
     var c = 0;
     for (var j = 0; j < sched.length; j++) {
-      if (sched[j].day <= t) c += sched[j].dose * Math.exp(-k * (t - sched[j].day));
+      if (sched[j].day <= t) {
+        var k = Math.LN2 / sched[j].halfLifeDays;
+        c += sched[j].dose * Math.exp(-k * (t - sched[j].day));
+      }
     }
     total[t] = c;
   }
@@ -313,10 +318,15 @@ function _tcBuildCurve(sched, plan) {
 }
 
 function _tcComputeStats(total, sched, plan) {
-  var k   = Math.LN2 / plan.cd.halfLifeDays;
-  var iv  = plan.intervalDays, dpi = plan.dosePerInj;
-  var eKT = Math.exp(k * iv);
-  var ssTrough = dpi / (eKT - 1), ssPeak = ssTrough + dpi;
+  // Analytical steady-state: sum contributions from each compound
+  var ssTrough = 0, ssPeak = 0;
+  plan.compounds.forEach(function(cp) {
+    var k   = Math.LN2 / cp.cd.halfLifeDays;
+    var eKT = Math.exp(k * cp.intervalDays);
+    var t   = cp.dosePerInj / (eKT - 1);
+    ssTrough += t;
+    ssPeak   += t + cp.dosePerInj;
+  });
   var bandFloor = ssTrough * 0.85, bandCeil = ssPeak * 1.15;
 
   var n = plan.cycleDays + 1, peak = 0, trough = Infinity, inBand = 0;
@@ -336,9 +346,10 @@ function _tcComputeStats(total, sched, plan) {
   return {
     peak:peak, trough:trough, ssTrough:ssTrough, ssPeak:ssPeak,
     bandFloor:bandFloor, bandCeil:bandCeil,
-    inBandPct:       Math.round(inBand / n * 100),
-    totalMg:         Math.round(sched.reduce(function(s, inj){ return s + inj.dose; }, 0)),
-    firstInBandWeek: firstInBand
+    peakTroughRatio:  trough > 0 ? peak / trough : 0,
+    inBandPct:        Math.round(inBand / n * 100),
+    totalMg:          Math.round(sched.reduce(function(s, inj){ return s + inj.dose; }, 0)),
+    firstInBandWeek:  firstInBand
   };
 }
 
@@ -347,7 +358,8 @@ function _tcComputeStats(total, sched, plan) {
 function _tcDrawChart(canvasId, total, stats, plan, sched) {
   var canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  var cd = plan.cd, cycleDays = plan.cycleDays, lineColor = cd.dot;
+  var lineColor = (plan.compounds && plan.compounds.length > 0) ? plan.compounds[0].cd.dot : '#e8a020';
+  var cycleDays = plan.cycleDays;
 
   var dpr  = window.devicePixelRatio || 1;
   var cssW = canvas.offsetWidth || 300;
@@ -407,9 +419,11 @@ function _tcDrawChart(canvasId, total, stats, plan, sched) {
   for (var t3 = 1; t3 <= cycleDays; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] || 0));
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
 
-  ctx.strokeStyle = cd.dot + '99'; ctx.lineWidth = 1;
+  // Per-injection tick marks colored by compound
+  ctx.lineWidth = 1;
   (sched || []).forEach(function(inj) {
     var ix = xOf(inj.day);
+    ctx.strokeStyle = (inj.dot || lineColor) + '99';
     ctx.beginPath(); ctx.moveTo(ix, PAD.top + cH); ctx.lineTo(ix, PAD.top + cH + 5); ctx.stroke();
   });
 
@@ -425,19 +439,27 @@ function _tcDrawChart(canvasId, total, stats, plan, sched) {
 
 function _tcExportPlan() {
   var plan = _tcCurrentPlan;
-  if (!plan) return;
-  var iv  = plan.intervalDays, dpi = plan.dosePerInj, cd = plan.cd;
-  var days;
-  if (iv <= 1.1)                       days = [0,1,2,3,4,5,6];
-  else if (Math.abs(iv - 2)   < 0.3)  days = [1,3,5];
-  else if (Math.abs(iv - 3.5) < 0.3)  days = [1,4];
-  else if (Math.abs(iv - 7)   < 0.5)  days = [1];
-  else                                 days = [1];
+  if (!plan || !plan.compounds || plan.compounds.length === 0) return;
+
+  var trtCompounds = plan.compounds.map(function(cp) {
+    var iv = cp.intervalDays;
+    var days;
+    if (iv <= 1.1)                       days = [0,1,2,3,4,5,6];
+    else if (Math.abs(iv - 2)   < 0.3)  days = [1,3,5];
+    else if (Math.abs(iv - 3.5) < 0.3)  days = [1,4];
+    else if (Math.abs(iv - 7)   < 0.5)  days = [1];
+    else                                 days = [1];
+    return {id:cp.compId, name:cp.cd.name, dose:String(cp.dosePerInj), unit:'mg', days:days};
+  });
+
+  var nameStr = plan.compounds.length === 1
+    ? plan.compounds[0].cd.name + ' Protocol'
+    : plan.compounds.map(function(cp){ return cp.cd.name; }).join(' + ') + ' Protocol';
 
   var newStack = {
-    name:         cd.name + ' Protocol',
+    name:         nameStr,
     cycle_length: Math.round(plan.cycleDays / 7),
-    trt:          {enabled:true, compounds:[{id:cd.id, name:cd.name, dose:String(dpi), unit:'mg', days:days}]},
+    trt:          {enabled:true, compounds:trtCompounds},
     peptides:     [],
     enhanced:     {enabled:false, compounds:[]},
     _tcalc:       true
@@ -498,7 +520,7 @@ function buildTCalc() {
   html += '<div><label style="' + lSty + '">Target free T (pmol/L)</label>';
   html += '<input type="number" min="0" max="10000" step="10" value="' + _esc(_tcp.targetFT) + '" placeholder="225–675 optimal · 600–1000 high-normal TRT" oninput="_tcp.targetFT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
 
-  // Calibration summary — concise key-value layout
+  // Calibration summary
   if (cal.vermFT !== null || cal.targetTT !== null) {
     html += '<div style="background:var(--surface2);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:8px">';
     if (cal.vermFT !== null) {
@@ -534,7 +556,6 @@ function buildTCalc() {
   // ── 2. AVAILABLE COMPOUNDS card ───────────────────────────────────────────────
   var trtIds = (typeof TRT_CAT !== 'undefined') ? TRT_CAT.map(function(c){ return c.id; }) : ['cypionate', 'enanthate'];
   var existingIds = _tcp.inventory.map(function(inv){ return inv.compId; });
-  // Compounds not yet added (exclude duplicates)
   var notAdded = trtIds.filter(function(id){ return existingIds.indexOf(id) === -1; });
   if (existingIds.indexOf('hcg') === -1) notAdded.push('hcg');
 
@@ -550,11 +571,16 @@ function buildTCalc() {
 
   _tcp.inventory.forEach(function(inv, idx) {
     var cd = _tcCompInfo(inv.compId);
-    var isChosen = plan && plan.compId === inv.compId;
+    // All non-HCG inventory compounds are used by the optimizer
+    var isChosen = plan && inv.compId !== 'hcg' &&
+                   plan.compounds.some(function(cp){ return cp.compId === inv.compId; });
     var totalMgNum = parseFloat(inv.totalMg) || 0;
     var weeksStr = '';
-    if (plan && plan.compId === inv.compId && totalMgNum > 0 && plan.reqMgPerWeek > 0) {
-      weeksStr = '~' + Math.floor(totalMgNum / plan.reqMgPerWeek) + ' wks';
+    if (plan && totalMgNum > 0) {
+      var cp = plan.compounds.find(function(c){ return c.compId === inv.compId; });
+      if (cp && cp.mgPerWeek > 0) {
+        weeksStr = '~' + Math.floor(totalMgNum / cp.mgPerWeek) + ' wks';
+      }
     }
 
     html += '<div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:8px;padding:12px 14px' + (isChosen ? ';border:1px solid ' + cd.dot + '66' : '') + '">';
@@ -570,7 +596,6 @@ function buildTCalc() {
     html += '</div>';
   });
 
-  // Add compound: dropdown listing only non-duplicate options
   if (notAdded.length > 0) {
     var addOpts = notAdded.map(function(id) {
       var cat = (typeof TRT_CAT !== 'undefined') ? TRT_CAT.find(function(c){ return c.id === id; }) : null;
@@ -601,7 +626,7 @@ function buildTCalc() {
   html += '<select onchange="_tcp.cycleDays=+this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '">' + cycleOpts + '</select></div>';
   html += '<div><label style="' + lSty + '">Preferred frequency</label>';
   html += '<select onchange="_tcp.preferredFreqDays=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '">';
-  html += '<option value="auto"' + (_tcp.preferredFreqDays==='auto'?' selected':'') + '>Auto (T-Calc picks)</option>';
+  html += '<option value="auto"' + (_tcp.preferredFreqDays==='auto'?' selected':'') + '>Auto (per ester)</option>';
   _TC_FREQ_OPTS.forEach(function(f) {
     var v = String(f.days);
     html += '<option value="' + v + '"' + (_tcp.preferredFreqDays===v?' selected':'') + '>' + _esc(f.label) + '</option>';
@@ -618,13 +643,16 @@ function buildTCalc() {
   });
   html += '</div></div></div></div>';
 
-  // ── 4. PLAN card — T-Calc recommendation + manual override ───────────────────
+  // ── 4. PLAN card ─────────────────────────────────────────────────────────────
   if (plan) {
-    var autoLabel  = _tcIntervalLabel(plan.autoIntervalDays);
+    var firstCp    = plan.compounds[0];
+    var planDot    = plan.isManual ? '#cc8844' : (firstCp ? firstCp.cd.dot : '#e8a020');
     var doseLabel  = plan.doseSource === 'personal' ? 'personal' :
                      plan.doseSource === 'population' ? 'pop. avg' :
                      plan.doseSource === 'manual'     ? 'manual'   : 'estimate';
-    var planDot    = plan.isManual ? '#cc8844' : plan.cd.dot;
+
+    // Auto-label for override interval dropdown
+    var autoIntervalLabel = firstCp ? _tcIntervalLabel(firstCp.autoIntervalDays) : 'auto';
 
     html += '<div class="card"><div class="card-header"><div class="card-title-wrap">';
     html += '<div class="card-dot" style="background:' + planDot + '"></div>';
@@ -637,49 +665,44 @@ function buildTCalc() {
     html += '</div>';
     html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:14px">';
 
-    // Compound selector (only when 2+ non-HCG compounds in inventory)
-    var planableComps = _tcp.inventory.filter(function(inv){ return inv.compId !== 'hcg'; });
-    if (planableComps.length > 1) {
-      html += '<div><label style="' + lSty + '">Compound</label>';
-      html += '<select onchange="_tcp.planCompId=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '">';
-      html += '<option value=""' + (!_tcp.planCompId ? ' selected' : '') + '>Auto</option>';
-      planableComps.forEach(function(inv) {
-        var cd = _tcCompInfo(inv.compId);
-        html += '<option value="' + _esc(inv.compId) + '"' + (_tcp.planCompId === inv.compId ? ' selected' : '') + '>' + _esc(cd.name) + '</option>';
+    // Per-compound rows
+    plan.compounds.forEach(function(cp) {
+      html += '<div style="background:var(--surface2);border-radius:10px;padding:14px">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
+      html += '<span style="width:9px;height:9px;border-radius:50%;background:' + cp.cd.dot + ';flex-shrink:0;display:inline-block"></span>';
+      html += '<span style="font-size:16px;font-weight:700;color:var(--text)">' + _esc(cp.cd.name) + '</span>';
+      if (cp.cd.halfLifeStr) html += '<span style="font-size:12px;color:var(--muted2)">t½ ' + _esc(cp.cd.halfLifeStr) + '</span>';
+      html += '</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">';
+      [
+        {label:'Per injection', value: cp.dosePerInj + ' mg'},
+        {label:'Per week',      value: cp.mgPerWeek + ' mg'},
+        {label:'Interval',      value: _tcIntervalLabel(cp.intervalDays)}
+      ].forEach(function(s) {
+        html += '<div style="text-align:center">';
+        html += '<div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">' + s.label + '</div>';
+        html += '<div style="font-size:14px;font-weight:700;color:var(--text)">' + s.value + '</div>';
+        html += '</div>';
       });
-      html += '</select></div>';
-    }
-
-    // Compound + key stats summary
-    html += '<div style="background:var(--surface2);border-radius:10px;padding:14px">';
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
-    html += '<span style="width:9px;height:9px;border-radius:50%;background:' + plan.cd.dot + ';flex-shrink:0;display:inline-block"></span>';
-    html += '<span style="font-size:16px;font-weight:700;color:var(--text)">' + _esc(plan.cd.name) + '</span>';
-    if (plan.cd.halfLifeStr) html += '<span style="font-size:12px;color:var(--muted2)">t½ ' + _esc(plan.cd.halfLifeStr) + '</span>';
-    html += '</div>';
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">';
-    [
-      {label:'Per injection', value: plan.dosePerInj + ' mg'},
-      {label:'Per week',      value: Math.round(plan.reqMgPerWeek) + ' mg'},
-      {label:'Interval',      value: _tcIntervalLabel(plan.intervalDays)}
-    ].forEach(function(s) {
-      html += '<div style="text-align:center">';
-      html += '<div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">' + s.label + '</div>';
-      html += '<div style="font-size:14px;font-weight:700;color:var(--text)">' + s.value + '</div>';
+      html += '</div>';
       html += '</div>';
     });
-    html += '</div>';
-    html += '<div style="text-align:center;margin-top:8px;font-size:11px;color:var(--muted2)">Basis: ' + doseLabel + '</div>';
-    html += '</div>';
+
+    // Total summary
+    if (plan.compounds.length > 1) {
+      html += '<div style="text-align:center;font-size:13px;color:var(--muted2)">Total ' + plan.totalMgPerWeek + ' mg/wk · Basis: ' + doseLabel + '</div>';
+    } else {
+      html += '<div style="text-align:center;font-size:13px;color:var(--muted2)">Basis: ' + doseLabel + '</div>';
+    }
 
     // Override inputs
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
     html += '<div><label style="' + lSty + '">Override dose (mg/wk)</label>';
     html += '<input type="number" min="50" max="1000" step="10" value="' + _esc(_tcp.overrideDoseMgWk) + '" placeholder="' + Math.round(plan.autoMgPerWeek) + ' (auto)" oninput="_tcp.overrideDoseMgWk=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
 
-    html += '<div><label style="' + lSty + '">Override interval</label>';
+    html += '<div><label style="' + lSty + '">Override interval (all)</label>';
     html += '<select onchange="_tcp.overrideIntervalDays=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '">';
-    html += '<option value=""' + (!_tcp.overrideIntervalDays ? ' selected' : '') + '>Auto — ' + _esc(autoLabel) + '</option>';
+    html += '<option value=""' + (!_tcp.overrideIntervalDays ? ' selected' : '') + '>Auto — per ester</option>';
     _TC_FREQ_OPTS.forEach(function(f) {
       var v = String(f.days);
       html += '<option value="' + v + '"' + (_tcp.overrideIntervalDays === v ? ' selected' : '') + '>' + _esc(f.label) + '</option>';
@@ -731,15 +754,19 @@ function buildTCalc() {
     html += '</div></div>';
   }
 
-  // ── 8. CHART + SCHEDULE (when plan exists) ───────────────────────────────────
+  // ── 8. PLASMA CURVE + SCHEDULE (when plan exists) ────────────────────────────
   if (plan && curve && stats) {
-    var ptr = plan.peakTroughRatio;
+    var ptr = stats.peakTroughRatio;
     var ptrColor = ptr > 2.5 ? '#cc4444' : ptr > 1.8 ? '#e8a020' : '#44cc88';
+    var firstCpForChart = plan.compounds[0];
+    var curveSubtitle = plan.compounds.length > 1
+      ? plan.compounds.map(function(cp){ return cp.cd.name; }).join(' + ')
+      : (firstCpForChart && firstCpForChart.cd.halfLifeStr ? 't½ ' + firstCpForChart.cd.halfLifeStr : '');
 
     html += '<div class="card"><div class="card-header"><div class="card-title-wrap">';
-    html += '<div class="card-dot" style="background:' + plan.cd.dot + '"></div>';
+    html += '<div class="card-dot" style="background:' + (firstCpForChart ? firstCpForChart.cd.dot : '#e8a020') + '"></div>';
     html += '<div class="card-title">PLASMA CURVE</div></div>';
-    if (plan.cd.halfLifeStr) html += '<span style="font-size:11px;color:var(--muted2)">t½ ' + _esc(plan.cd.halfLifeStr) + '</span>';
+    if (curveSubtitle) html += '<span style="font-size:11px;color:var(--muted2)">' + _esc(curveSubtitle) + '</span>';
     html += '</div>';
     html += '<div style="padding:2px 16px 10px"><canvas id="tc-chart" style="width:100%;display:block;"></canvas></div>';
 
@@ -765,6 +792,7 @@ function buildTCalc() {
     html += '</div></div>';
 
     var rampWeeks = Math.min(6, Math.max(2, Math.round(plan.cycleDays / 7 / 4)));
+    var showCompound = plan.compounds.length > 1;
 
     html += '<div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:#888"></div>';
     html += '<div class="card-title">SCHEDULE</div></div>';
@@ -772,18 +800,27 @@ function buildTCalc() {
     html += '</div>';
     html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">';
     html += '<thead><tr style="border-bottom:1px solid var(--border)">';
-    ['DAY','WEEK','DOSE',''].forEach(function(h, i) {
-      html += '<th style="padding:8px 16px;text-align:' + (i===2?'right':'left') + ';font-size:10px;color:var(--muted2);font-weight:600;letter-spacing:0.5px">' + h + '</th>';
+    var schedHeaders = showCompound ? ['DAY','WEEK','COMPOUND','DOSE',''] : ['DAY','WEEK','DOSE',''];
+    schedHeaders.forEach(function(h, i) {
+      var isRight = showCompound ? (i === 3) : (i === 2);
+      html += '<th style="padding:8px 16px;text-align:' + (isRight?'right':'left') + ';font-size:10px;color:var(--muted2);font-weight:600;letter-spacing:0.5px">' + h + '</th>';
     });
     html += '</tr></thead><tbody>';
 
     sched.forEach(function(inj, i) {
       var isLast  = i === sched.length - 1;
       var weekNum = Math.floor(inj.day / 7) + 1;
-      var isRamp  = inj.day < rampWeeks * 7 && inj.dose < plan.dosePerInj * 0.98;
+      var isRamp  = inj.day < rampWeeks * 7 && inj.dose < inj.dosePerInj * 0.98;
       html += '<tr style="border-bottom:' + (isLast ? 'none' : '1px solid var(--border)') + '">';
       html += '<td style="padding:8px 16px;color:var(--text);font-size:14px">Day ' + (inj.day + 1) + '</td>';
       html += '<td style="padding:8px 16px;color:var(--muted);font-size:14px">W' + weekNum + '</td>';
+      if (showCompound) {
+        html += '<td style="padding:8px 16px;font-size:13px">';
+        html += '<span style="display:inline-flex;align-items:center;gap:5px">';
+        html += '<span style="width:7px;height:7px;border-radius:50%;background:' + (inj.dot||'#e8a020') + ';display:inline-block;flex-shrink:0"></span>';
+        html += '<span style="color:var(--muted)">' + _esc(inj.name) + '</span>';
+        html += '</span></td>';
+      }
       html += '<td style="padding:8px 16px;text-align:right;font-weight:700;color:var(--text);font-size:14px">' + inj.dose + ' mg</td>';
       html += '<td style="padding:8px 16px;color:var(--muted2);font-size:11px">' + (isRamp ? 'ramp' : '') + '</td>';
       html += '</tr>';
