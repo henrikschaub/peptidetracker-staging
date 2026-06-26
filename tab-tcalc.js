@@ -499,20 +499,20 @@ function buildTCalc() {
 
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
   html += '<div><label style="' + lSty + '">Total T (nmol/L)</label>';
-  html += '<input type="number" min="0" max="200" step="0.1" value="' + _esc(_tcp.totalT) + '" placeholder="e.g. 16.2" oninput="_tcp.totalT=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '"></div>';
+  html += '<input type="number" min="0" max="200" step="0.1" value="' + _esc(_tcp.totalT) + '" placeholder="e.g. 16.2" oninput="_tcp.totalT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
   html += '<div><label style="' + lSty + '">SHBG (nmol/L)</label>';
-  html += '<input type="number" min="0" max="300" step="1" value="' + _esc(_tcp.shbg) + '" placeholder="e.g. 45" oninput="_tcp.shbg=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '"></div>';
+  html += '<input type="number" min="0" max="300" step="1" value="' + _esc(_tcp.shbg) + '" placeholder="e.g. 45" oninput="_tcp.shbg=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
   html += '</div>';
 
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
   html += '<div><label style="' + lSty + '">Measured free T (pmol/L)</label>';
-  html += '<input type="number" min="0" max="10000" step="1" value="' + _esc(_tcp.measuredFT) + '" placeholder="e.g. 223" oninput="_tcp.measuredFT=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '"></div>';
+  html += '<input type="number" min="0" max="10000" step="1" value="' + _esc(_tcp.measuredFT) + '" placeholder="e.g. 223" oninput="_tcp.measuredFT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
   html += '<div><label style="' + lSty + '">Current weekly dose (mg/wk)</label>';
-  html += '<input type="number" min="0" max="2000" step="10" value="' + _esc(_tcp.currentDoseMgWk) + '" placeholder="e.g. 150 (at time of bloodwork)" oninput="_tcp.currentDoseMgWk=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '"></div>';
+  html += '<input type="number" min="0" max="2000" step="10" value="' + _esc(_tcp.currentDoseMgWk) + '" placeholder="e.g. 150 (at time of bloodwork)" oninput="_tcp.currentDoseMgWk=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
   html += '</div>';
 
   html += '<div><label style="' + lSty + '">Target free T (pmol/L)</label>';
-  html += '<input type="number" min="0" max="10000" step="10" value="' + _esc(_tcp.targetFT) + '" placeholder="225–675 optimal male range · 600–1000 high-normal TRT" oninput="_tcp.targetFT=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '"></div>';
+  html += '<input type="number" min="0" max="10000" step="10" value="' + _esc(_tcp.targetFT) + '" placeholder="225–675 optimal male range · 600–1000 high-normal TRT" oninput="_tcp.targetFT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
 
   if (cal.ttNum > 0 || cal.mftNum > 0 || cal.tgtFT > 0) {
     html += '<div style="background:var(--surface2);border-radius:8px;padding:12px 14px;font-size:11px;color:var(--muted);line-height:1.9">';
@@ -572,7 +572,7 @@ function buildTCalc() {
     html += '<span style="width:8px;height:8px;border-radius:50%;background:' + cd.dot + ';flex-shrink:0;display:inline-block"></span>';
     html += '<select onchange="_tcp.inventory[' + idx + '].compId=this.value;_tcSaveProfile();buildTCalc()" style="flex:1;background:transparent;border:none;color:var(--text);font-size:12px;font-family:inherit;outline:none;min-width:0">' + compOpts + '</select>';
     if (cd.halfLifeStr) html += '<span style="font-size:10px;color:var(--muted2);flex-shrink:0;white-space:nowrap">t½ ' + _esc(cd.halfLifeStr) + '</span>';
-    html += '<input type="number" min="0" max="99999" step="100" value="' + _esc(inv.totalMg) + '" placeholder="mg" oninput="_tcp.inventory[' + idx + '].totalMg=this.value;_tcSaveProfile();buildTCalc()" style="width:72px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 6px;color:var(--text);font-size:12px;font-family:inherit;outline:none;text-align:right;flex-shrink:0">';
+    html += '<input type="number" min="0" max="99999" step="100" value="' + _esc(inv.totalMg) + '" placeholder="mg" oninput="_tcp.inventory[' + idx + '].totalMg=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="width:72px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 6px;color:var(--text);font-size:12px;font-family:inherit;outline:none;text-align:right;flex-shrink:0">';
     html += '<span style="font-size:10px;color:var(--muted2);flex-shrink:0">mg</span>';
     if (weeksStr) html += '<span style="font-size:10px;color:var(--accent);flex-shrink:0;font-weight:700">' + weeksStr + '</span>';
     html += '<button onclick="_tcRemoveInventory(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:0 0 0 2px;line-height:1;flex-shrink:0">×</button>';
