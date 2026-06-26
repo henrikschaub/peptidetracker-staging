@@ -163,7 +163,7 @@ function buildBloodLevels() {
     var cycleStartDow = st.cycle_start ? parseLocalDate(st.cycle_start).getDay() : 1;
     var stackLabel = st.name || ('Stack ' + (si + 1));
 
-    // TRT compounds
+    // TRT compounds — all TRT compounds are testosterone esters
     if (st.trt && st.trt.enabled) {
       (st.trt.compounds || []).forEach(function(c) {
         var guide = TRT_GUIDE[c.id];
@@ -183,7 +183,8 @@ function buildBloodLevels() {
           curve: curve,
           cycleLen: cycleLen,
           stackLabel: stackLabel,
-          halfLifeStr: guide.halfLife
+          halfLifeStr: guide.halfLife,
+          isTestosterone: true
         });
       });
     }
@@ -215,11 +216,32 @@ function buildBloodLevels() {
           curve: curve,
           cycleLen: cycleLen,
           stackLabel: stackLabel,
-          halfLifeStr: ec.id === 'hgh' ? '~24h IGF-1 effect' : halfLifeStr
+          halfLifeStr: ec.id === 'hgh' ? '~24h IGF-1 effect' : halfLifeStr,
+          isTestosterone: (c.name || '').toLowerCase().includes('testosterone')
         });
       });
     }
   });
+
+  // If 2+ testosterone compounds are present, prepend a combined total curve
+  var testItems = items.filter(function(it) { return it.isTestosterone; });
+  if (testItems.length > 1) {
+    var maxCycleLen = testItems.reduce(function(m, it) { return Math.max(m, it.cycleLen); }, 0);
+    var combined = new Float64Array(maxCycleLen + 1);
+    testItems.forEach(function(it) {
+      for (var t = 0; t <= it.cycleLen; t++) combined[t] += it.curve[t] || 0;
+    });
+    items.unshift({
+      name: 'Combined Testosterone',
+      unit: 'mg',
+      dot: '#f5c842',
+      curve: combined,
+      cycleLen: maxCycleLen,
+      stackLabel: '',
+      halfLifeStr: testItems.map(function(it) { return it.name; }).join(' + '),
+      isCombined: true
+    });
+  }
 
   if (!items.length) {
     el.innerHTML = '';
@@ -231,10 +253,10 @@ function buildBloodLevels() {
   items.forEach(function(item, idx) {
     html += '<div class="card">';
     html += '<div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:' + item.dot + '"></div><div class="card-title">' + _esc(item.name.toUpperCase()) + '</div></div>';
-    html += '<span style="font-size:10px;color:var(--muted2);padding-right:2px;white-space:nowrap">t½ ' + _esc(item.halfLifeStr) + '</span>';
+    html += '<span style="font-size:10px;color:var(--muted2);padding-right:2px;white-space:nowrap">' + (item.isCombined ? '' : 't½ ') + _esc(item.halfLifeStr) + '</span>';
     html += '</div>';
     html += '<div style="padding:2px 16px 14px"><canvas id="pk-chart-' + idx + '" height="110" style="width:100%;display:block;"></canvas></div>';
-    if (items.length > 1) {
+    if (items.length > 1 && !item.isCombined && item.stackLabel) {
       html += '<div style="padding:0 16px 10px;font-size:10px;color:var(--muted2)">' + _esc(item.stackLabel) + ' · ' + item.cycleLen + '-day cycle</div>';
     }
     html += '</div>';
