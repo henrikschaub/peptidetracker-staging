@@ -465,6 +465,33 @@ function _tcDrawManualChart(canvasId, log) {
     }
   });
 
+  // Calibrated pmol/L scale using settled peak/trough over the log window (not washout tail)
+  var _mftNum  = parseFloat(_tcp.measuredFT)      || 0;
+  var _curDose = parseFloat(_tcp.currentDoseMgWk) || 0;
+  var _logDays = totalDays - washoutDays - 1;
+  var _midLog  = Math.max(0, Math.floor(_logDays / 2));
+  var _logPeak = 0, _logTrough = Infinity;
+  for (var _ls = _midLog; _ls <= _logDays; _ls++) {
+    if (total[_ls] > _logPeak)   _logPeak   = total[_ls];
+    if (total[_ls] < _logTrough) _logTrough = total[_ls];
+  }
+  if (_logPeak === 0) { for (var _ls2 = 0; _ls2 <= totalDays; _ls2++) if (total[_ls2] > _logPeak) _logPeak = total[_ls2]; }
+  if (_logTrough === Infinity) _logTrough = _logPeak;
+  var _logMean = (_logPeak + _logTrough) / 2 || _logPeak;
+  var calFT = null;
+  if (_mftNum > 0 && _logMean > 0) {
+    if (_curDose > 0) {
+      var _totalAbsMg = 0;
+      sorted.forEach(function(e) { _totalAbsMg += parseFloat(e.doseMg) * ((_tcCompInfo(e.compId).bioavailability) || 1); });
+      var _effMgWk = _logDays > 0 ? _totalAbsMg / _logDays * 7 : _curDose;
+      calFT = _mftNum * _effMgWk / _curDose / _logMean;
+    } else {
+      calFT = _mftNum / _logMean;
+    }
+  }
+  var scale     = calFT || 1;
+  var unitLabel = calFT ? 'pmol/L' : 'mg';
+
   var dpr  = window.devicePixelRatio || 1;
   var cssW = canvas.offsetWidth || 300;
   var cssH = 150;
@@ -478,7 +505,8 @@ function _tcDrawManualChart(canvasId, log) {
   var cH  = cssH - PAD.top  - PAD.bottom;
 
   var maxV = 0;
-  for (var i = 0; i <= totalDays; i++) if (total[i] > maxV) maxV = total[i];
+  for (var i = 0; i <= totalDays; i++) if (total[i] * scale > maxV) maxV = total[i] * scale;
+  if (_mftNum && calFT && _mftNum > maxV) maxV = _mftNum * 1.1;
   if (!maxV) { ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.fillText('No data', 10, 40); return; }
   var vMax = maxV * 1.1;
 
@@ -492,28 +520,38 @@ function _tcDrawManualChart(canvasId, log) {
     ctx.beginPath(); ctx.moveTo(gx, PAD.top); ctx.lineTo(gx, PAD.top + cH); ctx.stroke();
   }
 
+  // Measured FT reference line
+  if (_mftNum && calFT) {
+    var _refY = yOf(_mftNum);
+    ctx.strokeStyle = '#e8a02099'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(PAD.left, _refY); ctx.lineTo(PAD.left + cW, _refY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e8a020bb'; ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(Math.round(_mftNum), PAD.left + 3, _refY - 2);
+  }
+
   ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'right';
   for (var ti = 0; ti <= 3; ti++) {
     var ty = PAD.top + (cH / 3) * ti;
     ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
     ctx.beginPath(); ctx.moveTo(PAD.left, ty); ctx.lineTo(PAD.left + cW, ty); ctx.stroke();
     var tv = vMax * (1 - ti / 3);
-    ctx.fillText(tv >= 100 ? Math.round(tv) : tv >= 10 ? tv.toFixed(1) : tv.toFixed(2), PAD.left - 4, ty + 3);
+    ctx.fillText(calFT ? Math.round(tv) : (tv >= 100 ? Math.round(tv) : tv >= 10 ? tv.toFixed(1) : tv.toFixed(2)), PAD.left - 4, ty + 3);
   }
   ctx.save(); ctx.translate(10, PAD.top + cH / 2); ctx.rotate(-Math.PI / 2);
   ctx.textAlign = 'center'; ctx.fillStyle = '#444'; ctx.font = '8px DM Sans,sans-serif';
-  ctx.fillText('mg', 0, 0); ctx.restore();
+  ctx.fillText(unitLabel, 0, 0); ctx.restore();
 
   var lineColor = _tcCompInfo(sorted[0].compId).dot || '#e8a020';
   var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
   grad.addColorStop(0, lineColor + '55'); grad.addColorStop(1, lineColor + '00');
   ctx.beginPath(); ctx.moveTo(xOf(0), PAD.top + cH);
-  for (var t2 = 0; t2 <= totalDays; t2++) ctx.lineTo(xOf(t2), yOf(total[t2] || 0));
+  for (var t2 = 0; t2 <= totalDays; t2++) ctx.lineTo(xOf(t2), yOf(total[t2] * scale || 0));
   ctx.lineTo(xOf(totalDays), PAD.top + cH);
   ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
-  ctx.beginPath(); ctx.moveTo(xOf(0), yOf(total[0] || 0));
-  for (var t3 = 1; t3 <= totalDays; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] || 0));
+  ctx.beginPath(); ctx.moveTo(xOf(0), yOf(total[0] * scale || 0));
+  for (var t3 = 1; t3 <= totalDays; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] * scale || 0));
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
 
   sorted.forEach(function(e) {
@@ -1009,11 +1047,14 @@ function buildTCalc() {
   _tcCurrentPlan = plan;
 
   // Calibrated free T scale: pmol/L per simulation unit.
-  // Anchors the curve to the user's measured free T at their bloodwork dose.
+  // Anchors steady-state mean to the user's measured free T.
+  // Dose ratio scales proportionally when bloodwork dose differs from plan dose.
   var calFT = null;
-  if (cal.mftNum > 0 && cal.curDose > 0 && stats && (stats.ssPeak + stats.ssTrough) > 0) {
+  if (cal.mftNum > 0 && stats && (stats.ssPeak + stats.ssTrough) > 0) {
     var _ssMean = (stats.ssPeak + stats.ssTrough) / 2;
-    calFT = cal.mftNum * plan.totalMgPerWeek / cal.curDose / _ssMean;
+    calFT = cal.curDose > 0
+      ? cal.mftNum * plan.totalMgPerWeek / cal.curDose / _ssMean
+      : cal.mftNum / _ssMean;
   }
 
   var html = '';
