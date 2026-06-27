@@ -137,6 +137,26 @@ function _tcVermeulenFT(totalT, shbg) {
 
 // ── PK helpers ────────────────────────────────────────────────────────────────
 
+function _tcKa(halfLifeDays) {
+  // Absorption rate constant (1/day) for 1-compartment depot model.
+  // Ka values calibrated to known Tmax per ester class:
+  //   Nebido (hl≥20d) → tmax≈7d | Cypionate (hl≥9d) → tmax≈2d
+  //   Enanthate (hl≥3d) → tmax≈1d | Propionate (hl≥1d) → tmax≈0.4d | Gel → near-immediate
+  if (halfLifeDays >= 20) return 0.40;
+  if (halfLifeDays >= 9)  return 1.50;
+  if (halfLifeDays >= 3)  return 3.00;
+  if (halfLifeDays >= 1)  return 8.00;
+  return 15.0;
+}
+
+function _tcPkConc(dose, ka, ke, dt) {
+  // 1-compartment first-order absorption model:
+  // C(dt) = dose * ka/(ka-ke) * (exp(-ke*dt) - exp(-ka*dt))
+  if (dt < 0) return 0;
+  if (Math.abs(ka - ke) < 1e-9) return dose * ke * dt * Math.exp(-ke * dt);
+  return dose * ka / (ka - ke) * (Math.exp(-ke * dt) - Math.exp(-ka * dt));
+}
+
 function _tcPeakTroughRatio(halfLifeDays, intervalDays) {
   return Math.exp(Math.LN2 / halfLifeDays * intervalDays);
 }
@@ -433,14 +453,15 @@ function _tcDrawManualChart(canvasId, log) {
   var total = new Float64Array(totalDays + 1);
 
   sorted.forEach(function(e) {
-    var cd   = _tcCompInfo(e.compId);
-    var hl   = cd.halfLifeDays || 1;
+    var cd    = _tcCompInfo(e.compId);
+    var hl    = cd.halfLifeDays || 1;
     var bioav = cd.bioavailability || 1;
-    var k    = Math.LN2 / hl;
+    var ke    = Math.LN2 / hl;
+    var ka    = _tcKa(hl);
     var injectDay = Math.round((new Date(e.date) - firstDate) / 86400000);
     var absorbed  = parseFloat(e.doseMg) * bioav;
     for (var t = injectDay; t <= totalDays; t++) {
-      total[t] += absorbed * Math.exp(-k * (t - injectDay));
+      total[t] += _tcPkConc(absorbed, ka, ke, t - injectDay);
     }
   });
 
@@ -701,11 +722,13 @@ function _tcBuildSchedule(plan) {
 
   function makeInj(cp, day, dose) {
     var bioav = cp.cd.bioavailability || 1;
+    var hl    = cp.cd.halfLifeDays;
     return {
       day:          Math.round(day),
       dose:         Math.round(dose * bioav * 10) / 10,  // bioavailable dose drives PK curve
       compId:       cp.compId,
-      halfLifeDays: cp.cd.halfLifeDays,
+      halfLifeDays: hl,
+      ka:           _tcKa(hl),
       dot:          cp.cd.dot,
       name:         cp.cd.name,
       dosePerInj:   cp.dosePerInj                        // applied dose shown in schedule
@@ -739,9 +762,10 @@ function _tcBuildSchedule(plan) {
   // 2. Build backbone plasma curve
   var curve = new Float64Array(cycleDays + 1);
   function addToCurve(inj) {
-    var k = Math.LN2 / inj.halfLifeDays;
+    var ke = Math.LN2 / inj.halfLifeDays;
+    var ka = inj.ka || _tcKa(inj.halfLifeDays);
     for (var t = inj.day; t <= cycleDays; t++)
-      curve[t] += inj.dose * Math.exp(-k * (t - inj.day));
+      curve[t] += _tcPkConc(inj.dose, ka, ke, t - inj.day);
   }
   sched.forEach(addToCurve);
 
@@ -773,9 +797,11 @@ function _tcBuildCurve(sched, plan) {
   for (var t = 0; t < n; t++) {
     var c = 0;
     for (var j = 0; j < sched.length; j++) {
-      if (sched[j].day <= t) {
-        var k = Math.LN2 / sched[j].halfLifeDays;
-        c += sched[j].dose * Math.exp(-k * (t - sched[j].day));
+      var inj = sched[j];
+      if (inj.day <= t) {
+        var ke = Math.LN2 / inj.halfLifeDays;
+        var ka = inj.ka || _tcKa(inj.halfLifeDays);
+        c += _tcPkConc(inj.dose, ka, ke, t - inj.day);
       }
     }
     total[t] = c;
@@ -831,11 +857,13 @@ function _tcComputeStats(total, sched, plan) {
 
 // ── Chart ─────────────────────────────────────────────────────────────────────
 
-function _tcDrawChart(canvasId, total, stats, plan, sched) {
+function _tcDrawChart(canvasId, total, stats, plan, sched, calFT, measuredFT) {
   var canvas = document.getElementById(canvasId);
   if (!canvas) return;
   var lineColor = (plan.compounds && plan.compounds.length > 0) ? plan.compounds[0].cd.dot : '#e8a020';
   var cycleDays = plan.cycleDays;
+  var scale     = calFT || 1;
+  var unitLabel = calFT ? 'pmol/L' : 'mg';
 
   var dpr  = window.devicePixelRatio || 1;
   var cssW = canvas.offsetWidth || 300;
@@ -849,8 +877,9 @@ function _tcDrawChart(canvasId, total, stats, plan, sched) {
   var cW = cssW - PAD.left - PAD.right, cH = cssH - PAD.top - PAD.bottom;
   var totalWeeks = Math.ceil(cycleDays / 7);
 
-  var maxV = stats ? stats.bandCeil * 1.1 : 0;
-  for (var i = 0; i <= cycleDays; i++) if (total[i] > maxV) maxV = total[i];
+  var maxV = stats ? stats.bandCeil * scale * 1.1 : 0;
+  for (var i = 0; i <= cycleDays; i++) if (total[i] * scale > maxV) maxV = total[i] * scale;
+  if (measuredFT && calFT && measuredFT > maxV) maxV = measuredFT * 1.1;
   if (!maxV) { ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.fillText('No data', 10, 40); return; }
   var vMax = maxV * 1.05;
 
@@ -865,11 +894,21 @@ function _tcDrawChart(canvasId, total, stats, plan, sched) {
 
   if (stats && stats.bandCeil > 0) {
     ctx.fillStyle = 'rgba(34,204,102,0.09)';
-    ctx.fillRect(PAD.left, yOf(stats.bandCeil), cW, yOf(stats.bandFloor) - yOf(stats.bandCeil));
+    ctx.fillRect(PAD.left, yOf(stats.bandCeil * scale), cW, yOf(stats.bandFloor * scale) - yOf(stats.bandCeil * scale));
     ctx.strokeStyle = 'rgba(34,204,102,0.4)'; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
-    ctx.beginPath(); ctx.moveTo(PAD.left, yOf(stats.ssTrough)); ctx.lineTo(PAD.left+cW, yOf(stats.ssTrough)); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(PAD.left, yOf(stats.ssPeak));   ctx.lineTo(PAD.left+cW, yOf(stats.ssPeak));   ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PAD.left, yOf(stats.ssTrough * scale)); ctx.lineTo(PAD.left+cW, yOf(stats.ssTrough * scale)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PAD.left, yOf(stats.ssPeak   * scale)); ctx.lineTo(PAD.left+cW, yOf(stats.ssPeak   * scale)); ctx.stroke();
     ctx.setLineDash([]);
+  }
+
+  // Measured free T reference line (dashed orange)
+  if (measuredFT && calFT) {
+    var refY = yOf(measuredFT);
+    ctx.strokeStyle = '#e8a02099'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(PAD.left, refY); ctx.lineTo(PAD.left + cW, refY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e8a020bb'; ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(Math.round(measuredFT), PAD.left + 3, refY - 2);
   }
 
   ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'right';
@@ -878,21 +917,21 @@ function _tcDrawChart(canvasId, total, stats, plan, sched) {
     ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
     ctx.beginPath(); ctx.moveTo(PAD.left, ty); ctx.lineTo(PAD.left+cW, ty); ctx.stroke();
     var tv = vMax * (1 - ti / 3);
-    ctx.fillText(tv >= 100 ? Math.round(tv) : tv >= 10 ? tv.toFixed(1) : tv.toFixed(2), PAD.left - 4, ty + 3);
+    ctx.fillText(calFT ? Math.round(tv) : (tv >= 100 ? Math.round(tv) : tv >= 10 ? tv.toFixed(1) : tv.toFixed(2)), PAD.left - 4, ty + 3);
   }
   ctx.save(); ctx.translate(10, PAD.top + cH/2); ctx.rotate(-Math.PI/2);
   ctx.textAlign = 'center'; ctx.fillStyle = '#444'; ctx.font = '8px DM Sans,sans-serif';
-  ctx.fillText('mg', 0, 0); ctx.restore();
+  ctx.fillText(unitLabel, 0, 0); ctx.restore();
 
   var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
   grad.addColorStop(0, lineColor + '55'); grad.addColorStop(1, lineColor + '00');
   ctx.beginPath(); ctx.moveTo(xOf(0), PAD.top + cH);
-  for (var t = 0; t <= cycleDays; t++) ctx.lineTo(xOf(t), yOf(total[t] || 0));
+  for (var t = 0; t <= cycleDays; t++) ctx.lineTo(xOf(t), yOf(total[t] * scale || 0));
   ctx.lineTo(xOf(cycleDays), PAD.top + cH);
   ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
-  ctx.beginPath(); ctx.moveTo(xOf(0), yOf(total[0] || 0));
-  for (var t3 = 1; t3 <= cycleDays; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] || 0));
+  ctx.beginPath(); ctx.moveTo(xOf(0), yOf(total[0] * scale || 0));
+  for (var t3 = 1; t3 <= cycleDays; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] * scale || 0));
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
 
   ctx.lineWidth = 1;
@@ -968,6 +1007,14 @@ function buildTCalc() {
   var curve    = plan ? _tcBuildCurve(sched, plan) : null;
   var stats    = (plan && curve) ? _tcComputeStats(curve, sched, plan) : null;
   _tcCurrentPlan = plan;
+
+  // Calibrated free T scale: pmol/L per simulation unit.
+  // Anchors the curve to the user's measured free T at their bloodwork dose.
+  var calFT = null;
+  if (cal.mftNum > 0 && cal.curDose > 0 && stats && (stats.ssPeak + stats.ssTrough) > 0) {
+    var _ssMean = (stats.ssPeak + stats.ssTrough) / 2;
+    calFT = cal.mftNum * plan.totalMgPerWeek / cal.curDose / _ssMean;
+  }
 
   var html = '';
 
@@ -1263,9 +1310,12 @@ function buildTCalc() {
     html += '</div>';
     html += '<div style="padding:2px 16px 10px"><canvas id="tc-chart" style="width:100%;display:block;"></canvas></div>';
 
+    var _ftUnit  = calFT ? 'pmol/L' : 'mg';
+    var _peakVal = calFT ? Math.round(stats.peak   * calFT) + ' ' + _ftUnit : Math.round(stats.peak)   + ' mg';
+    var _trghVal = calFT ? Math.round(stats.trough * calFT) + ' ' + _ftUnit : Math.round(stats.trough) + ' mg';
     html += '<div style="padding:0 16px 14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">';
-    [{label:'PEAK',value:Math.round(stats.peak)+' mg'},
-     {label:'TROUGH',value:Math.round(stats.trough)+' mg'},
+    [{label:'PEAK',value:_peakVal},
+     {label:'TROUGH',value:_trghVal},
      {label:'P:T',value:ptr.toFixed(1)+'×',color:ptrColor},
      {label:'TOTAL',value:Math.round(stats.totalMg)+' mg'}
     ].forEach(function(s) {
@@ -1387,9 +1437,9 @@ function buildTCalc() {
   el.innerHTML = html;
 
   if (plan && curve && stats) {
-    var _s = sched, _p = plan;
+    var _s = sched, _p = plan, _cft = calFT, _mft = cal.mftNum || 0;
     requestAnimationFrame(function() {
-      _tcDrawChart('tc-chart', curve, stats, _p, _s);
+      _tcDrawChart('tc-chart', curve, stats, _p, _s, _cft, _mft);
     });
   }
 }
