@@ -15,7 +15,8 @@ var _tcp = {
   overrideDoseMgWk:    '',
   overrideIntervalDays: '',
   planCompId:          '',  // kept for backward-compat with saved profiles; ignored
-  backboneStartDay:    0    // days into cycle before first backbone injection (default 0)
+  backboneStartDay:    0,   // days into cycle before first backbone injection (default 0)
+  manualLog:           []   // [{compId, doseMg, date}, ...] — manual injection history
 };
 
 var _tcpSessionLoaded = false;
@@ -291,6 +292,226 @@ function _tcInvSetField(compId, field, val) {
   inv[field] = val;
   _tcSaveProfile();
   buildTCalc();
+}
+
+// ── Manual injection log overlay ──────────────────────────────────────────────
+
+function _tcManualComps() {
+  var ids = [];
+  ((typeof TRT_CAT !== 'undefined') ? TRT_CAT : []).forEach(function(c) {
+    if (c.id !== 'hcg') ids.push(c.id);
+  });
+  _tcExtraCatalog.forEach(function(c) {
+    if (c.id !== 'hcg' && ids.indexOf(c.id) === -1) ids.push(c.id);
+  });
+  return ids;
+}
+
+function _tcOpenManualLog() {
+  var log   = _tcp.manualLog || [];
+  var comps = _tcManualComps();
+  var iSty  = 'background:#0a0a0a;border:1px solid #2a2a2a;border-radius:6px;padding:7px 10px;color:#ccc;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box';
+
+  var html = '<div id="tc-log-overlay" onclick="if(event.target===this)_tcCloseManualLog()" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.92);backdrop-filter:blur(16px);overflow-y:auto;-webkit-overflow-scrolling:touch">' +
+    '<div style="max-width:480px;margin:0 auto;padding:16px 16px 60px">';
+
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0 24px">' +
+    '<div>' +
+      '<div style="font-size:11px;color:#444;letter-spacing:2px;font-weight:700;margin-bottom:4px">T-CALC</div>' +
+      '<div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:0.5px">INJECTION LOG</div>' +
+      '<div style="font-size:12px;color:#444;margin-top:4px">' + log.length + ' injection' + (log.length === 1 ? '' : 's') + ' logged</div>' +
+    '</div>' +
+    '<button onclick="_tcCloseManualLog()" style="background:#111;border:1px solid #333;border-radius:10px;color:#777;font-size:24px;cursor:pointer;padding:4px 14px;line-height:1;font-family:inherit">×</button>' +
+  '</div>';
+
+  if (log.length > 0) {
+    html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">';
+    log.forEach(function(entry, idx) {
+      var cd = _tcCompInfo(entry.compId || (comps[0] || 'topical'));
+      var compSelect = '<select onchange="_tcSetManualField(' + idx + ',\'compId\',this.value)" style="' + iSty + ';flex:1;min-width:0">';
+      comps.forEach(function(id) {
+        var n = _tcCompInfo(id).name;
+        compSelect += '<option value="' + _esc(id) + '"' + (entry.compId === id ? ' selected' : '') + '>' + _esc(n) + '</option>';
+      });
+      compSelect += '</select>';
+
+      html += '<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:12px;padding:12px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+          '<span style="width:8px;height:8px;border-radius:50%;background:' + cd.dot + ';display:inline-block;flex-shrink:0"></span>' +
+          compSelect +
+          '<button onclick="_tcRemoveManualEntry(' + idx + ')" style="background:none;border:none;color:#444;font-size:18px;cursor:pointer;padding:0;flex-shrink:0;line-height:1">✕</button>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+          '<div><div style="font-size:9px;color:#444;letter-spacing:1.2px;font-weight:700;margin-bottom:5px">DOSE (mg)</div>' +
+          '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';width:100%"></div>' +
+          '<div><div style="font-size:9px;color:#444;letter-spacing:1.2px;font-weight:700;margin-bottom:5px">DATE</div>' +
+          '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';width:100%"></div>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div style="text-align:center;padding:32px 0;color:#444;font-size:13px">No injections logged yet.<br><span style="font-size:12px;color:#2a2a2a">Tap + ADD INJECTION to start.</span></div>';
+  }
+
+  html += '<button onclick="_tcAddManualEntry()" style="width:100%;background:#0d0d0d;border:1px dashed #2a2a2a;border-radius:10px;color:#555;font-size:13px;font-weight:700;padding:13px;cursor:pointer;font-family:inherit;letter-spacing:0.5px;margin-bottom:20px">+ ADD INJECTION</button>';
+
+  var validLog = log.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; });
+  if (validLog.length > 0) {
+    html += '<div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:14px;padding:14px">' +
+      '<div style="font-size:10px;color:#444;letter-spacing:1.8px;font-weight:700;margin-bottom:10px">PLASMA CURVE</div>' +
+      '<canvas id="tc-manual-chart" style="width:100%;display:block;"></canvas>' +
+    '</div>';
+  }
+
+  html += '</div></div>';
+
+  var existing = document.getElementById('tc-log-overlay');
+  if (existing) existing.remove();
+  var tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  document.body.appendChild(tmp.firstChild);
+
+  if (validLog.length > 0) {
+    requestAnimationFrame(function() { _tcDrawManualChart('tc-manual-chart', validLog); });
+  }
+}
+
+function _tcCloseManualLog() {
+  var el = document.getElementById('tc-log-overlay');
+  if (el) el.remove();
+}
+
+function _tcAddManualEntry() {
+  if (!_tcp.manualLog) _tcp.manualLog = [];
+  var defaultComp = _tcManualComps()[0] || 'topical';
+  var today = new Date().toISOString().slice(0, 10);
+  _tcp.manualLog.push({compId: defaultComp, doseMg: '', date: today});
+  _tcSaveProfile();
+  _tcOpenManualLog();
+}
+
+function _tcRemoveManualEntry(idx) {
+  if (!_tcp.manualLog) return;
+  _tcp.manualLog.splice(idx, 1);
+  _tcSaveProfile();
+  _tcOpenManualLog();
+}
+
+function _tcSetManualField(idx, field, val) {
+  if (!_tcp.manualLog || !_tcp.manualLog[idx]) return;
+  _tcp.manualLog[idx][field] = val;
+  _tcSaveProfile();
+  if (field === 'compId') {
+    _tcOpenManualLog();
+  } else {
+    var validLog = _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; });
+    if (validLog.length > 0 && document.getElementById('tc-manual-chart')) {
+      _tcDrawManualChart('tc-manual-chart', validLog);
+    } else if (validLog.length === 0 && document.getElementById('tc-log-overlay')) {
+      _tcOpenManualLog();
+    }
+  }
+}
+
+function _tcDrawManualChart(canvasId, log) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas || !log || log.length === 0) return;
+
+  var sorted = log.slice().sort(function(a, b){ return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  var firstDate = new Date(sorted[0].date);
+  var lastDate  = new Date(sorted[sorted.length - 1].date);
+
+  var maxHL = 1;
+  sorted.forEach(function(e) {
+    var hl = (_tcCompInfo(e.compId).halfLifeDays) || 1;
+    if (hl > maxHL) maxHL = hl;
+  });
+  var washoutDays = Math.ceil(4.3 * maxHL);
+
+  var totalDays = Math.ceil((lastDate - firstDate) / 86400000) + washoutDays + 1;
+  var total = new Float64Array(totalDays + 1);
+
+  sorted.forEach(function(e) {
+    var cd   = _tcCompInfo(e.compId);
+    var hl   = cd.halfLifeDays || 1;
+    var bioav = cd.bioavailability || 1;
+    var k    = Math.LN2 / hl;
+    var injectDay = Math.round((new Date(e.date) - firstDate) / 86400000);
+    var absorbed  = parseFloat(e.doseMg) * bioav;
+    for (var t = injectDay; t <= totalDays; t++) {
+      total[t] += absorbed * Math.exp(-k * (t - injectDay));
+    }
+  });
+
+  var dpr  = window.devicePixelRatio || 1;
+  var cssW = canvas.offsetWidth || 300;
+  var cssH = 150;
+  canvas.width  = cssW * dpr; canvas.height = cssH * dpr;
+  canvas.style.width  = cssW + 'px'; canvas.style.height = cssH + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  var PAD = {top:12, right:14, bottom:26, left:52};
+  var cW  = cssW - PAD.left - PAD.right;
+  var cH  = cssH - PAD.top  - PAD.bottom;
+
+  var maxV = 0;
+  for (var i = 0; i <= totalDays; i++) if (total[i] > maxV) maxV = total[i];
+  if (!maxV) { ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.fillText('No data', 10, 40); return; }
+  var vMax = maxV * 1.1;
+
+  function xOf(t){ return PAD.left + (t / totalDays) * cW; }
+  function yOf(v){ return PAD.top  + cH - (v / vMax) * cH; }
+
+  var gridStep = totalDays <= 28 ? 7 : totalDays <= 84 ? 14 : 28;
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
+  for (var dg = 0; dg <= totalDays; dg += gridStep) {
+    var gx = xOf(dg);
+    ctx.beginPath(); ctx.moveTo(gx, PAD.top); ctx.lineTo(gx, PAD.top + cH); ctx.stroke();
+  }
+
+  ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'right';
+  for (var ti = 0; ti <= 3; ti++) {
+    var ty = PAD.top + (cH / 3) * ti;
+    ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(PAD.left, ty); ctx.lineTo(PAD.left + cW, ty); ctx.stroke();
+    var tv = vMax * (1 - ti / 3);
+    ctx.fillText(tv >= 100 ? Math.round(tv) : tv >= 10 ? tv.toFixed(1) : tv.toFixed(2), PAD.left - 4, ty + 3);
+  }
+  ctx.save(); ctx.translate(10, PAD.top + cH / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#444'; ctx.font = '8px DM Sans,sans-serif';
+  ctx.fillText('mg', 0, 0); ctx.restore();
+
+  var lineColor = _tcCompInfo(sorted[0].compId).dot || '#e8a020';
+  var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
+  grad.addColorStop(0, lineColor + '55'); grad.addColorStop(1, lineColor + '00');
+  ctx.beginPath(); ctx.moveTo(xOf(0), PAD.top + cH);
+  for (var t2 = 0; t2 <= totalDays; t2++) ctx.lineTo(xOf(t2), yOf(total[t2] || 0));
+  ctx.lineTo(xOf(totalDays), PAD.top + cH);
+  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+
+  ctx.beginPath(); ctx.moveTo(xOf(0), yOf(total[0] || 0));
+  for (var t3 = 1; t3 <= totalDays; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] || 0));
+  ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+
+  sorted.forEach(function(e) {
+    var injectDay = Math.round((new Date(e.date) - firstDate) / 86400000);
+    var dot = _tcCompInfo(e.compId).dot || lineColor;
+    var ix = xOf(injectDay);
+    ctx.strokeStyle = dot + '99'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ix, PAD.top + cH); ctx.lineTo(ix, PAD.top + cH + 5); ctx.stroke();
+  });
+
+  ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'center';
+  var labelEvery = totalDays <= 28 ? 7 : totalDays <= 84 ? 14 : 28;
+  for (var dl = 0; dl <= totalDays; dl += labelEvery) {
+    var lx = xOf(dl);
+    if (lx > PAD.left + cW + 8) break;
+    var labelDate = new Date(firstDate.getTime() + dl * 86400000);
+    var lbl = (labelDate.getMonth() + 1) + '/' + labelDate.getDate();
+    ctx.fillText(lbl, lx, PAD.top + cH + 18);
+  }
 }
 
 // ── OPTIMIZER ─────────────────────────────────────────────────────────────────
@@ -806,7 +1027,10 @@ function buildTCalc() {
   html += '<div class="card"><div class="card-header"><div class="card-title-wrap">';
   html += '<div class="card-dot" style="background:#e8a020"></div>';
   html += '<div class="card-title">INVENTORY</div></div>';
+  html += '<div style="display:flex;gap:6px">';
+  html += '<button onclick="_tcOpenManualLog()" style="background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#888;font-size:11px;font-weight:800;letter-spacing:0.8px;cursor:pointer;padding:7px 14px;font-family:inherit">LOG</button>';
   html += '<button onclick="_tcOpenInventory()" style="background:linear-gradient(135deg,#e8a020 0%,#b85a00 100%);border:none;border-radius:8px;color:#000;font-size:11px;font-weight:800;letter-spacing:0.8px;cursor:pointer;padding:7px 14px;font-family:inherit">⚗ MANAGE</button>';
+  html += '</div>';
   html += '</div>';
   html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">';
 
