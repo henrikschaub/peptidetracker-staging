@@ -5,6 +5,7 @@
 var _tcp = {
   totalT:              '',
   shbg:                '',
+  birthYear:           '',
   measuredFT:          '',
   currentDoseMgWk:     '',
   targetFT:            '',
@@ -468,6 +469,19 @@ function _tcSetManualField(idx, field, val) {
   }
 }
 
+// Age-stratified free T reference midpoints (pmol/L) for when no bloodwork is entered.
+// Values are approximate midpoints of published male reference ranges.
+function _tcDefaultFT(birthYear) {
+  if (!birthYear) return 350;
+  var age = new Date().getFullYear() - birthYear;
+  if (age < 25) return 450;
+  if (age < 35) return 400;
+  if (age < 45) return 340;
+  if (age < 55) return 280;
+  if (age < 65) return 220;
+  return 180;
+}
+
 function _tcDrawManualChart(canvasId, log) {
   var canvas = document.getElementById(canvasId);
   if (!canvas || !log || log.length === 0) return;
@@ -500,7 +514,7 @@ function _tcDrawManualChart(canvasId, log) {
   });
 
   // Calibrated pmol/L scale using settled peak/trough over the log window (not washout tail)
-  var _mftNum  = parseFloat(_tcp.measuredFT)      || 0;
+  var _mftNum  = parseFloat(_tcp.measuredFT)      || _tcDefaultFT(parseInt(_tcp.birthYear) || 0);
   var _curDose = parseFloat(_tcp.currentDoseMgWk) || 0;
   var _logDays = totalDays - washoutDays - 1;
   var _midLog  = Math.max(0, Math.floor(_logDays / 2));
@@ -558,19 +572,14 @@ function _tcDrawManualChart(canvasId, log) {
         });
       }
     } else {
-      // Unknown prior dose: add a decaying baseline anchored to logMean so that
-      // total[0] * calFT = mftNum exactly. Use the ke of the slowest compound in
-      // the log (longest half-life) — the prior protocol was most likely based on
-      // that compound, so its residual decays at that rate, not the weighted average
-      // (which is dominated by short-acting esters and decays too fast).
-      var _blMinKe = Infinity;
-      sorted.forEach(function(e) {
-        var _blCompKe = Math.LN2 / ((_tcCompInfo(e.compId).halfLifeDays) || 7);
-        if (_blCompKe < _blMinKe) _blMinKe = _blCompKe;
-      });
-      var _blKe = _blMinKe < Infinity ? _blMinKe : Math.LN2 / 7;
+      // The log is the complete injection history — no prior protocol residual exists.
+      // Add a constant endogenous baseline (continuous production) so the chart starts
+      // at _mftNum and rises above it as injections accumulate.  A decaying exponential
+      // here was wrong: it represented a fictional prior-dose residual that drained away
+      // at peak time (making the peak read too low) and post-dose (making levels appear
+      // to crash faster than the compound's half-life actually dictates).
       for (var _blt = 0; _blt <= totalDays; _blt++) {
-        total[_blt] += _logMean * Math.exp(-_blKe * _blt);
+        total[_blt] += _logMean;
       }
     }
   }
@@ -1237,11 +1246,13 @@ function buildTCalc() {
   html += '<span style="font-size:11px;color:var(--muted2)">saved to backend</span></div>';
   html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:16px">';
 
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">';
   html += '<div><label style="' + lSty + '">Total T (nmol/L)</label>';
   html += '<input type="number" min="0" max="200" step="0.1" value="' + _esc(_tcp.totalT) + '" placeholder="e.g. 16.2" oninput="_tcp.totalT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
   html += '<div><label style="' + lSty + '">SHBG (nmol/L)</label>';
   html += '<input type="number" min="0" max="300" step="1" value="' + _esc(_tcp.shbg) + '" placeholder="e.g. 45" oninput="_tcp.shbg=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
+  html += '<div><label style="' + lSty + '">Birth year</label>';
+  html += '<input type="number" min="1940" max="2010" step="1" value="' + _esc(_tcp.birthYear || '') + '" placeholder="e.g. 1985" oninput="_tcp.birthYear=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
   html += '</div>';
 
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
