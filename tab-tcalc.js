@@ -25,7 +25,7 @@ var _tcCurrentPlan    = null;
 var _tcExtraCatalog   = [];   // extra compounds fetched from /trt-catalog at runtime
 var _tcAgeMissing     = false; // true when user-settings returned but no user_age found
 var _tcBwOpen         = false; // whether the bloodwork panel is expanded
-var _tcExpandedSeries = {};   // seriesId → true when series card is expanded for editing
+var _tcEditSeriesId = null;   // seriesId currently open in the Edit Series sheet
 
 // ── Frequency options ─────────────────────────────────────────────────────────
 
@@ -565,14 +565,87 @@ function _tcRemoveManualEntry(idx) {
 function _tcRemoveSeries(seriesId) {
   if (!_tcp.manualLog || !seriesId) return;
   _tcp.manualLog = _tcp.manualLog.filter(function(e){ return e.seriesId !== seriesId; });
-  delete _tcExpandedSeries[seriesId];
   _tcSaveProfile();
   buildTCalc();
 }
 
-function _tcToggleSeriesExpand(sid) {
-  _tcExpandedSeries[sid] = !_tcExpandedSeries[sid];
-  buildTCalc();
+function _tcOpenEditSeriesSheet(sid) {
+  if (!_tcp || !_tcp.manualLog) return;
+  var entries = _tcp.manualLog.filter(function(e){ return e.seriesId === sid; }).sort(function(a,b){ return (a.date||'') < (b.date||'') ? -1 : (a.date||'') > (b.date||'') ? 1 : 0; });
+  if (!entries.length) return;
+  var first = entries[0];
+  var compId = first.compId;
+  var doseMg = first.doseMg || '';
+  var startDate = first.date || new Date().toISOString().slice(0,10);
+  var count = entries.length;
+  var interval = 2;
+  if (entries.length >= 2) {
+    var p0 = (entries[0].date||'').split('-'), p1 = (entries[1].date||'').split('-');
+    var d0 = new Date(+p0[0],+p0[1]-1,+p0[2]), d1 = new Date(+p1[0],+p1[1]-1,+p1[2]);
+    interval = Math.max(1, Math.round((d1-d0)/86400000));
+  }
+  _tcEditSeriesId = sid;
+  var comps = _tcManualComps();
+  var iSty = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--text);font-size:15px;font-family:inherit;outline:none;width:100%;box-sizing:border-box';
+  var lSty = 'font-size:11px;font-weight:700;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;display:block';
+  var compOpts = comps.map(function(id){ var n=_tcCompInfo(id).name; return '<option value="'+_esc(id)+'"'+(id===compId?' selected':'')+'>'+_esc(n)+'</option>'; }).join('');
+  var ol = document.createElement('div');
+  ol.id = 'tc-edit-series-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  ol.onclick = function(e){ if(e.target===ol)_tcCloseEditSeriesSheet(); };
+  ol.innerHTML =
+    '<div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 20px 36px;max-height:85vh;overflow-y:auto">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">' +
+    '<div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--text)">EDIT SERIES</div>' +
+    '<button onclick="_tcCloseEditSeriesSheet()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button>' +
+    '</div>' +
+    '<div style="margin-bottom:14px"><label style="'+lSty+'">COMPOUND</label>' +
+    '<select id="tc-es-comp" style="'+iSty+'">'+compOpts+'</select></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
+    '<div><label style="'+lSty+'">DOSE (mg)</label>' +
+    '<input id="tc-es-dose" type="number" min="0" max="9999" step="1" placeholder="e.g. 100" value="'+_esc(String(doseMg))+'" style="'+iSty+'"></div>' +
+    '<div><label style="'+lSty+'">START DATE</label>' +
+    '<input id="tc-es-date" type="date" value="'+_esc(startDate)+'" style="'+iSty+'"></div>' +
+    '</div>' +
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+    '<div><label style="'+lSty+'">INJECTIONS</label>' +
+    '<input id="tc-es-count" type="number" min="2" max="365" step="1" value="'+_esc(String(count))+'" style="'+iSty+'"></div>' +
+    '<div><label style="'+lSty+'">EVERY (DAYS)</label>' +
+    '<input id="tc-es-interval" type="number" min="1" max="90" step="1" value="'+_esc(String(interval))+'" style="'+iSty+'"></div>' +
+    '</div></div>' +
+    '<button onclick="_tcSaveEditSeries()" style="width:100%;background:linear-gradient(135deg,#6688cc,#4466aa);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;letter-spacing:0.5px;padding:14px;cursor:pointer;font-family:inherit">SAVE</button>' +
+    '</div>';
+  document.body.appendChild(ol);
+}
+
+function _tcCloseEditSeriesSheet() {
+  var ol=document.getElementById('tc-edit-series-overlay');if(ol)ol.remove();_tcEditSeriesId=null;
+}
+
+function _tcSaveEditSeries() {
+  var sid = _tcEditSeriesId;
+  if (!sid || !_tcp || !_tcp.manualLog) return;
+  var compEl=document.getElementById('tc-es-comp');
+  var doseEl=document.getElementById('tc-es-dose');
+  var dateEl=document.getElementById('tc-es-date');
+  var countEl=document.getElementById('tc-es-count');
+  var intervalEl=document.getElementById('tc-es-interval');
+  var compId=compEl?compEl.value:'';
+  var doseMg=doseEl?parseFloat(doseEl.value):0;
+  var startDate=dateEl?dateEl.value:'';
+  var count=countEl?Math.max(2,parseInt(countEl.value)||10):10;
+  var intervalDays=intervalEl?Math.max(1,parseInt(intervalEl.value)||2):2;
+  if(!compId||!startDate||!(doseMg>0)){return;}
+  _tcp.manualLog = _tcp.manualLog.filter(function(e){ return e.seriesId !== sid; });
+  var sp=startDate.split('-');
+  for(var i=0;i<count;i++){
+    var sd=new Date(+sp[0],+sp[1]-1,+sp[2]+i*intervalDays);
+    var ds=sd.getFullYear()+'-'+String(sd.getMonth()+1).padStart(2,'0')+'-'+String(sd.getDate()).padStart(2,'0');
+    _tcp.manualLog.push({compId:compId,doseMg:doseMg,date:ds,seriesId:sid});
+  }
+  _tcp.manualLog.sort(function(a,b){return(a.date||'')<(b.date||'')?-1:(a.date||'')>(b.date||'')?1:0;});
+  _tcSaveProfile();_tcCloseEditSeriesSheet();buildTCalc();
 }
 
 function _tcConfirmRemoveSeries(sid) {
@@ -1463,14 +1536,14 @@ function buildTCalc() {
     });
     var _tcFmtD=function(iso){if(!iso)return'';var p=iso.split('-');var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return parseInt(p[2],10)+' '+M[parseInt(p[1],10)-1];};
 
-    var _seriesExpPos = {};  // position counter for expanded series individual cards
-
     log.forEach(function(entry, idx) {
       var cd = _tcCompInfo(entry.compId || (comps[0] || ''));
       var sid = entry.seriesId;
 
       if (sid) {
-        var isExpanded = !!_tcExpandedSeries[sid];
+        // ── One summary card per seriesId ──
+        if (_seriesSeen[sid]) return;
+        _seriesSeen[sid] = true;
         var meta = _seriesMeta[sid] || {};
         var total = _seriesTotals[sid] || 1;
         var iv = meta.interval;
@@ -1478,68 +1551,30 @@ function buildTCalc() {
         var mcd = _tcCompInfo(meta.compId || (comps[0] || ''));
         var editBtnStyle = 'background:none;border:1px solid #6688cc66;border-radius:6px;color:#6688cc;font-size:10px;font-weight:700;letter-spacing:0.5px;cursor:pointer;padding:4px 8px;font-family:inherit;flex-shrink:0';
         var deleteBtnStyle = 'background:none;border:none;color:var(--muted2);font-size:16px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0';
-
-        if (!isExpanded) {
-          // ── COLLAPSED: one summary card per seriesId ──
-          if (_seriesSeen[sid]) return;
-          _seriesSeen[sid] = true;
-          // Stack visual: box-shadow creates two "cards" peeking behind the top card
-          html += '<div style="background:rgba(102,136,204,0.10);border:1px dashed #6688cc66;border-radius:12px;padding:12px;box-shadow:3px 3px 0 0 rgba(102,136,204,0.18),6px 6px 0 0 rgba(102,136,204,0.09);">';
-          html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
-          html += '<div style="display:flex;align-items:center;gap:8px;">';
-          html += '<span style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6688cc;text-transform:uppercase">⛓ SERIES</span>';
-          html += '<span style="font-size:10px;color:var(--muted2)">' + total + ' injections' + ivLabel + '</span>';
-          html += '</div>';
-          html += '<div style="display:flex;align-items:center;gap:6px;">';
-          html += '<button onclick="_tcToggleSeriesExpand(\'' + _esc(sid) + '\')" style="' + editBtnStyle + '">EDIT</button>';
-          html += '<button onclick="_tcConfirmRemoveSeries(\'' + _esc(sid) + '\')" style="' + deleteBtnStyle + '">✕</button>';
-          html += '</div>';
-          html += '</div>';
-          html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
-          html += '<span style="width:8px;height:8px;border-radius:50%;background:' + mcd.dot + ';display:inline-block;flex-shrink:0"></span>';
-          html += '<span style="font-size:14px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(mcd.name) + '</span>';
-          html += '</div>';
-          html += '<div style="display:flex;gap:24px;">';
-          html += '<div><div style="' + lSty + '">DOSE</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + _esc(String(meta.doseMg || '')) + ' mg</div></div>';
-          if (meta.firstDate) {
-            var dRange = _tcFmtD(meta.firstDate) + (meta.firstDate !== meta.lastDate ? ' → ' + _tcFmtD(meta.lastDate) : '');
-            html += '<div><div style="' + lSty + '">DATES</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + _esc(dRange) + '</div></div>';
-          }
-          html += '</div>';
-          html += '</div>';
-        } else {
-          // ── EXPANDED: header once, then individual editable cards ──
-          if (!_seriesSeen[sid]) {
-            _seriesSeen[sid] = true;
-            html += '<div style="background:rgba(102,136,204,0.10);border:1px dashed #6688cc66;border-radius:12px;padding:10px 12px;">';
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;">';
-            html += '<div style="display:flex;align-items:center;gap:8px;">';
-            html += '<span style="width:8px;height:8px;border-radius:50%;background:' + mcd.dot + ';display:inline-block;flex-shrink:0"></span>';
-            html += '<span style="font-size:13px;font-weight:600;color:var(--text)">' + _esc(mcd.name) + '</span>';
-            html += '<span style="font-size:10px;color:var(--muted2)">' + total + ' injections' + ivLabel + '</span>';
-            html += '</div>';
-            html += '<div style="display:flex;align-items:center;gap:6px;">';
-            html += '<button onclick="_tcToggleSeriesExpand(\'' + _esc(sid) + '\')" style="' + editBtnStyle + '">DONE</button>';
-            html += '<button onclick="_tcConfirmRemoveSeries(\'' + _esc(sid) + '\')" style="' + deleteBtnStyle + '">✕</button>';
-            html += '</div>';
-            html += '</div>';
-            html += '</div>';
-          }
-          // Individual editable card
-          _seriesExpPos[sid] = (_seriesExpPos[sid] || 0) + 1;
-          var pos = _seriesExpPos[sid];
-          html += '<div style="background:rgba(102,136,204,0.06);border:1px dashed #6688cc44;border-radius:12px;padding:12px;">';
-          html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-          html += '<span style="font-size:10px;font-weight:700;color:#6688cc;letter-spacing:0.5px">#' + pos + ' / ' + total + '</span>';
-          html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:16px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0">✕</button>';
-          html += '</div>';
-          html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-          html += '<div><div style="' + lSty + '">DOSE (mg)</div>';
-          html += '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
-          html += '<div><div style="' + lSty + '">DATE</div>';
-          html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
-          html += '</div></div>';
+        // Stack visual: box-shadow creates two "cards" peeking behind the top card
+        html += '<div style="background:rgba(102,136,204,0.10);border:1px dashed #6688cc66;border-radius:12px;padding:12px;box-shadow:3px 3px 0 0 rgba(102,136,204,0.18),6px 6px 0 0 rgba(102,136,204,0.09);">';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+        html += '<div style="display:flex;align-items:center;gap:8px;">';
+        html += '<span style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6688cc;text-transform:uppercase">⛓ SERIES</span>';
+        html += '<span style="font-size:10px;color:var(--muted2)">' + total + ' injections' + ivLabel + '</span>';
+        html += '</div>';
+        html += '<div style="display:flex;align-items:center;gap:6px;">';
+        html += '<button onclick="_tcOpenEditSeriesSheet(\'' + _esc(sid) + '\')" style="' + editBtnStyle + '">EDIT</button>';
+        html += '<button onclick="_tcConfirmRemoveSeries(\'' + _esc(sid) + '\')" style="' + deleteBtnStyle + '">✕</button>';
+        html += '</div>';
+        html += '</div>';
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+        html += '<span style="width:8px;height:8px;border-radius:50%;background:' + mcd.dot + ';display:inline-block;flex-shrink:0"></span>';
+        html += '<span style="font-size:14px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(mcd.name) + '</span>';
+        html += '</div>';
+        html += '<div style="display:flex;gap:24px;">';
+        html += '<div><div style="' + lSty + '">DOSE</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + _esc(String(meta.doseMg || '')) + ' mg</div></div>';
+        if (meta.firstDate) {
+          var dRange = _tcFmtD(meta.firstDate) + (meta.firstDate !== meta.lastDate ? ' → ' + _tcFmtD(meta.lastDate) : '');
+          html += '<div><div style="' + lSty + '">DATES</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + _esc(dRange) + '</div></div>';
         }
+        html += '</div>';
+        html += '</div>';
       } else {
         // Single injection card
         var compSelect = '<select onchange="_tcSetManualField(' + idx + ',\'compId\',this.value)" style="' + iSty + ';flex:1;min-width:0;font-size:14px">';
