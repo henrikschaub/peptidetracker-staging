@@ -534,18 +534,19 @@ function showEnhancedCard(id){
   var dot=cat.dot||'#a855f7';
   var userComp=null;
   (_activeStackIndices||[]).forEach(function(si){var st=_userStacks[si];if(!st||!st.enhanced)return;var f=(st.enhanced.compounds||[]).find(function(c){return c.id===id;});if(f&&!userComp)userComp=f;});
-  var myDoseHtml='';
+  var myDoseHtml='';var activeDose=0;
   if(userComp){
     var parts=[];
     var eCat=(ENHANCEMENT_COMPOUNDS||[]).find(function(ec){return ec.id===id;});
     var isAmPm=userComp.amPm||(eCat&&eCat.amPm);
+    activeDose=isAmPm?(parseFloat(userComp.dose_am||0)+parseFloat(userComp.dose_pm||0)):parseFloat(userComp.dose||0);
     if(isAmPm){if(userComp.dose_am)parts.push('AM: '+userComp.dose_am+' '+(userComp.unit?(userComp.unit.split('/')[0]):''));if(userComp.dose_pm)parts.push('PM: '+userComp.dose_pm+' '+(userComp.unit?(userComp.unit.split('/')[0]):''));}
     else if(userComp.dose)parts.push(userComp.dose+(userComp.unit?' '+userComp.unit:''));
     if(parts.length)myDoseHtml='<div style="background:'+dot+'15;border:1px solid '+dot+'30;border-radius:10px;padding:10px 14px;margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:'+dot+';margin-bottom:3px;">Your dose</div><div style="font-size:13px;color:var(--text);">'+parts.join(' · ')+'</div></div>';
   }
   var overlay=document.createElement('div');overlay.className='pcard-overlay';overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
   var sheet=document.createElement('div');sheet.className='pcard-sheet';
-  sheet.innerHTML='<div style="margin-bottom:14px;"><div class="pcard-name" style="color:'+dot+'">'+(cat.name||id)+'</div><div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;">'+(cat.group||'')+'</div></div>'+myDoseHtml+_renderEnhancedGuide(cat)+'<div style="position:sticky;bottom:0;background:var(--surface);padding:16px 0 28px;margin-top:20px;"><button onclick="this.closest(\'.pcard-overlay\').remove()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px;font-weight:700;padding:14px;border-radius:12px;cursor:pointer;font-family:inherit;letter-spacing:0.5px;">Done</button></div>';
+  sheet.innerHTML='<div style="margin-bottom:14px;"><div class="pcard-name" style="color:'+dot+'">'+(cat.name||id)+'</div><div style="font-size:11px;font-weight:600;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;">'+(cat.group||'')+'</div></div>'+myDoseHtml+_renderEnhancedGuide(cat,activeDose)+'<div style="position:sticky;bottom:0;background:var(--surface);padding:16px 0 28px;margin-top:20px;"><button onclick="this.closest(\'.pcard-overlay\').remove()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px;font-weight:700;padding:14px;border-radius:12px;cursor:pointer;font-family:inherit;letter-spacing:0.5px;">Done</button></div>';
   overlay.appendChild(sheet);document.body.appendChild(overlay);
 }
 // ── Wizard ────────────────────────────────────────────────────────────────────
