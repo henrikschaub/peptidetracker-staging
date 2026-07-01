@@ -489,6 +489,41 @@ function _tcDrawManualChart(canvasId, log) {
       calFT = _mftNum / _logMean;
     }
   }
+
+  // Warm-start: pre-fill curve with residual from prior-protocol injections so
+  // the chart starts at the user's measured free T rather than zero.
+  // Uses standard ester-class intervals (not log gaps, which may be transitional).
+  if (calFT && _curDose > 0) {
+    var _wsGroups = {}, _wsTotalAbsMg = 0;
+    sorted.forEach(function(e) {
+      var _wsBioav = (_tcCompInfo(e.compId).bioavailability || 1);
+      var _wsAbs   = parseFloat(e.doseMg) * _wsBioav;
+      _wsTotalAbsMg += _wsAbs;
+      _wsGroups[e.compId] = (_wsGroups[e.compId] || 0) + _wsAbs;
+    });
+    if (_wsTotalAbsMg > 0) {
+      Object.keys(_wsGroups).forEach(function(wsId) {
+        var wsCd    = _tcCompInfo(wsId);
+        var wsHl    = wsCd.halfLifeDays || 1;
+        var wsBioav = wsCd.bioavailability || 1;
+        var wsKe    = Math.LN2 / wsHl;
+        var wsKa    = _tcKa(wsHl);
+        // Standard injection interval per ester class
+        var wsIv = wsHl >= 20 ? 84 : wsHl >= 9 ? 14 : wsHl >= 3 ? 3.5 : 1;
+        var wsCompFrac   = _wsGroups[wsId] / _wsTotalAbsMg;
+        var wsCompWk     = _curDose * wsCompFrac;
+        var wsDosePerInj = wsCompWk * wsIv / 7 * wsBioav;
+        var wsLookback   = Math.ceil(wsHl * 10 / wsIv);
+        for (var _wsk = 1; _wsk <= wsLookback; _wsk++) {
+          var _wsDt = _wsk * wsIv;
+          for (var _wst = 0; _wst <= totalDays; _wst++) {
+            total[_wst] += _tcPkConc(wsDosePerInj, wsKa, wsKe, _wst + _wsDt);
+          }
+        }
+      });
+    }
+  }
+
   var scale     = calFT || 1;
   var unitLabel = calFT ? 'pmol/L' : 'mg';
 
