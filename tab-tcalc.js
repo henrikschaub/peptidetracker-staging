@@ -525,15 +525,16 @@ function _tcDrawManualChart(canvasId, log) {
       }
     } else {
       // Unknown prior dose: add a decaying baseline anchored to logMean so that
-      // total[0] * calFT = mftNum exactly, decaying at the log's weighted ke.
-      var _blTotalAbs = 0, _blWeightedKe = 0;
+      // total[0] * calFT = mftNum exactly. Use the ke of the slowest compound in
+      // the log (longest half-life) — the prior protocol was most likely based on
+      // that compound, so its residual decays at that rate, not the weighted average
+      // (which is dominated by short-acting esters and decays too fast).
+      var _blMinKe = Infinity;
       sorted.forEach(function(e) {
-        var _blAbs = parseFloat(e.doseMg) * ((_tcCompInfo(e.compId).bioavailability) || 1);
-        var _blKe  = Math.LN2 / ((_tcCompInfo(e.compId).halfLifeDays) || 7);
-        _blTotalAbs   += _blAbs;
-        _blWeightedKe += _blAbs * _blKe;
+        var _blCompKe = Math.LN2 / ((_tcCompInfo(e.compId).halfLifeDays) || 7);
+        if (_blCompKe < _blMinKe) _blMinKe = _blCompKe;
       });
-      var _blKe = _blTotalAbs > 0 ? _blWeightedKe / _blTotalAbs : Math.LN2 / 7;
+      var _blKe = _blMinKe < Infinity ? _blMinKe : Math.LN2 / 7;
       for (var _blt = 0; _blt <= totalDays; _blt++) {
         total[_blt] += _logMean * Math.exp(-_blKe * _blt);
       }
