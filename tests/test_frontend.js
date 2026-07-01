@@ -3265,6 +3265,27 @@ console.log('\n── _getDynamicEnhancedDoses ───────────
   const noEnhDoses = G._getDynamicEnhancedDoses(monday, false);
   check('Enhanced: 0 doses when enabled=false',       noEnhDoses.length === 0, `got ${noEnhDoses.length}`);
 
+  // amPm compound with both doses non-zero → 2 separate entries
+  const enhStackBothAmPm = {
+    name: 'HGH Stack',
+    cycle_start: '2026-06-01',
+    cycle_length: 12,
+    peptides: [],
+    trt: { enabled: false, compounds: [] },
+    enhanced: { enabled: true, compounds: [
+      { id: 'hgh', name: 'HGH', dot: '#3cffa0', days: [0,1,2,3,4,5,6],
+        amPm: true, dose_am: '3', dose_pm: '3', unit: 'IU/day' }
+    ]}
+  };
+  G._userStacks = [enhStackBothAmPm];
+  G._activeStackIndices = [0];
+  const bothAmPmDoses = G._getDynamicEnhancedDoses(monday, true);
+  check('Enhanced amPm: both AM+PM non-zero → 2 entries', bothAmPmDoses.length === 2, `got ${bothAmPmDoses.length}`);
+  check('Enhanced amPm: AM entry has time=AM', bothAmPmDoses.some(function(d){return d.time==='AM';}));
+  check('Enhanced amPm: PM entry has time=PM', bothAmPmDoses.some(function(d){return d.time==='PM';}));
+  check('Enhanced amPm: AM detail includes dose', bothAmPmDoses.some(function(d){return d.time==='AM'&&d.detail.includes('3');}));
+  check('Enhanced amPm: AM entry id unique from PM', bothAmPmDoses[0].id!==bothAmPmDoses[1].id);
+
   G._userStacks = _des;
   G._activeStackIndices = _dea;
 }
