@@ -359,7 +359,7 @@ function _tcOpenManualLog() {
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
           '<span style="width:8px;height:8px;border-radius:50%;background:' + cd.dot + ';display:inline-block;flex-shrink:0"></span>' +
           compSelect +
-          '<button onclick="_tcRemoveManualEntry(' + idx + ')" style="background:none;border:none;color:#444;font-size:18px;cursor:pointer;padding:0;flex-shrink:0;line-height:1">✕</button>' +
+          '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:#444;font-size:18px;cursor:pointer;padding:0;flex-shrink:0;line-height:1">✕</button>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
           '<div><div style="font-size:9px;color:#444;letter-spacing:1.2px;font-weight:700;margin-bottom:5px">DOSE (mg)</div>' +
@@ -427,9 +427,26 @@ function _tcAddManualEntry() {
   });
 }
 
+function _tcConfirmRemove(idx) {
+  var ex = document.getElementById('tc-del-confirm');
+  if (ex) ex.remove();
+  var d = document.createElement('div');
+  d.id = 'tc-del-confirm';
+  d.style.cssText = 'position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  d.innerHTML =
+    '<div style="background:#141414;border:1px solid #2a2a2a;border-radius:16px;padding:24px;max-width:300px;width:100%;text-align:center">' +
+      '<div style="font-size:13px;color:var(--accent);font-weight:700;letter-spacing:0.5px;margin-bottom:6px">Delete this injection?</div>' +
+      '<div style="font-size:12px;color:#555;margin-bottom:20px">This cannot be undone.</div>' +
+      '<div style="display:flex;gap:10px">' +
+        '<button onclick="document.getElementById(\'tc-del-confirm\').remove()" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#888;font-size:13px;font-weight:700;padding:12px;cursor:pointer;font-family:inherit">Cancel</button>' +
+        '<button onclick="document.getElementById(\'tc-del-confirm\').remove();_tcRemoveManualEntry(' + idx + ')" style="flex:1;background:var(--accent);border:none;border-radius:10px;color:#000;font-size:13px;font-weight:700;padding:12px;cursor:pointer;font-family:inherit">Delete</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(d);
+}
+
 function _tcRemoveManualEntry(idx) {
   if (!_tcp.manualLog) return;
-  if (!confirm('Delete this injection? This cannot be undone.')) return;
   _tcp.manualLog.splice(idx, 1);
   _tcSaveProfile();
   _tcOpenManualLog();
