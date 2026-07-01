@@ -1024,6 +1024,39 @@ function _tcExportPlan() {
   }
 }
 
+// ── Copy plan to active stack ─────────────────────────────────────────────────
+
+function _tcCopyToActiveStack() {
+  var plan = _tcCurrentPlan;
+  if (!plan || !plan.compounds || plan.compounds.length === 0) {
+    alert('No T-Calc plan to copy.'); return;
+  }
+  if (typeof _userStacks === 'undefined' || _userStacks.length === 0) {
+    alert('No stacks found. Create a stack first in the Stacks tab.'); return;
+  }
+  var activeIdx = (typeof _activeStackIndices !== 'undefined' && _activeStackIndices.length > 0)
+    ? _activeStackIndices[0] : 0;
+  if (activeIdx < 0 || activeIdx >= _userStacks.length) {
+    alert('No active stack found.'); return;
+  }
+  var stack = _userStacks[activeIdx];
+  var trtCompounds = plan.compounds.map(function(cp) {
+    var iv = cp.intervalDays;
+    var days;
+    if      (iv <= 1.1)                  days = [0,1,2,3,4,5,6];
+    else if (Math.abs(iv - 2)   < 0.3)   days = [1,3,5];
+    else if (Math.abs(iv - 3.5) < 0.3)   days = [1,4];
+    else if (Math.abs(iv - 7)   < 0.5)   days = [1];
+    else                                  days = [1];
+    return {id:cp.compId, name:cp.cd.name, dose:String(cp.dosePerInj), unit:'mg', days:days};
+  });
+  if (!stack.trt) stack.trt = {enabled:true, compounds:[]};
+  stack.trt.enabled   = true;
+  stack.trt.compounds = trtCompounds;
+  if (typeof saveStacksToBackend === 'function') saveStacksToBackend();
+  alert('TRT plan copied to "' + (stack.name || 'active stack') + '".');
+}
+
 // ── Main build ────────────────────────────────────────────────────────────────
 
 function buildTCalc() {
@@ -1055,6 +1088,31 @@ function buildTCalc() {
     calFT = cal.curDose > 0
       ? cal.mftNum * plan.totalMgPerWeek / cal.curDose / _ssMean
       : cal.mftNum / _ssMean;
+  }
+
+  // Warm start: pre-fill curve with residual drug from prior injections at the
+  // user's current dose so the graph starts at their measured free T (mftNum)
+  // rather than zero. Stats are already computed above from the cold-start curve.
+  // Proof: warmStart[0] ≈ ssMean×(curDose/planDose); ×calFT = mftNum ✓
+  if (calFT && cal.curDose > 0 && plan && curve) {
+    plan.compounds.forEach(function(wscp) {
+      if (wscp.compId === 'hcg') return;
+      var wsHl       = wscp.cd.halfLifeDays;
+      var wsKe       = Math.LN2 / wsHl;
+      var wsKa       = _tcKa(wsHl);
+      var wsBioav    = wscp.cd.bioavailability || 1;
+      var wsCompFrac = plan.totalMgPerWeek > 0 ? wscp.mgPerWeek / plan.totalMgPerWeek : 1;
+      var wsFreq     = wscp.intervalDays;
+      var wsCompWk   = cal.curDose * wsCompFrac;
+      var wsDosePerInj = wsCompWk * wsFreq / 7 * wsBioav;
+      var wsLookback   = Math.ceil(wsHl * 10 / wsFreq);
+      for (var wsk = 1; wsk <= wsLookback; wsk++) {
+        var wsDtAtT0 = wsk * wsFreq;
+        for (var wst = 0; wst <= plan.cycleDays; wst++) {
+          curve[wst] += _tcPkConc(wsDosePerInj, wsKa, wsKe, wst + wsDtAtT0);
+        }
+      }
+    });
   }
 
   var html = '';
@@ -1470,8 +1528,9 @@ function buildTCalc() {
     });
 
     html += '</tbody></table></div>';
-    html += '<div style="padding:14px 16px">';
-    html += '<button onclick="_tcExportPlan()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:13px 20px;font-size:14px;font-weight:700;cursor:pointer;width:100%;font-family:inherit">Export as TRT Stack</button>';
+    html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">';
+    html += '<button onclick="_tcCopyToActiveStack()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:13px 20px;font-size:14px;font-weight:700;cursor:pointer;width:100%;font-family:inherit">Copy TRT to Active Stack</button>';
+    html += '<button onclick="_tcExportPlan()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:13px 20px;font-size:14px;font-weight:700;cursor:pointer;width:100%;font-family:inherit">Export as New TRT Stack</button>';
     html += '</div></div>';
   }
 
