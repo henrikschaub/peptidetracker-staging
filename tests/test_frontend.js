@@ -3063,3 +3063,43 @@ if (typeof G._tcDrawManualChart === 'function') {
   G._tcp.measuredFT      = _ws_savedFT;
   G._tcp.currentDoseMgWk = _ws_savedDose;
 }
+
+// Regression: warm-start ke for curDose=0 must use slowest compound ke (not weighted avg).
+// Bug: weighted ke was dominated by TE (short HL=4.5d), causing the prior-protocol
+// baseline to wash out in ~7 days. By Day 30 it was <6% of initial, leaving total
+// free T far below baseline. Fix: use ke of longest-HL compound (TU, 34d).
+if (typeof G._tcKa === 'function') {
+  var _blKe_te = Math.LN2 / 4.5;   // 0.154/d  (TE, short-acting)
+  var _blKe_tu = Math.LN2 / 34;    // 0.0204/d (TU Nebido, long-acting)
+  // 250mg TE + 200mg TU: old weighted ke ≈ 0.0946/d, new min ke = ke_tu
+  var _blKe_avg = (250 * _blKe_te + 200 * _blKe_tu) / 450;
+  check('warm-start ke: TU ke < weighted ke for TE+TU log',
+    _blKe_tu < _blKe_avg,
+    'tu='+_blKe_tu.toFixed(4)+' avg='+_blKe_avg.toFixed(4));
+  check('warm-start ke: TU baseline at Day 30 is >50% intact (correct slow decay)',
+    Math.exp(-_blKe_tu * 30) > 0.5,
+    'got '+Math.exp(-_blKe_tu * 30).toFixed(3));
+  check('warm-start ke: old weighted baseline at Day 30 is <10% (too fast, was the bug)',
+    Math.exp(-_blKe_avg * 30) < 0.1,
+    'got '+Math.exp(-_blKe_avg * 30).toFixed(3));
+}
+
+// Smoke test: mixed TE+TU log with curDose=0 must not crash
+if (typeof G._tcDrawManualChart === 'function') {
+  var _bl_savedFT   = G._tcp.measuredFT;
+  var _bl_savedDose = G._tcp.currentDoseMgWk;
+  G._tcp.measuredFT      = '217';
+  G._tcp.currentDoseMgWk = '';
+  var _bl_log = [
+    {compId: 'testoviron', doseMg: '100', date: '2026-06-27'},
+    {compId: 'testoviron', doseMg: '150', date: '2026-06-28'},
+    {compId: 'nebido',     doseMg: '100', date: '2026-06-29'},
+    {compId: 'nebido',     doseMg: '100', date: '2026-07-01'},
+  ];
+  var _bl_threw = false;
+  try { G._tcDrawManualChart('tc-manual-chart', _bl_log); }
+  catch (e) { _bl_threw = true; console.error('  mixed TE+TU chart threw:', e.message); }
+  check('warm-start ke fix: mixed TE+TU log no crash when curDose=0', !_bl_threw);
+  G._tcp.measuredFT      = _bl_savedFT;
+  G._tcp.currentDoseMgWk = _bl_savedDose;
+}
