@@ -1347,19 +1347,10 @@ function _tcCopyLogToStack() {
   compIds.forEach(function(cid){
     var entries = byComp[cid].slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
     // Derive interval from consecutive entry dates
-    var intervals = [];
-    for(var i=1;i<entries.length;i++){
-      var a=new Date(entries[i-1].date.replace(/-/g,'/')), b=new Date(entries[i].date.replace(/-/g,'/'));
-      var diff=Math.round((b-a)/86400000);
-      if(diff>0)intervals.push(diff);
-    }
-    var iv = intervals.length ? Math.round(intervals.reduce(function(s,v){return s+v;},0)/intervals.length) : 7;
-    var days;
-    if(iv<=1)days=[0,1,2,3,4,5,6];
-    else if(Math.abs(iv-2)<0.6)days=[1,3,5];
-    else if(Math.abs(iv-3.5)<0.6)days=[1,4];
-    else if(Math.abs(iv-7)<2)days=[1];
-    else days=[1];
+    var _daySet={};
+    entries.forEach(function(e){if(e.date){_daySet[new Date(e.date.replace(/-/g,'/')).getDay()]=true;}});
+    var days=Object.keys(_daySet).map(Number).sort(function(a,b){return a-b;});
+    if(!days.length)days=[1];
     // Most common dose
     var doses=entries.map(function(e){return parseFloat(e.doseMg)||0;}).filter(Boolean);
     var dose=doses.length?String(Math.round(doses.reduce(function(s,v){return s+v;},0)/doses.length)):'';
@@ -1401,11 +1392,10 @@ function _tcExportPlan() {
   var trtCompounds = plan.compounds.map(function(cp) {
     var iv = cp.intervalDays;
     var days;
-    if (iv <= 1.1)                       days = [0,1,2,3,4,5,6];
-    else if (Math.abs(iv - 2)   < 0.3)  days = [1,3,5];
-    else if (Math.abs(iv - 3.5) < 0.3)  days = [1,4];
-    else if (Math.abs(iv - 7)   < 0.5)  days = [1];
-    else                                 days = [1];
+    if      (iv <= 1)   days = [0,1,2,3,4,5,6];
+    else if (iv <= 2.5) days = [1,3,5];
+    else if (iv <= 5)   days = [1,4];
+    else                days = [1];
     return {id:cp.compId, name:cp.cd.name, dose:String(cp.dosePerInj), unit:'mg', days:days};
   });
 
@@ -1448,11 +1438,10 @@ function _tcCopyToActiveStack() {
   var trtCompounds = plan.compounds.map(function(cp) {
     var iv = cp.intervalDays;
     var days;
-    if      (iv <= 1.1)                  days = [0,1,2,3,4,5,6];
-    else if (Math.abs(iv - 2)   < 0.3)   days = [1,3,5];
-    else if (Math.abs(iv - 3.5) < 0.3)   days = [1,4];
-    else if (Math.abs(iv - 7)   < 0.5)   days = [1];
-    else                                  days = [1];
+    if      (iv <= 1)   days = [0,1,2,3,4,5,6];
+    else if (iv <= 2.5) days = [1,3,5];
+    else if (iv <= 5)   days = [1,4];
+    else                days = [1];
     return {id:cp.compId, name:cp.cd.name, dose:String(cp.dosePerInj), unit:'mg', days:days};
   });
   if (!stack.trt) stack.trt = {enabled:true, compounds:[]};
