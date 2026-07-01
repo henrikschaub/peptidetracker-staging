@@ -42,7 +42,7 @@ const patchedScript = rawScript
   .replace('const TRT_GUIDE=',        'var TRT_GUIDE=');
 
 const noop = () => {};
-const mockCtx = {scale:noop,beginPath:noop,moveTo:noop,lineTo:noop,arc:noop,fill:noop,stroke:noop,fillText:noop,closePath:noop,createLinearGradient:()=>({addColorStop:noop}),save:noop,restore:noop,fillRect:noop};
+const mockCtx = {scale:noop,beginPath:noop,moveTo:noop,lineTo:noop,arc:noop,fill:noop,stroke:noop,fillText:noop,closePath:noop,createLinearGradient:()=>({addColorStop:noop}),save:noop,restore:noop,fillRect:noop,setLineDash:noop,strokeRect:noop,translate:noop,rotate:noop,measureText:()=>({width:0})};
 const mockEl = () => {
   const el = {style:{},classList:{add:noop,remove:noop,contains:()=>false},appendChild:noop,removeChild:noop,insertBefore:noop,addEventListener:noop,children:[],querySelectorAll:()=>[],querySelector:()=>mockEl(),offsetWidth:300,getContext:()=>mockCtx};
   Object.defineProperty(el,'innerHTML',  {get:()=>'',set:noop});
@@ -2982,4 +2982,84 @@ console.log('\n── _renderTRTGuide: sex / age personalization modifiers ─�
   var htmlBpc=G._renderDoseGuide('bpc157',500);
   check('_renderDoseGuide: bpc157 500mcg highlights Optimal tier',
     activeTierLabel(htmlBpc).some(function(l){return l.indexOf('Optimal')===0;}));
+}
+
+// ── T-Calc PK model regression tests ─────────────────────────────────────────
+console.log('\n── T-Calc PK model ─────────────────────────────────────────');
+check('_tcPkConc defined',          typeof G._tcPkConc === 'function');
+check('_tcKa defined',              typeof G._tcKa === 'function');
+check('_tcVermeulenFT defined',     typeof G._tcVermeulenFT === 'function');
+check('_tcDrawManualChart defined', typeof G._tcDrawManualChart === 'function');
+
+if (typeof G._tcPkConc === 'function') {
+  var _tc_ke_te = Math.LN2 / 4.5, _tc_ka_te = G._tcKa(4.5);
+  check('_tcPkConc: dt=0  → 0',     G._tcPkConc(100, _tc_ka_te, _tc_ke_te, 0) === 0);
+  check('_tcPkConc: dt=-1 → 0',     G._tcPkConc(100, _tc_ka_te, _tc_ke_te, -1) === 0);
+  check('_tcPkConc: TE peak > 0 at ~1d',
+    G._tcPkConc(100, _tc_ka_te, _tc_ke_te, 1) > 0,
+    'got '+G._tcPkConc(100, _tc_ka_te, _tc_ke_te, 1).toFixed(3));
+  check('_tcPkConc: TE decays from 1d to 5d',
+    G._tcPkConc(100, _tc_ka_te, _tc_ke_te, 5) < G._tcPkConc(100, _tc_ka_te, _tc_ke_te, 1));
+}
+
+if (typeof G._tcKa === 'function') {
+  check('_tcKa: HL=0.5d → 15.0 (gel/short)',      G._tcKa(0.5) === 15.0, 'got '+G._tcKa(0.5));
+  check('_tcKa: HL=2d   →  8.0 (propionate)',      G._tcKa(2)   ===  8.0, 'got '+G._tcKa(2));
+  check('_tcKa: HL=4.5d →  3.0 (enanthate/TE)',    G._tcKa(4.5) ===  3.0, 'got '+G._tcKa(4.5));
+  check('_tcKa: HL=10d  →  1.5 (cypionate/TC)',    G._tcKa(10)  ===  1.5, 'got '+G._tcKa(10));
+  check('_tcKa: HL=34d  →  0.4 (undecanoate/TU)',  G._tcKa(34)  ===  0.4, 'got '+G._tcKa(34));
+}
+
+if (typeof G._tcVermeulenFT === 'function') {
+  var _tc_ft20_40 = G._tcVermeulenFT(20, 40);
+  check('Vermeulen: TT=20 SHBG=40 → 350–500 pmol/L',
+    _tc_ft20_40 > 350 && _tc_ft20_40 < 500,
+    'got '+(_tc_ft20_40 ? Math.round(_tc_ft20_40) : _tc_ft20_40));
+  check('Vermeulen: TT=0   → null', G._tcVermeulenFT(0, 40) === null);
+  check('Vermeulen: SHBG=0 → null', G._tcVermeulenFT(20, 0) === null);
+  check('Vermeulen: higher SHBG → lower free T',
+    G._tcVermeulenFT(20, 80) < G._tcVermeulenFT(20, 20));
+}
+
+// Warm-start accumulation: prior injections must give non-zero residual at t=0
+if (typeof G._tcPkConc === 'function' && typeof G._tcKa === 'function') {
+  // TE (enanthate): 125mg/wk E3.5D, 13 prior injections look-back
+  var _ws_ke_te = Math.LN2 / 4.5, _ws_ka_te = G._tcKa(4.5);
+  var _ws_dose_te = 125 * 3.5 / 7;
+  var _ws_sum_te = 0;
+  for (var _wsi = 1; _wsi <= 13; _wsi++) {
+    _ws_sum_te += G._tcPkConc(_ws_dose_te, _ws_ka_te, _ws_ke_te, _wsi * 3.5);
+  }
+  check('warm-start TE: 13 prior E3.5D injections accumulate > 0 at t=0',
+    _ws_sum_te > 0, 'got '+_ws_sum_te.toFixed(3));
+
+  // TU (Nebido): 1000mg Q84d, 5 prior injections look-back
+  var _ws_ke_tu = Math.LN2 / 34, _ws_ka_tu = G._tcKa(34);
+  var _ws_dose_tu = 1000 * 84 / 7;
+  var _ws_sum_tu = 0;
+  for (var _wsi2 = 1; _wsi2 <= 5; _wsi2++) {
+    _ws_sum_tu += G._tcPkConc(_ws_dose_tu, _ws_ka_tu, _ws_ke_tu, _wsi2 * 84);
+  }
+  check('warm-start Nebido: 5 prior Q84d injections accumulate > 0 at t=0',
+    _ws_sum_tu > 0, 'got '+_ws_sum_tu.toFixed(3));
+}
+
+// Regression: _tcDrawManualChart must not crash when curDose=0 and measuredFT is set.
+// This was the bug: if (calFT && _curDose > 0) skipped the warm-start entirely when
+// "Dose at bloodwork" was left blank, causing the curve to always start at 0.
+if (typeof G._tcDrawManualChart === 'function') {
+  var _ws_savedFT   = G._tcp.measuredFT;
+  var _ws_savedDose = G._tcp.currentDoseMgWk;
+  G._tcp.measuredFT      = '217';
+  G._tcp.currentDoseMgWk = '';
+  var _ws_log = [
+    {compId: 'testoviron', doseMg: '125', date: '2026-06-24'},
+    {compId: 'testoviron', doseMg: '125', date: '2026-06-28'},
+  ];
+  var _ws_threw = false;
+  try { G._tcDrawManualChart('tc-manual-chart', _ws_log); }
+  catch (e) { _ws_threw = true; console.error('  _tcDrawManualChart threw:', e.message); }
+  check('_tcDrawManualChart: no crash when curDose=0 and measuredFT set', !_ws_threw);
+  G._tcp.measuredFT      = _ws_savedFT;
+  G._tcp.currentDoseMgWk = _ws_savedDose;
 }
