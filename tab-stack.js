@@ -1084,10 +1084,25 @@ function _getDynamicEnhancedDoses(d,withIds){
       var key=c.id+'_'+si;
       if(seenIds[key])return;
       seenIds[key]=true;
+      var dot=c.dot||'#a855f7';
+      var baseUnit=c.unit?(c.unit.split('/')[0]):'';
       var unitLabel=c.unit?(' '+c.unit):'';
-      var entry={name:c.name,detail:(c.dose?c.dose+unitLabel:''),time:null,dot:c.dot||'#a855f7'};
-      if(withIds)entry.id=c.id+'_'+si+'_'+dateKey(d);
-      result.push(entry);
+      if(c.amPm){
+        if(c.dose_am&&parseFloat(c.dose_am)!==0){
+          var amEntry={name:c.name,detail:c.dose_am+(baseUnit?' '+baseUnit:''),time:'AM',dot:dot};
+          if(withIds)amEntry.id=c.id+'_'+si+'_am_'+dateKey(d);
+          result.push(amEntry);
+        }
+        if(c.dose_pm&&parseFloat(c.dose_pm)!==0){
+          var pmEntry={name:c.name,detail:c.dose_pm+(baseUnit?' '+baseUnit:''),time:'PM',dot:dot};
+          if(withIds)pmEntry.id=c.id+'_'+si+'_pm_'+dateKey(d);
+          result.push(pmEntry);
+        }
+      }else{
+        var entry={name:c.name,detail:(c.dose?c.dose+unitLabel:''),time:null,dot:dot};
+        if(withIds)entry.id=c.id+'_'+si+'_'+dateKey(d);
+        result.push(entry);
+      }
     });
   });
   return result;
