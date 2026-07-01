@@ -24,6 +24,7 @@ var _tcpSessionLoaded = false;
 var _tcCurrentPlan    = null;
 var _tcExtraCatalog   = [];   // extra compounds fetched from /trt-catalog at runtime
 var _tcAgeMissing     = false; // true when user-settings returned but no user_age found
+var _tcBwOpen         = false; // whether the bloodwork panel is expanded
 
 // ── Frequency options ─────────────────────────────────────────────────────────
 
@@ -435,10 +436,10 @@ function _tcAddManualEntry() {
   }
   _tcp.manualLog.push({compId: defaultComp, doseMg: '', date: defaultDate});
   _tcSaveProfile();
-  _tcOpenManualLog();
+  buildTCalc();
   // Focus the dose field of the newly added (last) entry
   requestAnimationFrame(function() {
-    var inputs = document.querySelectorAll('#tc-log-overlay input[type="number"]');
+    var inputs = document.querySelectorAll('#tcalc-body input[type="number"]');
     if (inputs.length) inputs[inputs.length - 1].focus();
   });
 }
@@ -465,7 +466,7 @@ function _tcRemoveManualEntry(idx) {
   if (!_tcp.manualLog) return;
   _tcp.manualLog.splice(idx, 1);
   _tcSaveProfile();
-  _tcOpenManualLog();
+  buildTCalc();
 }
 
 function _tcSetManualField(idx, field, val) {
@@ -473,15 +474,21 @@ function _tcSetManualField(idx, field, val) {
   _tcp.manualLog[idx][field] = val;
   _tcSaveProfile();
   if (field === 'compId') {
-    _tcOpenManualLog();
+    buildTCalc();
   } else {
     var validLog = _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; });
-    if (validLog.length > 0 && document.getElementById('tc-manual-chart')) {
-      _tcDrawManualChart('tc-manual-chart', validLog);
-    } else if (validLog.length === 0 && document.getElementById('tc-log-overlay')) {
-      _tcOpenManualLog();
+    if (validLog.length > 0 && document.getElementById('tc-main-chart')) {
+      _tcDrawManualChart('tc-main-chart', validLog);
+    } else {
+      buildTCalc();
     }
   }
+}
+
+// Toggle bloodwork panel open/closed
+function _tcToggleBw() {
+  _tcBwOpen = !_tcBwOpen;
+  buildTCalc();
 }
 
 // Age-stratified free T reference midpoints (pmol/L) for when no bloodwork is entered.
@@ -1208,478 +1215,168 @@ function buildTCalc() {
   var iSty = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--text);font-size:16px;font-family:inherit;outline:none;width:100%;box-sizing:border-box';
   var lSty = 'font-size:11px;font-weight:700;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;display:block';
 
-  var result   = _tcOptimize();
-  var plan     = result.plan;
-  var cal      = result.calibration;
-  var sched    = plan ? _tcBuildSchedule(plan) : [];
-  var curve    = plan ? _tcBuildCurve(sched, plan) : null;
-  var stats    = (plan && curve) ? _tcComputeStats(curve, sched, plan) : null;
-  _tcCurrentPlan = plan;
-
-  // Calibrated free T scale: pmol/L per simulation unit.
-  // Anchors steady-state mean to the user's measured free T.
-  // Dose ratio scales proportionally when bloodwork dose differs from plan dose.
-  var calFT = null;
-  if (cal.mftNum > 0 && stats && (stats.ssPeak + stats.ssTrough) > 0) {
-    var _ssMean = (stats.ssPeak + stats.ssTrough) / 2;
-    calFT = cal.curDose > 0
-      ? cal.mftNum * plan.totalMgPerWeek / cal.curDose / _ssMean
-      : cal.mftNum / _ssMean;
-  }
-
-  // Warm start: pre-fill curve with residual drug from prior injections at the
-  // user's current dose so the graph starts at their measured free T (mftNum)
-  // rather than zero. Stats are already computed above from the cold-start curve.
-  // Proof: warmStart[0] ≈ ssMean×(curDose/planDose); ×calFT = mftNum ✓
-  if (calFT && cal.curDose > 0 && plan && curve) {
-    plan.compounds.forEach(function(wscp) {
-      if (wscp.compId === 'hcg') return;
-      var wsHl       = wscp.cd.halfLifeDays;
-      var wsKe       = Math.LN2 / wsHl;
-      var wsKa       = _tcKa(wsHl);
-      var wsBioav    = wscp.cd.bioavailability || 1;
-      var wsCompFrac = plan.totalMgPerWeek > 0 ? wscp.mgPerWeek / plan.totalMgPerWeek : 1;
-      var wsFreq     = wscp.intervalDays;
-      var wsCompWk   = cal.curDose * wsCompFrac;
-      var wsDosePerInj = wsCompWk * wsFreq / 7 * wsBioav;
-      var wsLookback   = Math.ceil(wsHl * 10 / wsFreq);
-      for (var wsk = 1; wsk <= wsLookback; wsk++) {
-        var wsDtAtT0 = wsk * wsFreq;
-        for (var wst = 0; wst <= plan.cycleDays; wst++) {
-          curve[wst] += _tcPkConc(wsDosePerInj, wsKa, wsKe, wst + wsDtAtT0);
-        }
-      }
-    });
-  }
+  var log      = _tcp.manualLog || [];
+  var comps    = _tcManualComps();
+  var validLog = log.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; });
+  var mftNum   = parseFloat(_tcp.measuredFT) || 0;
 
   var html = '';
 
-  // ── 1. BLOODWORK card ─────────────────────────────────────────────────────────
-  html += '<div class="card"><div class="card-header"><div class="card-title-wrap">';
-  html += '<div class="card-dot" style="background:#cc8844"></div>';
-  html += '<div class="card-title">BLOODWORK</div></div>';
-  html += '<span style="font-size:11px;color:var(--muted2)">saved to backend</span></div>';
-  html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:16px">';
-
-  if (_tcAgeMissing) {
-    html += '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:#f59e0b;">⚠ Age not set — go to Body Comp → Age to save your age. Age-stratified free T reference ranges will use a default of 350 pmol/L until then.</div>';
-  }
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
-  html += '<div><label style="' + lSty + '">Total T (nmol/L)</label>';
-  html += '<input type="number" min="0" max="200" step="0.1" value="' + _esc(_tcp.totalT) + '" placeholder="e.g. 16.2" oninput="_tcp.totalT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
-  html += '<div><label style="' + lSty + '">SHBG (nmol/L)</label>';
-  html += '<input type="number" min="0" max="300" step="1" value="' + _esc(_tcp.shbg) + '" placeholder="e.g. 45" oninput="_tcp.shbg=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
+  // ── 1. PLASMA CURVE (top — main feature) ─────────────────────────────────────
+  var chartDot = (validLog.length > 0 && validLog[0].compId)
+    ? (_tcCompInfo(validLog[0].compId).dot || '#e8a020') : '#e8a020';
+  html += '<div class="card">';
+  html += '<div class="card-header"><div class="card-title-wrap">';
+  html += '<div class="card-dot" style="background:' + chartDot + '"></div>';
+  html += '<div class="card-title">PLASMA CURVE</div></div>';
+  html += '<span style="font-size:11px;color:var(--muted2)">' + (mftNum > 0 ? 'calibrated · pmol/L' : 'add bloodwork to calibrate') + '</span>';
   html += '</div>';
-
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
-  html += '<div><label style="' + lSty + '">Free T measured (pmol/L)</label>';
-  html += '<input type="number" min="0" max="10000" step="1" value="' + _esc(_tcp.measuredFT) + '" placeholder="e.g. 223" oninput="_tcp.measuredFT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
-  html += '<div><label style="' + lSty + '">Dose at bloodwork (mg/wk)</label>';
-  html += '<input type="number" min="0" max="2000" step="10" value="' + _esc(_tcp.currentDoseMgWk) + '" placeholder="e.g. 150" oninput="_tcp.currentDoseMgWk=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
-  html += '</div>';
-
-  html += '<div><label style="' + lSty + '">Target free T (pmol/L)</label>';
-  html += '<input type="number" min="0" max="10000" step="10" value="' + _esc(_tcp.targetFT) + '" placeholder="225–675 optimal · 600–1000 high-normal TRT" oninput="_tcp.targetFT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
-
-  if (cal.vermFT !== null || cal.targetTT !== null) {
-    html += '<div style="background:var(--surface2);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:8px">';
-    if (cal.vermFT !== null) {
-      html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
-      html += '<span style="font-size:13px;color:var(--muted)">Vermeulen est.</span>';
-      html += '<span style="font-size:15px;font-weight:700;color:var(--text)">' + Math.round(cal.vermFT) + ' pmol/L</span></div>';
-    }
-    if (cal.ftFrac !== null) {
-      html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
-      html += '<span style="font-size:13px;color:var(--muted)">Free T fraction</span>';
-      html += '<span style="font-size:15px;font-weight:700;color:var(--text)">' + (cal.ftFrac * 100).toFixed(2) + '%</span></div>';
-    }
-    if (cal.targetTT !== null) {
-      html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
-      html += '<span style="font-size:13px;color:var(--muted)">Total T needed</span>';
-      html += '<span style="font-size:15px;font-weight:700;color:var(--accent)">' + cal.targetTT.toFixed(1) + ' nmol/L</span></div>';
-    }
-    if (cal.mgToNmol !== null && cal.targetTT !== null) {
-      html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
-      html += '<span style="font-size:13px;color:var(--muted)">Weekly dose needed</span>';
-      html += '<span style="font-size:15px;font-weight:700;color:var(--accent)">' + Math.round(cal.targetTT / cal.mgToNmol) + ' mg/wk</span></div>';
-    }
-    html += '</div>';
+  if (validLog.length > 0) {
+    html += '<div style="padding:2px 16px 10px"><canvas id="tc-main-chart" style="width:100%;display:block;"></canvas></div>';
   } else {
-    html += '<div style="font-size:13px;color:var(--muted2);line-height:1.5">Enter bloodwork values to enable personalised dosing.<br>Optimal male free T: 225–675 pmol/L · High-normal TRT: 600–1000 pmol/L</div>';
+    html += '<div style="padding:28px 16px;text-align:center;color:var(--muted2);font-size:13px">';
+    html += 'No injections logged yet.<br><span style="font-size:12px;opacity:0.6">Add injections below to plot your plasma curve.</span>';
+    html += '</div>';
   }
-  html += '</div></div>';
+  html += '</div>';
 
-  // ── 2. INVENTORY card ─────────────────────────────────────────────────────────
-  html += '<div class="card"><div class="card-header"><div class="card-title-wrap">';
-  html += '<div class="card-dot" style="background:#e8a020"></div>';
-  html += '<div class="card-title">INVENTORY</div></div>';
-  html += '<div style="display:flex;gap:6px">';
-  html += '<button onclick="_tcOpenManualLog()" style="background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#888;font-size:11px;font-weight:800;letter-spacing:0.8px;cursor:pointer;padding:7px 14px;font-family:inherit">LOG</button>';
-  html += '<button onclick="_tcOpenInventory()" style="background:linear-gradient(135deg,#e8a020 0%,#b85a00 100%);border:none;border-radius:8px;color:#000;font-size:11px;font-weight:800;letter-spacing:0.8px;cursor:pointer;padding:7px 14px;font-family:inherit">⚗ MANAGE</button>';
-  html += '</div>';
-  html += '</div>';
+  // ── 2. INJECTION SCHEDULE (main card — inline) ────────────────────────────────
+  html += '<div class="card">';
+  html += '<div class="card-header"><div class="card-title-wrap">';
+  html += '<div class="card-dot" style="background:#6688cc"></div>';
+  html += '<div class="card-title">INJECTION SCHEDULE</div></div>';
+  html += '<div style="display:flex;align-items:center;gap:8px">';
+  if (log.length > 0) {
+    html += '<span style="font-size:11px;color:var(--muted2)">' + log.length + ' entr' + (log.length === 1 ? 'y' : 'ies') + '</span>';
+  }
+  html += '<button onclick="_tcAddManualEntry()" style="background:linear-gradient(135deg,#6688cc,#4466aa);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;letter-spacing:0.8px;cursor:pointer;padding:7px 14px;font-family:inherit">+ ADD</button>';
+  html += '</div></div>';
   html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">';
 
-  if (_tcp.inventory.length === 0) {
-    html += '<div style="font-size:13px;color:var(--muted2);text-align:center;padding:16px 0">';
-    html += 'No compounds equipped.<br><span style="font-size:12px;color:var(--muted2);opacity:0.6">Tap ⚗ MANAGE to open the inventory.</span>';
-    html += '</div>';
+  if (log.length === 0) {
+    html += '<div style="text-align:center;padding:16px 0;color:var(--muted2);font-size:13px">No injections logged yet.<br><span style="font-size:12px;opacity:0.6">Tap + ADD to log your first injection.</span></div>';
   } else {
-    _tcp.inventory.forEach(function(inv) {
-      var cd = _tcCompInfo(inv.compId);
-      var isHCG = inv.compId === 'hcg';
-      var unit = isHCG ? 'IU' : 'mg';
-      var stock = parseFloat(inv.totalMg) || 0;
+    log.forEach(function(entry, idx) {
+      var cd = _tcCompInfo(entry.compId || (comps[0] || ''));
+      var compSelect = '<select onchange="_tcSetManualField(' + idx + ',\'compId\',this.value)" style="' + iSty + ';flex:1;min-width:0;font-size:14px">';
+      comps.forEach(function(id) {
+        var n = _tcCompInfo(id).name;
+        compSelect += '<option value="' + _esc(id) + '"' + (entry.compId === id ? ' selected' : '') + '>' + _esc(n) + '</option>';
+      });
+      compSelect += '</select>';
 
-      // Weeks coverage
-      var weeksStr = '';
-      if (plan && !isHCG && stock > 0) {
-        var cp = plan.compounds.find(function(c){ return c.compId === inv.compId; });
-        if (cp && cp.mgPerWeek > 0) weeksStr = '~' + Math.floor(stock / cp.mgPerWeek) + ' wks';
-      }
-
-      // Cost/week
-      var costStr = '';
-      if (!isHCG) {
-        var costTotal = parseFloat(inv.costTotal) || 0;
-        if (costTotal > 0 && stock > 0) {
-          var cp2 = plan && plan.compounds.find(function(c){ return c.compId === inv.compId; });
-          if (cp2 && cp2.costPerWeek !== null) costStr = cp2.costPerWeek.toFixed(2) + '/wk';
-        }
-      }
-
-      html += '<div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:8px;padding:10px 14px;border:1px solid ' + cd.dot + '33">';
-      html += '<span style="width:8px;height:8px;border-radius:50%;background:' + cd.dot + ';flex-shrink:0;display:inline-block;box-shadow:0 0 6px ' + cd.dot + '88"></span>';
-      html += '<div style="flex:1;min-width:0">';
-      html += '<div style="font-size:14px;font-weight:700;color:var(--text)">' + _esc(cd.name) + '</div>';
-      var meta = [];
-      if (stock > 0) meta.push(stock + ' ' + unit);
-      if (weeksStr) meta.push(weeksStr);
-      if (cd.halfLifeStr) meta.push('t½ ' + cd.halfLifeStr);
-      if (meta.length) html += '<div style="font-size:11px;color:var(--muted2);margin-top:1px">' + meta.join(' · ') + '</div>';
+      html += '<div style="background:var(--surface2);border:1px solid ' + cd.dot + '33;border-radius:12px;padding:12px">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
+      html += '<span style="width:8px;height:8px;border-radius:50%;background:' + cd.dot + ';display:inline-block;flex-shrink:0"></span>';
+      html += compSelect;
+      html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:0;flex-shrink:0;line-height:1">✕</button>';
       html += '</div>';
-      if (costStr) html += '<span style="font-size:12px;color:var(--accent);font-weight:700;flex-shrink:0">' + _esc(costStr) + '</span>';
-      html += '</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+      html += '<div><div style="' + lSty + '">DOSE (mg)</div>';
+      html += '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
+      html += '<div><div style="' + lSty + '">DATE</div>';
+      html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
+      html += '</div></div>';
     });
-
-    // Total cost summary if all compounds have cost
-    if (plan && plan.totalCostPerCycle !== null) {
-      html += '<div style="background:var(--surface2);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:baseline;border:1px solid var(--accent)33;margin-top:2px">';
-      html += '<span style="font-size:12px;color:var(--muted)">Cycle cost (' + Math.round(plan.cycleDays / 7) + ' wks)</span>';
-      html += '<span style="font-size:15px;font-weight:800;color:var(--accent)">' + plan.totalCostPerCycle.toFixed(2) + '</span>';
-      html += '</div>';
-    }
   }
   html += '</div></div>';
 
-  // ── 3. PREFERENCES card ───────────────────────────────────────────────────────
-  var cycleOpts = _TC_CYCLE_OPTS.map(function(c) {
-    return '<option value="' + c.days + '"' + (c.days === _tcp.cycleDays ? ' selected' : '') + '>' + _esc(c.label) + '</option>';
-  }).join('');
+  // ── 3. BLOODWORK (collapsible) ────────────────────────────────────────────────
+  var bwSummary = mftNum > 0
+    ? 'Calibrated · ' + Math.round(mftNum) + ' pmol/L Free T'
+    : (parseFloat(_tcp.totalT) > 0
+        ? 'Total T ' + _tcp.totalT + ' nmol/L · no Free T'
+        : 'Not calibrated — tap to add');
 
-  html += '<div class="card"><div class="card-header"><div class="card-title-wrap">';
-  html += '<div class="card-dot" style="background:#6688cc"></div>';
-  html += '<div class="card-title">PREFERENCES</div></div></div>';
-  html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:16px">';
-
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
-  html += '<div><label style="' + lSty + '">Duration</label>';
-  html += '<select onchange="_tcp.cycleDays=+this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '">' + cycleOpts + '</select></div>';
-  html += '<div><label style="' + lSty + '">Preferred frequency</label>';
-  html += '<select onchange="_tcp.preferredFreqDays=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '">';
-  html += '<option value="auto"' + (_tcp.preferredFreqDays==='auto'?' selected':'') + '>Auto (per ester)</option>';
-  _TC_FREQ_OPTS.forEach(function(f) {
-    var v = String(f.days);
-    html += '<option value="' + v + '"' + (_tcp.preferredFreqDays===v?' selected':'') + '>' + _esc(f.label) + '</option>';
-  });
-  html += '</select></div></div>';
-
-  if (plan && plan.compounds.length >= 2) {
-    html += '<div><label style="' + lSty + '">Backbone start (days into cycle)</label>';
-    html += '<input type="number" min="0" max="84" step="1" value="' + (_tcp.backboneStartDay || 0) + '" placeholder="0 = Day 1 of cycle" oninput="_tcp.backboneStartDay=+this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '">';
-    var _bk = plan.compounds.slice().sort(function(a,b){ return b.cd.halfLifeDays - a.cd.halfLifeDays; })[0];
-    html += '<div style="font-size:11px;color:var(--muted2);margin-top:5px">Backbone: <strong>' + _esc(_bk.cd.name) + '</strong> (t½ ' + _esc(_bk.cd.halfLifeStr||'') + '). Compensatory esters pre-fill from Day 0 until backbone fires.</div>';
-    html += '</div>';
+  html += '<div class="card">';
+  html += '<div class="card-header" onclick="_tcToggleBw()" style="cursor:pointer;user-select:none">';
+  html += '<div class="card-title-wrap">';
+  html += '<div class="card-dot" style="background:#cc8844"></div>';
+  html += '<div class="card-title">BLOODWORK</div></div>';
+  html += '<div style="display:flex;align-items:center;gap:8px">';
+  if (!_tcBwOpen) {
+    html += '<span style="font-size:11px;color:var(--muted2)">' + _esc(bwSummary) + '</span>';
   }
+  html += '<span style="font-size:14px;color:var(--muted2);line-height:1">' + (_tcBwOpen ? '▲' : '▼') + '</span>';
+  html += '</div></div>';
 
-  html += '<div><label style="' + lSty + '">End strategy</label>';
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
-  [{id:'trt',label:'Permanent TRT'},{id:'blast-cruise',label:'Blast & Cruise'},{id:'pct',label:'Full PCT'}].forEach(function(s) {
-    var on = _tcp.cycleType === s.id;
-    html += '<button onclick="_tcp.cycleType=\'' + s.id + '\';_tcSaveProfile();buildTCalc()" ';
-    html += 'style="background:' + (on?'#6688cc':'var(--surface2)') + ';color:' + (on?'#fff':'var(--text)') + ';border:1px solid ' + (on?'#6688cc':'var(--border)') + ';border-radius:8px;padding:11px 8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600">';
-    html += _esc(s.label) + '</button>';
-  });
-  html += '</div></div></div></div>';
+  if (_tcBwOpen) {
+    html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:16px">';
 
-  // ── 4. PLAN card ─────────────────────────────────────────────────────────────
-  if (plan) {
-    var firstCp   = plan.compounds[0];
-    var planDot   = plan.isManual ? '#cc8844' : (firstCp ? firstCp.cd.dot : '#e8a020');
-    var doseLabel = plan.doseSource === 'personal' ? 'personal' :
-                    plan.doseSource === 'population' ? 'pop. avg' :
-                    plan.doseSource === 'manual'     ? 'manual'   : 'estimate';
-
-    html += '<div class="card"><div class="card-header"><div class="card-title-wrap">';
-    html += '<div class="card-dot" style="background:' + planDot + '"></div>';
-    html += '<div class="card-title">PLAN</div></div>';
-    html += plan.isManual
-      ? '<span style="font-size:11px;color:#e8a020;font-weight:700;padding-right:2px">MANUAL OVERRIDE</span>'
-      : '<span style="font-size:11px;color:var(--muted2);padding-right:2px">T-Calc optimised</span>';
-    html += '</div>';
-    html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:14px">';
-
-    var _planBackboneId = (plan.compounds.length > 1)
-      ? plan.compounds.slice().sort(function(a,b){ return b.cd.halfLifeDays - a.cd.halfLifeDays; })[0].compId
-      : null;
-
-    plan.compounds.forEach(function(cp) {
-      var _isBackbone = _planBackboneId && cp.compId === _planBackboneId;
-      html += '<div style="background:var(--surface2);border-radius:10px;padding:14px">';
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
-      html += '<span style="width:9px;height:9px;border-radius:50%;background:' + cp.cd.dot + ';flex-shrink:0;display:inline-block;box-shadow:0 0 8px ' + cp.cd.dot + '88"></span>';
-      html += '<span style="font-size:16px;font-weight:700;color:var(--text)">' + _esc(cp.cd.name) + '</span>';
-      if (cp.cd.halfLifeStr) html += '<span style="font-size:12px;color:var(--muted2)">t½ ' + _esc(cp.cd.halfLifeStr) + '</span>';
-      if (_planBackboneId) {
-        var _roleLabel = _isBackbone ? 'BACKBONE' : 'FILL';
-        var _roleClr   = _isBackbone ? '#e8a020' : '#6688cc';
-        html += '<span style="font-size:10px;background:' + _roleClr + '22;color:' + _roleClr + ';border:1px solid ' + _roleClr + '66;border-radius:4px;padding:2px 6px;font-weight:700;letter-spacing:0.5px;margin-left:auto">' + _roleLabel + '</span>';
-      }
+    // Age display (prefilled from /user-settings via _tcp.birthYear)
+    if (_tcp.birthYear) {
+      var _bwAge = new Date().getFullYear() - parseInt(_tcp.birthYear);
+      html += '<div style="background:var(--surface2);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">';
+      html += '<span style="font-size:12px;color:var(--muted)">Age (from profile)</span>';
+      html += '<span style="font-size:15px;font-weight:700;color:var(--text)">' + _bwAge + ' yrs</span>';
       html += '</div>';
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">';
-      var _bioav = cp.cd.bioavailability;
-      var _injLabel = _bioav && _bioav < 1
-        ? cp.dosePerInj + ' mg applied<br><span style="color:var(--muted2);font-size:11px">' + Math.round(cp.dosePerInj * _bioav) + ' mg absorbed</span>'
-        : cp.dosePerInj + ' mg';
-      [{label:'Per injection', value: _injLabel},
-       {label:'Per week',      value: cp.mgPerWeek + ' mg'},
-       {label: _isBackbone ? 'Interval' : 'Min interval', value: _tcIntervalLabel(cp.intervalDays)}
-      ].forEach(function(s) {
-        html += '<div style="text-align:center">';
-        html += '<div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">' + s.label + '</div>';
-        html += '<div style="font-size:14px;font-weight:700;color:var(--text)">' + s.value + '</div>';
-        html += '</div>';
-      });
-      html += '</div>';
-      if (cp.costPerWeek !== null) {
-        html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:baseline">';
-        html += '<span style="font-size:11px;color:var(--muted2)">Est. cost / week</span>';
-        html += '<span style="font-size:13px;font-weight:700;color:var(--accent)">' + cp.costPerWeek.toFixed(2) + '</span>';
-        html += '</div>';
-      }
-      html += '</div>';
-    });
-
-    if (plan.compounds.length > 1) {
-      html += '<div style="text-align:center;font-size:13px;color:var(--muted2)">Total ' + plan.totalMgPerWeek + ' mg/wk · Basis: ' + doseLabel + '</div>';
-    } else {
-      html += '<div style="text-align:center;font-size:13px;color:var(--muted2)">Basis: ' + doseLabel + '</div>';
+    } else if (_tcAgeMissing) {
+      html += '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:#f59e0b;">⚠ Age not set — go to Body Comp → Age to enable age-stratified reference ranges.</div>';
     }
 
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
-    html += '<div><label style="' + lSty + '">Override dose (mg/wk)</label>';
-    html += '<input type="number" min="50" max="1000" step="10" value="' + _esc(_tcp.overrideDoseMgWk) + '" placeholder="' + Math.round(plan.autoMgPerWeek) + ' (auto)" oninput="_tcp.overrideDoseMgWk=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
-
-    html += '<div><label style="' + lSty + '">Override interval (all)</label>';
-    html += '<select onchange="_tcp.overrideIntervalDays=this.value;_tcSaveProfile();buildTCalc()" style="' + iSty + '">';
-    html += '<option value=""' + (!_tcp.overrideIntervalDays ? ' selected' : '') + '>Auto — per ester</option>';
-    _TC_FREQ_OPTS.forEach(function(f) {
-      var v = String(f.days);
-      html += '<option value="' + v + '"' + (_tcp.overrideIntervalDays === v ? ' selected' : '') + '>' + _esc(f.label) + '</option>';
-    });
-    html += '</select></div></div>';
-
-    if (plan.isManual) {
-      html += '<button onclick="_tcp.overrideDoseMgWk=\'\';_tcp.overrideIntervalDays=\'\';_tcSaveProfile();buildTCalc()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;color:var(--muted);cursor:pointer;font-family:inherit;width:100%">↩ Reset to T-Calc auto</button>';
-    }
-    html += '</div></div>';
-  }
-
-  // ── 5. WARNINGS card ──────────────────────────────────────────────────────────
-  if (result.warnings.length > 0) {
-    html += '<div class="card" style="border:1px solid rgba(204,68,68,0.5)">';
-    html += '<div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:#cc4444"></div><div class="card-title">⚠ WARNINGS</div></div></div>';
-    html += '<div style="padding:0 16px 14px;display:flex;flex-direction:column;gap:8px">';
-    result.warnings.forEach(function(w) {
-      html += '<div style="background:rgba(204,68,68,0.1);border-radius:8px;padding:12px;font-size:13px;color:#ff8888;line-height:1.5">' + _esc(w.message) + '</div>';
-    });
-    html += '</div></div>';
-  }
-
-  // ── 6. HCG card ───────────────────────────────────────────────────────────────
-  var hcgSug = result.suggestions.find(function(s){ return s.type==='hcg-missing'||s.type==='hcg-included'; });
-  if (hcgSug) {
-    var hcgGreen  = hcgSug.type === 'hcg-included';
-    var hcgColor  = hcgGreen ? '#44cc88' : '#e8a020';
-    var hcgBorder = hcgGreen ? 'rgba(68,204,136,0.3)' : 'rgba(232,160,32,0.4)';
-    html += '<div class="card" style="border:1px solid ' + hcgBorder + '">';
-    html += '<div class="card-header"><div class="card-title-wrap">';
-    html += '<div class="card-dot" style="background:' + hcgColor + '"></div>';
-    html += '<div class="card-title">HCG</div></div>';
-    html += '<span style="font-size:11px;color:' + hcgColor + ';font-weight:700;padding-right:2px">' + (hcgGreen ? '✓ IN INVENTORY' : 'ALWAYS RECOMMENDED') + '</span>';
+    html += '<div><label style="' + lSty + '">Total T (nmol/L)</label>';
+    html += '<input type="number" min="0" max="200" step="0.1" value="' + _esc(_tcp.totalT) + '" placeholder="e.g. 16.2" oninput="_tcp.totalT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
+    html += '<div><label style="' + lSty + '">SHBG (nmol/L)</label>';
+    html += '<input type="number" min="0" max="300" step="1" value="' + _esc(_tcp.shbg) + '" placeholder="e.g. 45" oninput="_tcp.shbg=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
     html += '</div>';
-    html += '<div style="padding:0 16px 14px;font-size:13px;color:var(--muted);line-height:1.6">' + _esc(hcgSug.message) + '</div>';
+
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
+    html += '<div><label style="' + lSty + '">Free T measured (pmol/L)</label>';
+    html += '<input type="number" min="0" max="10000" step="1" value="' + _esc(_tcp.measuredFT) + '" placeholder="e.g. 223" oninput="_tcp.measuredFT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
+    html += '<div><label style="' + lSty + '">Dose at bloodwork (mg/wk)</label>';
+    html += '<input type="number" min="0" max="2000" step="10" value="' + _esc(_tcp.currentDoseMgWk) + '" placeholder="e.g. 150" oninput="_tcp.currentDoseMgWk=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
     html += '</div>';
-  }
 
-  // ── 7. NOTES card ─────────────────────────────────────────────────────────────
-  var otherSugs = result.suggestions.filter(function(s){ return s.type!=='hcg-missing'&&s.type!=='hcg-included'; });
-  if (otherSugs.length > 0) {
-    html += '<div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:#8899cc"></div><div class="card-title">NOTES</div></div></div>';
-    html += '<div style="padding:0 16px 14px;display:flex;flex-direction:column;gap:8px">';
-    otherSugs.forEach(function(s) {
-      html += '<div style="background:var(--surface2);border-radius:8px;padding:12px;font-size:13px;color:var(--muted);line-height:1.5">' + _esc(s.message) + '</div>';
-    });
-    html += '</div></div>';
-  }
+    html += '<div><label style="' + lSty + '">Target free T (pmol/L)</label>';
+    html += '<input type="number" min="0" max="10000" step="10" value="' + _esc(_tcp.targetFT) + '" placeholder="225–675 optimal · 600–1000 high-normal TRT" oninput="_tcp.targetFT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
 
-  // ── 8. PLASMA CURVE + SCHEDULE ────────────────────────────────────────────────
-  if (plan && curve && stats) {
-    var ptr = stats.peakTroughRatio;
-    var ptrColor = ptr > 2.5 ? '#cc4444' : ptr > 1.8 ? '#e8a020' : '#44cc88';
-    var firstCpForChart = plan.compounds[0];
-    var curveSubtitle = plan.compounds.length > 1
-      ? plan.compounds.map(function(cp){ return cp.cd.name; }).join(' + ')
-      : (firstCpForChart && firstCpForChart.cd.halfLifeStr ? 't½ ' + firstCpForChart.cd.halfLifeStr : '');
+    // Calculated outputs from entered values
+    var _bwTT    = parseFloat(_tcp.totalT)          || 0;
+    var _bwSHBG  = parseFloat(_tcp.shbg)            || 0;
+    var _bwMFT   = parseFloat(_tcp.measuredFT)      || 0;
+    var _bwDose  = parseFloat(_tcp.currentDoseMgWk) || 0;
+    var _bwTgt   = parseFloat(_tcp.targetFT)        || 0;
+    var _bwVerm  = (_bwTT > 0 && _bwSHBG > 0) ? _tcVermeulenFT(_bwTT, _bwSHBG) : null;
+    var _bwFrac  = _bwMFT > 0 && _bwTT > 0 ? _bwMFT / (_bwTT * 1000)
+                 : (_bwVerm !== null && _bwTT > 0 ? _bwVerm / (_bwTT * 1000) : null);
+    var _bwTgtTT = (_bwTgt > 0 && _bwFrac > 0) ? (_bwTgt / _bwFrac / 1000) : null;
+    var _bwMgNm  = (_bwDose > 0 && _bwTT > 0) ? (_bwTT / _bwDose) : null;
 
-    html += '<div class="card"><div class="card-header"><div class="card-title-wrap">';
-    html += '<div class="card-dot" style="background:' + (firstCpForChart ? firstCpForChart.cd.dot : '#e8a020') + '"></div>';
-    html += '<div class="card-title">PLASMA CURVE</div></div>';
-    if (curveSubtitle) html += '<span style="font-size:11px;color:var(--muted2)">' + _esc(curveSubtitle) + '</span>';
-    html += '</div>';
-    html += '<div style="padding:2px 16px 10px"><canvas id="tc-chart" style="width:100%;display:block;"></canvas></div>';
-
-    var _ftUnit  = calFT ? 'pmol/L' : 'mg';
-    var _peakVal = calFT ? Math.round(stats.peak   * calFT) + ' ' + _ftUnit : Math.round(stats.peak)   + ' mg';
-    var _trghVal = calFT ? Math.round(stats.trough * calFT) + ' ' + _ftUnit : Math.round(stats.trough) + ' mg';
-    html += '<div style="padding:0 16px 14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">';
-    [{label:'PEAK',value:_peakVal},
-     {label:'TROUGH',value:_trghVal},
-     {label:'P:T',value:ptr.toFixed(1)+'×',color:ptrColor},
-     {label:'TOTAL',value:Math.round(stats.totalMg)+' mg'}
-    ].forEach(function(s) {
-      html += '<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">';
-      html += '<div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px">' + s.label + '</div>';
-      html += '<div style="font-size:15px;font-weight:700;color:' + (s.color||'var(--text)') + '">' + s.value + '</div>';
+    if (_bwVerm !== null || _bwTgtTT !== null) {
+      html += '<div style="background:var(--surface2);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:8px">';
+      if (_bwVerm !== null) {
+        html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
+        html += '<span style="font-size:13px;color:var(--muted)">Vermeulen est. free T</span>';
+        html += '<span style="font-size:15px;font-weight:700;color:var(--text)">' + Math.round(_bwVerm) + ' pmol/L</span></div>';
+      }
+      if (_bwFrac !== null) {
+        html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
+        html += '<span style="font-size:13px;color:var(--muted)">Free T fraction</span>';
+        html += '<span style="font-size:15px;font-weight:700;color:var(--text)">' + (_bwFrac * 100).toFixed(2) + '%</span></div>';
+      }
+      if (_bwTgtTT !== null) {
+        html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
+        html += '<span style="font-size:13px;color:var(--muted)">Total T needed</span>';
+        html += '<span style="font-size:15px;font-weight:700;color:var(--accent)">' + _bwTgtTT.toFixed(1) + ' nmol/L</span></div>';
+      }
+      if (_bwMgNm !== null && _bwTgtTT !== null) {
+        html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
+        html += '<span style="font-size:13px;color:var(--muted)">Weekly dose needed</span>';
+        html += '<span style="font-size:15px;font-weight:700;color:var(--accent)">' + Math.round(_bwTgtTT / _bwMgNm) + ' mg/wk</span></div>';
+      }
       html += '</div>';
-    });
-    html += '</div>';
-
-    // ── Validation block ─────────────────────────────────────────────────────
-    var _vRows = [];
-
-    // Row 1: SS free T vs target (if calibration available)
-    if (plan.ftFrac && stats.ssTrough > 0) {
-      var _ssMinFT = Math.round(stats.ssTrough * plan.ftFrac * 1000);
-      var _ssMaxFT = Math.round(stats.ssPeak   * plan.ftFrac * 1000);
-      var _tgtFT   = parseFloat(_tcp.targetFT) || 0;
-      var _ftRange = Math.round(_ssMinFT/1000) + 'k–' + Math.round(_ssMaxFT/1000) + 'k pmol/L';
-      if (_tgtFT > 0) {
-        var _inRange = _tgtFT >= _ssMinFT && _tgtFT <= _ssMaxFT;
-        var _close   = !_inRange && _tgtFT >= _ssMinFT * 0.8 && _tgtFT <= _ssMaxFT * 1.2;
-        _vRows.push({
-          label: 'SS FREE T',
-          value: (_inRange?'✓ ':_close?'≈ ':'✗ ') + _ftRange,
-          detail: 'target ' + Math.round(_tgtFT/1000) + 'k pmol/L',
-          color: _inRange?'#44cc88':_close?'#e8a020':'#cc4444'
-        });
-      } else {
-        _vRows.push({label:'SS FREE T', value: _ftRange, color:'var(--muted2)'});
-      }
     } else {
-      var _ssStr = Math.round(stats.ssTrough) + '–' + Math.round(stats.ssPeak) + ' mg (sim)';
-      _vRows.push({label:'SS LEVEL', value: _ssStr, color:'var(--muted2)'});
+      html += '<div style="font-size:13px;color:var(--muted2);line-height:1.5">Enter bloodwork values to calibrate the graph and enable dose calculations.<br>Optimal male free T: 225–675 pmol/L · High-normal TRT: 600–1000 pmol/L</div>';
     }
 
-    // Row 2: peak:trough stability
-    var _ptrPass = ptr <= 1.5, _ptrWarn = ptr > 1.5 && ptr <= 2.5;
-    _vRows.push({
-      label: 'STABILITY',
-      value: ptr.toFixed(1) + '× P:T · ' + (_ptrPass?'✓ excellent':_ptrWarn?'⚠ moderate':'✗ high variability'),
-      color: _ptrPass?'#44cc88':_ptrWarn?'#e8a020':'#cc4444'
-    });
-
-    // Row 3: ramp — does SS land within the cycle?
-    var _cycleWks = Math.round(plan.cycleDays / 7);
-    if (stats.firstInBandWeek !== null) {
-      var _rampOk = stats.firstInBandWeek <= _cycleWks * 0.75;
-      _vRows.push({
-        label: 'SS REACHED',
-        value: (_rampOk?'✓ W':'⚠ W') + stats.firstInBandWeek + ' of ' + _cycleWks + ' wks',
-        color: _rampOk?'#44cc88':'#e8a020'
-      });
-    } else {
-      _vRows.push({label:'SS REACHED', value:'✗ Beyond ' + _cycleWks + ' wk cycle', color:'#cc4444'});
-    }
-
-    // Row 4: combined dose summary
-    _vRows.push({
-      label: 'COMBINED',
-      value: Math.round(plan.totalMgPerWeek) + ' mg/wk · ' + plan.compounds.length + ' compound' + (plan.compounds.length===1?'':'s'),
-      color: 'var(--muted2)'
-    });
-
-    html += '<div style="padding:0 16px 14px;display:flex;flex-direction:column;gap:5px">';
-    _vRows.forEach(function(row) {
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:7px;background:var(--surface2)">';
-      html += '<span style="font-size:10px;font-weight:700;letter-spacing:0.8px;color:var(--muted2);flex-shrink:0">' + _esc(row.label) + '</span>';
-      html += '<div style="text-align:right;margin-left:8px">';
-      html += '<div style="font-size:12px;font-weight:700;color:' + row.color + '">' + _esc(row.value) + '</div>';
-      if (row.detail) html += '<div style="font-size:10px;color:var(--muted2);margin-top:1px">' + _esc(row.detail) + '</div>';
-      html += '</div></div>';
-    });
-    html += '</div>';
-
-    html += '</div>'; // close card
-
-    var _schedBackboneId = (plan.compounds.length > 1)
-      ? plan.compounds.slice().sort(function(a,b){ return b.cd.halfLifeDays - a.cd.halfLifeDays; })[0].compId
-      : null;
-    var showCompound = plan.compounds.length > 1;
-
-    html += '<div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:#888"></div>';
-    html += '<div class="card-title">SCHEDULE</div></div>';
-    html += '<span style="font-size:11px;color:var(--muted2);padding-right:2px">' + sched.length + ' injections</span>';
-    html += '</div>';
-    html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">';
-    html += '<thead><tr style="border-bottom:1px solid var(--border)">';
-    (showCompound ? ['DAY','WEEK','COMPOUND','DOSE',''] : ['DAY','WEEK','DOSE','']).forEach(function(h, i) {
-      var isRight = showCompound ? (i === 3) : (i === 2);
-      html += '<th style="padding:8px 16px;text-align:' + (isRight?'right':'left') + ';font-size:10px;color:var(--muted2);font-weight:600;letter-spacing:0.5px">' + h + '</th>';
-    });
-    html += '</tr></thead><tbody>';
-
-    sched.forEach(function(inj, i) {
-      var isLast      = i === sched.length - 1;
-      var weekNum     = Math.floor(inj.day / 7) + 1;
-      var isBackbone  = _schedBackboneId && inj.compId === _schedBackboneId;
-      html += '<tr style="border-bottom:' + (isLast ? 'none' : '1px solid var(--border)') + '">';
-      html += '<td style="padding:8px 16px;color:var(--text);font-size:14px">Day ' + (inj.day + 1) + '</td>';
-      html += '<td style="padding:8px 16px;color:var(--muted);font-size:14px">W' + weekNum + '</td>';
-      if (showCompound) {
-        html += '<td style="padding:8px 16px;font-size:13px">';
-        html += '<span style="display:inline-flex;align-items:center;gap:5px">';
-        html += '<span style="width:7px;height:7px;border-radius:50%;background:' + (inj.dot||'#e8a020') + ';display:inline-block;flex-shrink:0"></span>';
-        html += '<span style="color:var(--muted)">' + _esc(inj.name) + '</span></span></td>';
-      }
-      html += '<td style="padding:8px 16px;text-align:right;font-weight:700;color:var(--text);font-size:14px">' + inj.dose + ' mg</td>';
-      html += '<td style="padding:8px 16px;color:var(--muted2);font-size:11px">' + (isBackbone ? 'backbone' : '') + '</td>';
-      html += '</tr>';
-    });
-
-    html += '</tbody></table></div>';
-    html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">';
-    html += '<button onclick="_tcCopyToActiveStack()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:13px 20px;font-size:14px;font-weight:700;cursor:pointer;width:100%;font-family:inherit">Copy TRT to Active Stack</button>';
-    html += '<button onclick="_tcExportPlan()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:13px 20px;font-size:14px;font-weight:700;cursor:pointer;width:100%;font-family:inherit">Export as New TRT Stack</button>';
-    html += '</div></div>';
+    html += '</div>'; // close padding
   }
+  html += '</div>'; // close card
 
   el.innerHTML = html;
 
-  if (plan && curve && stats) {
-    var _s = sched, _p = plan, _cft = calFT, _mft = cal.mftNum || 0;
-    requestAnimationFrame(function() {
-      _tcDrawChart('tc-chart', curve, stats, _p, _s, _cft, _mft);
-    });
+  if (validLog.length > 0) {
+    requestAnimationFrame(function() { _tcDrawManualChart('tc-main-chart', validLog); });
   }
 }
