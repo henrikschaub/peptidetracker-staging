@@ -405,10 +405,26 @@ function _tcCloseManualLog() {
 function _tcAddManualEntry() {
   if (!_tcp.manualLog) _tcp.manualLog = [];
   var defaultComp = _tcManualComps()[0] || 'topical';
-  var today = new Date().toISOString().slice(0, 10);
-  _tcp.manualLog.push({compId: defaultComp, doseMg: '', date: today});
+  // Default date: day after the latest existing entry, or today
+  var defaultDate;
+  var existingDates = _tcp.manualLog.map(function(e){ return e.date; }).filter(Boolean).sort();
+  if (existingDates.length > 0) {
+    var p = existingDates[existingDates.length - 1].split('-');
+    var next = new Date(+p[0], +p[1] - 1, +p[2] + 1);
+    defaultDate = next.getFullYear() + '-' +
+      String(next.getMonth() + 1).padStart(2, '0') + '-' +
+      String(next.getDate()).padStart(2, '0');
+  } else {
+    defaultDate = new Date().toISOString().slice(0, 10);
+  }
+  _tcp.manualLog.push({compId: defaultComp, doseMg: '', date: defaultDate});
   _tcSaveProfile();
   _tcOpenManualLog();
+  // Focus the dose field of the newly added (last) entry
+  requestAnimationFrame(function() {
+    var inputs = document.querySelectorAll('#tc-log-overlay input[type="number"]');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  });
 }
 
 function _tcRemoveManualEntry(idx) {
