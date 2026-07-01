@@ -1020,7 +1020,7 @@ function _renderCartModal(){
       h+='<div style="font-size:12px;color:var(--muted2);padding:8px 0">No peptide data available</div>';
     }
   }
-  var enhanceCmpds=_cycle&&_cycle.compounds?_cycle.compounds.filter(function(c){return c.active&&c.name;}):[];
+  var enhanceCmpds=(st.enhanced&&st.enhanced.compounds)?st.enhanced.compounds.filter(function(c){return c.active!==false&&c.name;}):[];
   if(enhanceCmpds.length){
     h+='<div style="font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;margin-top:18px">Enhancement Compounds — source separately</div>';
     enhanceCmpds.forEach(function(c){

@@ -25,6 +25,7 @@ var _tcCurrentPlan    = null;
 var _tcExtraCatalog   = [];   // extra compounds fetched from /trt-catalog at runtime
 var _tcAgeMissing     = false; // true when user-settings returned but no user_age found
 var _tcBwOpen         = false; // whether the bloodwork panel is expanded
+var _tcExpandedSeries = {};   // seriesId → true when series card is expanded for editing
 
 // ── Frequency options ─────────────────────────────────────────────────────────
 
@@ -564,7 +565,13 @@ function _tcRemoveManualEntry(idx) {
 function _tcRemoveSeries(seriesId) {
   if (!_tcp.manualLog || !seriesId) return;
   _tcp.manualLog = _tcp.manualLog.filter(function(e){ return e.seriesId !== seriesId; });
+  delete _tcExpandedSeries[seriesId];
   _tcSaveProfile();
+  buildTCalc();
+}
+
+function _tcToggleSeriesExpand(sid) {
+  _tcExpandedSeries[sid] = !_tcExpandedSeries[sid];
   buildTCalc();
 }
 
@@ -1456,40 +1463,83 @@ function buildTCalc() {
     });
     var _tcFmtD=function(iso){if(!iso)return'';var p=iso.split('-');var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return parseInt(p[2],10)+' '+M[parseInt(p[1],10)-1];};
 
+    var _seriesExpPos = {};  // position counter for expanded series individual cards
+
     log.forEach(function(entry, idx) {
       var cd = _tcCompInfo(entry.compId || (comps[0] || ''));
       var sid = entry.seriesId;
 
       if (sid) {
-        // Series entry — render ONE summary card per seriesId, skip the rest
-        if (_seriesSeen[sid]) return;
-        _seriesSeen[sid] = true;
+        var isExpanded = !!_tcExpandedSeries[sid];
         var meta = _seriesMeta[sid] || {};
         var total = _seriesTotals[sid] || 1;
         var iv = meta.interval;
         var ivLabel = iv ? ' · every ' + iv + ' day' + (iv === 1 ? '' : 's') : '';
         var mcd = _tcCompInfo(meta.compId || (comps[0] || ''));
-        // Stack visual: box-shadow creates two "cards" peeking behind the top card
-        html += '<div style="background:rgba(102,136,204,0.10);border:1px dashed #6688cc66;border-radius:12px;padding:12px;box-shadow:3px 3px 0 0 rgba(102,136,204,0.18),6px 6px 0 0 rgba(102,136,204,0.09);">';
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
-        html += '<div style="display:flex;align-items:center;gap:8px;">';
-        html += '<span style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6688cc;text-transform:uppercase">⛓ SERIES</span>';
-        html += '<span style="font-size:10px;color:var(--muted2)">' + total + ' injections' + ivLabel + '</span>';
-        html += '</div>';
-        html += '<button onclick="_tcConfirmRemoveSeries(\'' + _esc(sid) + '\')" style="background:none;border:none;color:var(--muted2);font-size:16px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0">✕</button>';
-        html += '</div>';
-        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
-        html += '<span style="width:8px;height:8px;border-radius:50%;background:' + mcd.dot + ';display:inline-block;flex-shrink:0"></span>';
-        html += '<span style="font-size:14px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(mcd.name) + '</span>';
-        html += '</div>';
-        html += '<div style="display:flex;gap:24px;">';
-        html += '<div><div style="' + lSty + '">DOSE</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + _esc(String(meta.doseMg || '')) + ' mg</div></div>';
-        if (meta.firstDate) {
-          var dRange = _tcFmtD(meta.firstDate) + (meta.firstDate !== meta.lastDate ? ' → ' + _tcFmtD(meta.lastDate) : '');
-          html += '<div><div style="' + lSty + '">DATES</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + _esc(dRange) + '</div></div>';
+        var editBtnStyle = 'background:none;border:1px solid #6688cc66;border-radius:6px;color:#6688cc;font-size:10px;font-weight:700;letter-spacing:0.5px;cursor:pointer;padding:4px 8px;font-family:inherit;flex-shrink:0';
+        var deleteBtnStyle = 'background:none;border:none;color:var(--muted2);font-size:16px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0';
+
+        if (!isExpanded) {
+          // ── COLLAPSED: one summary card per seriesId ──
+          if (_seriesSeen[sid]) return;
+          _seriesSeen[sid] = true;
+          // Stack visual: box-shadow creates two "cards" peeking behind the top card
+          html += '<div style="background:rgba(102,136,204,0.10);border:1px dashed #6688cc66;border-radius:12px;padding:12px;box-shadow:3px 3px 0 0 rgba(102,136,204,0.18),6px 6px 0 0 rgba(102,136,204,0.09);">';
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+          html += '<div style="display:flex;align-items:center;gap:8px;">';
+          html += '<span style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6688cc;text-transform:uppercase">⛓ SERIES</span>';
+          html += '<span style="font-size:10px;color:var(--muted2)">' + total + ' injections' + ivLabel + '</span>';
+          html += '</div>';
+          html += '<div style="display:flex;align-items:center;gap:6px;">';
+          html += '<button onclick="_tcToggleSeriesExpand(\'' + _esc(sid) + '\')" style="' + editBtnStyle + '">EDIT</button>';
+          html += '<button onclick="_tcConfirmRemoveSeries(\'' + _esc(sid) + '\')" style="' + deleteBtnStyle + '">✕</button>';
+          html += '</div>';
+          html += '</div>';
+          html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+          html += '<span style="width:8px;height:8px;border-radius:50%;background:' + mcd.dot + ';display:inline-block;flex-shrink:0"></span>';
+          html += '<span style="font-size:14px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(mcd.name) + '</span>';
+          html += '</div>';
+          html += '<div style="display:flex;gap:24px;">';
+          html += '<div><div style="' + lSty + '">DOSE</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + _esc(String(meta.doseMg || '')) + ' mg</div></div>';
+          if (meta.firstDate) {
+            var dRange = _tcFmtD(meta.firstDate) + (meta.firstDate !== meta.lastDate ? ' → ' + _tcFmtD(meta.lastDate) : '');
+            html += '<div><div style="' + lSty + '">DATES</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + _esc(dRange) + '</div></div>';
+          }
+          html += '</div>';
+          html += '</div>';
+        } else {
+          // ── EXPANDED: header once, then individual editable cards ──
+          if (!_seriesSeen[sid]) {
+            _seriesSeen[sid] = true;
+            html += '<div style="background:rgba(102,136,204,0.10);border:1px dashed #6688cc66;border-radius:12px;padding:10px 12px;">';
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;">';
+            html += '<div style="display:flex;align-items:center;gap:8px;">';
+            html += '<span style="width:8px;height:8px;border-radius:50%;background:' + mcd.dot + ';display:inline-block;flex-shrink:0"></span>';
+            html += '<span style="font-size:13px;font-weight:600;color:var(--text)">' + _esc(mcd.name) + '</span>';
+            html += '<span style="font-size:10px;color:var(--muted2)">' + total + ' injections' + ivLabel + '</span>';
+            html += '</div>';
+            html += '<div style="display:flex;align-items:center;gap:6px;">';
+            html += '<button onclick="_tcToggleSeriesExpand(\'' + _esc(sid) + '\')" style="' + editBtnStyle + '">DONE</button>';
+            html += '<button onclick="_tcConfirmRemoveSeries(\'' + _esc(sid) + '\')" style="' + deleteBtnStyle + '">✕</button>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+          }
+          // Individual editable card
+          _seriesExpPos[sid] = (_seriesExpPos[sid] || 0) + 1;
+          var pos = _seriesExpPos[sid];
+          html += '<div style="background:rgba(102,136,204,0.06);border:1px dashed #6688cc44;border-radius:12px;padding:12px;">';
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+          html += '<span style="font-size:10px;font-weight:700;color:#6688cc;letter-spacing:0.5px">#' + pos + ' / ' + total + '</span>';
+          html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:16px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0">✕</button>';
+          html += '</div>';
+          html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+          html += '<div><div style="' + lSty + '">DOSE (mg)</div>';
+          html += '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
+          html += '<div><div style="' + lSty + '">DATE</div>';
+          html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
+          html += '</div></div>';
         }
-        html += '</div>';
-        html += '</div>';
       } else {
         // Single injection card
         var compSelect = '<select onchange="_tcSetManualField(' + idx + ',\'compId\',this.value)" style="' + iSty + ';flex:1;min-width:0;font-size:14px">';
