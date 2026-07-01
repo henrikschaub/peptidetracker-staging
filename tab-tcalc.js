@@ -596,12 +596,27 @@ function _tcDrawManualChart(canvasId, log) {
   if (!maxV) { ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.fillText('No data', 10, 40); return; }
   var vMax = maxV * 1.1;
 
-  function xOf(t){ return PAD.left + (t / totalDays) * cW; }
+  // Clip x-axis to where free T last crosses back down to baseline (the interesting area)
+  var xDays = totalDays;
+  if (_mftNum && calFT) {
+    for (var _xi = totalDays; _xi > 0; _xi--) {
+      if (total[_xi] * scale >= _mftNum) { xDays = _xi; break; }
+    }
+  }
+
+  // Find peak within visible window
+  var peakV = 0, peakT = 0;
+  for (var _pi = 0; _pi <= xDays; _pi++) {
+    var _pv = total[_pi] * scale;
+    if (_pv > peakV) { peakV = _pv; peakT = _pi; }
+  }
+
+  function xOf(t){ return PAD.left + (t / xDays) * cW; }
   function yOf(v){ return PAD.top  + cH - (v / vMax) * cH; }
 
-  var gridStep = totalDays <= 28 ? 7 : totalDays <= 84 ? 14 : 28;
+  var gridStep = xDays <= 28 ? 7 : xDays <= 84 ? 14 : 28;
   ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
-  for (var dg = 0; dg <= totalDays; dg += gridStep) {
+  for (var dg = 0; dg <= xDays; dg += gridStep) {
     var gx = xOf(dg);
     ctx.beginPath(); ctx.moveTo(gx, PAD.top); ctx.lineTo(gx, PAD.top + cH); ctx.stroke();
   }
@@ -629,15 +644,26 @@ function _tcDrawManualChart(canvasId, log) {
   ctx.fillText(unitLabel, 0, 0); ctx.restore();
 
   var lineColor = _tcCompInfo(sorted[0].compId).dot || '#e8a020';
+
+  // Peak highlight line + y-axis label
+  if (calFT && peakV > 0 && peakV > (_mftNum || 0) * 1.05) {
+    var _pkY = yOf(peakV);
+    ctx.strokeStyle = lineColor + 'aa'; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(PAD.left, _pkY); ctx.lineTo(PAD.left + cW, _pkY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = lineColor; ctx.font = 'bold 8px DM Sans,sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(peakV), PAD.left - 4, _pkY + 3);
+  }
+
   var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
   grad.addColorStop(0, lineColor + '55'); grad.addColorStop(1, lineColor + '00');
   ctx.beginPath(); ctx.moveTo(xOf(0), PAD.top + cH);
-  for (var t2 = 0; t2 <= totalDays; t2++) ctx.lineTo(xOf(t2), yOf(total[t2] * scale || 0));
-  ctx.lineTo(xOf(totalDays), PAD.top + cH);
+  for (var t2 = 0; t2 <= xDays; t2++) ctx.lineTo(xOf(t2), yOf(total[t2] * scale || 0));
+  ctx.lineTo(xOf(xDays), PAD.top + cH);
   ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
   ctx.beginPath(); ctx.moveTo(xOf(0), yOf(total[0] * scale || 0));
-  for (var t3 = 1; t3 <= totalDays; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] * scale || 0));
+  for (var t3 = 1; t3 <= xDays; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] * scale || 0));
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
 
   sorted.forEach(function(e) {
@@ -649,8 +675,8 @@ function _tcDrawManualChart(canvasId, log) {
   });
 
   ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'center';
-  var labelEvery = totalDays <= 28 ? 7 : totalDays <= 84 ? 14 : 28;
-  for (var dl = 0; dl <= totalDays; dl += labelEvery) {
+  var labelEvery = xDays <= 28 ? 7 : xDays <= 84 ? 14 : 28;
+  for (var dl = 0; dl <= xDays; dl += labelEvery) {
     var lx = xOf(dl);
     if (lx > PAD.left + cW + 8) break;
     var labelDate = new Date(firstDate.getTime() + dl * 86400000);
