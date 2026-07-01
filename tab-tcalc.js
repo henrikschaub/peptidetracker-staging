@@ -23,6 +23,7 @@ var _tcp = {
 var _tcpSessionLoaded = false;
 var _tcCurrentPlan    = null;
 var _tcExtraCatalog   = [];   // extra compounds fetched from /trt-catalog at runtime
+var _tcAgeMissing     = false; // true when user-settings returned but no user_age found
 
 // ── Frequency options ─────────────────────────────────────────────────────────
 
@@ -81,6 +82,20 @@ function _tcLoadProfile() {
       buildTCalc();
     })
     .catch(function(){});
+  // Derive birth year from onboarding age in /user-settings
+  fetch(AGENT_URL + '/user-settings', {headers: h})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(s) {
+      var age = s && parseInt(s['user_age']);
+      if (age && age > 0) {
+        _tcp.birthYear = new Date().getFullYear() - age;
+        _tcAgeMissing = false;
+      } else {
+        _tcAgeMissing = true;
+      }
+      buildTCalc();
+    })
+    .catch(function(){ _tcAgeMissing = true; buildTCalc(); });
 }
 
 function _tcSaveProfile() {
@@ -1246,13 +1261,14 @@ function buildTCalc() {
   html += '<span style="font-size:11px;color:var(--muted2)">saved to backend</span></div>';
   html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:16px">';
 
-  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">';
+  if (_tcAgeMissing) {
+    html += '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:#f59e0b;">⚠ Age not set — go to Body Comp → Age to save your age. Age-stratified free T reference ranges will use a default of 350 pmol/L until then.</div>';
+  }
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
   html += '<div><label style="' + lSty + '">Total T (nmol/L)</label>';
   html += '<input type="number" min="0" max="200" step="0.1" value="' + _esc(_tcp.totalT) + '" placeholder="e.g. 16.2" oninput="_tcp.totalT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
   html += '<div><label style="' + lSty + '">SHBG (nmol/L)</label>';
   html += '<input type="number" min="0" max="300" step="1" value="' + _esc(_tcp.shbg) + '" placeholder="e.g. 45" oninput="_tcp.shbg=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
-  html += '<div><label style="' + lSty + '">Birth year</label>';
-  html += '<input type="number" min="1940" max="2010" step="1" value="' + _esc(_tcp.birthYear || '') + '" placeholder="e.g. 1985" oninput="_tcp.birthYear=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
   html += '</div>';
 
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
