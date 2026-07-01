@@ -492,39 +492,51 @@ function _tcDrawManualChart(canvasId, log) {
     }
   }
 
-  // Warm-start: pre-fill curve with residual from prior-protocol injections so
-  // the chart starts at the user's measured free T rather than zero.
-  // Uses standard ester-class intervals (not log gaps, which may be transitional).
-  // Falls back to the log's own effective mg/wk when "Dose at bloodwork" isn't filled in.
-  var _wsPriorDose = _curDose > 0 ? _curDose : _effMgWk;
-  if (calFT && _wsPriorDose > 0) {
-    var _wsGroups = {}, _wsTotalAbsMg = 0;
-    sorted.forEach(function(e) {
-      var _wsBioav = (_tcCompInfo(e.compId).bioavailability || 1);
-      var _wsAbs   = parseFloat(e.doseMg) * _wsBioav;
-      _wsTotalAbsMg += _wsAbs;
-      _wsGroups[e.compId] = (_wsGroups[e.compId] || 0) + _wsAbs;
-    });
-    if (_wsTotalAbsMg > 0) {
-      Object.keys(_wsGroups).forEach(function(wsId) {
-        var wsCd    = _tcCompInfo(wsId);
-        var wsHl    = wsCd.halfLifeDays || 1;
-        var wsBioav = wsCd.bioavailability || 1;
-        var wsKe    = Math.LN2 / wsHl;
-        var wsKa    = _tcKa(wsHl);
-        // Standard injection interval per ester class
-        var wsIv = wsHl >= 20 ? 84 : wsHl >= 9 ? 14 : wsHl >= 3 ? 3.5 : 1;
-        var wsCompFrac   = _wsGroups[wsId] / _wsTotalAbsMg;
-        var wsCompWk     = _wsPriorDose * wsCompFrac;
-        var wsDosePerInj = wsCompWk * wsIv / 7 * wsBioav;
-        var wsLookback   = Math.ceil(wsHl * 10 / wsIv);
-        for (var _wsk = 1; _wsk <= wsLookback; _wsk++) {
-          var _wsDt = _wsk * wsIv;
-          for (var _wst = 0; _wst <= totalDays; _wst++) {
-            total[_wst] += _tcPkConc(wsDosePerInj, wsKa, wsKe, _wst + _wsDt);
-          }
-        }
+  // Warm-start: pre-fill curve so the chart starts at the user's measured free T.
+  if (calFT && _mftNum > 0) {
+    if (_curDose > 0) {
+      // Known prior dose: model each compound's residual from a steady-state protocol.
+      var _wsGroups = {}, _wsTotalAbsMg = 0;
+      sorted.forEach(function(e) {
+        var _wsBioav = (_tcCompInfo(e.compId).bioavailability || 1);
+        var _wsAbs   = parseFloat(e.doseMg) * _wsBioav;
+        _wsTotalAbsMg += _wsAbs;
+        _wsGroups[e.compId] = (_wsGroups[e.compId] || 0) + _wsAbs;
       });
+      if (_wsTotalAbsMg > 0) {
+        Object.keys(_wsGroups).forEach(function(wsId) {
+          var wsCd    = _tcCompInfo(wsId);
+          var wsHl    = wsCd.halfLifeDays || 1;
+          var wsBioav = wsCd.bioavailability || 1;
+          var wsKe    = Math.LN2 / wsHl;
+          var wsKa    = _tcKa(wsHl);
+          var wsIv    = wsHl >= 20 ? 84 : wsHl >= 9 ? 14 : wsHl >= 3 ? 3.5 : 1;
+          var wsCompFrac   = _wsGroups[wsId] / _wsTotalAbsMg;
+          var wsCompWk     = _curDose * wsCompFrac;
+          var wsDosePerInj = wsCompWk * wsIv / 7 * wsBioav;
+          var wsLookback   = Math.ceil(wsHl * 10 / wsIv);
+          for (var _wsk = 1; _wsk <= wsLookback; _wsk++) {
+            var _wsDt = _wsk * wsIv;
+            for (var _wst = 0; _wst <= totalDays; _wst++) {
+              total[_wst] += _tcPkConc(wsDosePerInj, wsKa, wsKe, _wst + _wsDt);
+            }
+          }
+        });
+      }
+    } else {
+      // Unknown prior dose: add a decaying baseline anchored to logMean so that
+      // total[0] * calFT = mftNum exactly, decaying at the log's weighted ke.
+      var _blTotalAbs = 0, _blWeightedKe = 0;
+      sorted.forEach(function(e) {
+        var _blAbs = parseFloat(e.doseMg) * ((_tcCompInfo(e.compId).bioavailability) || 1);
+        var _blKe  = Math.LN2 / ((_tcCompInfo(e.compId).halfLifeDays) || 7);
+        _blTotalAbs   += _blAbs;
+        _blWeightedKe += _blAbs * _blKe;
+      });
+      var _blKe = _blTotalAbs > 0 ? _blWeightedKe / _blTotalAbs : Math.LN2 / 7;
+      for (var _blt = 0; _blt <= totalDays; _blt++) {
+        total[_blt] += _logMean * Math.exp(-_blKe * _blt);
+      }
     }
   }
 
@@ -607,7 +619,8 @@ function _tcDrawManualChart(canvasId, log) {
     var lx = xOf(dl);
     if (lx > PAD.left + cW + 8) break;
     var labelDate = new Date(firstDate.getTime() + dl * 86400000);
-    var lbl = (labelDate.getMonth() + 1) + '/' + labelDate.getDate();
+    var _MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var lbl = labelDate.getDate() + ' ' + _MONTHS[labelDate.getMonth()];
     ctx.fillText(lbl, lx, PAD.top + cH + 18);
   }
 }
