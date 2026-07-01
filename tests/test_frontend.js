@@ -3286,6 +3286,45 @@ console.log('\n── _getDynamicEnhancedDoses ───────────
   check('Enhanced amPm: AM detail includes dose', bothAmPmDoses.some(function(d){return d.time==='AM'&&d.detail.includes('3');}));
   check('Enhanced amPm: AM entry id unique from PM', bothAmPmDoses[0].id!==bothAmPmDoses[1].id);
 
+  // amPm via catalog fallback (stored compound lacks amPm:true but ENHANCEMENT_COMPOUNDS has it)
+  const enhStackCatalogFallback = {
+    name: 'HGH Fallback',
+    cycle_start: '2026-06-01',
+    cycle_length: 12,
+    peptides: [],
+    trt: { enabled: false, compounds: [] },
+    enhanced: { enabled: true, compounds: [
+      { id: 'hgh-fallback', name: 'HGH', dot: '#3cffa0', days: [0,1,2,3,4,5,6],
+        // amPm NOT set, but dose_am/dose_pm present — catalog should provide fallback
+        dose_am: '2', dose_pm: '2', unit: 'IU/day' }
+    ]}
+  };
+  // Simulate ENHANCEMENT_COMPOUNDS catalog entry with amPm:true
+  G.ENHANCEMENT_COMPOUNDS = (G.ENHANCEMENT_COMPOUNDS||[]).concat([{id:'hgh-fallback',name:'HGH',amPm:true,dot:'#3cffa0',group:'GH Axis'}]);
+  G._userStacks = [enhStackCatalogFallback];
+  G._activeStackIndices = [0];
+  const fallbackDoses = G._getDynamicEnhancedDoses(monday, true);
+  check('Enhanced catalog fallback: amPm via ENHANCEMENT_COMPOUNDS → 2 entries', fallbackDoses.length === 2, `got ${fallbackDoses.length}`);
+  check('Enhanced catalog fallback: entries have compId', fallbackDoses.every(function(d){return d.compId==='hgh-fallback';}));
+  // Restore
+  G.ENHANCEMENT_COMPOUNDS = (G.ENHANCEMENT_COMPOUNDS||[]).filter(function(c){return c.id!=='hgh-fallback';});
+
+  // compId field present on regular (non-amPm) dose
+  const enhStackSingle = {
+    name: 'Single Enhanced',
+    cycle_start: '2026-06-01',
+    cycle_length: 12,
+    peptides: [],
+    trt: { enabled: false, compounds: [] },
+    enhanced: { enabled: true, compounds: [
+      { id: 'primo', name: 'Primobolan', dot: '#a855f7', days: [0,1,2,3,4,5,6], dose: '200', unit: 'mg/week' }
+    ]}
+  };
+  G._userStacks = [enhStackSingle];
+  G._activeStackIndices = [0];
+  const singleEnhDoses = G._getDynamicEnhancedDoses(monday, true);
+  check('Enhanced single: compId set on non-amPm dose', singleEnhDoses.length===1 && singleEnhDoses[0].compId==='primo');
+
   G._userStacks = _des;
   G._activeStackIndices = _dea;
 }
