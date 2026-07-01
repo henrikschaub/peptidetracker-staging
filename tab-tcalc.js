@@ -413,6 +413,7 @@ function _tcAddManualEntry() {
 
 function _tcRemoveManualEntry(idx) {
   if (!_tcp.manualLog) return;
+  if (!confirm('Delete this injection? This cannot be undone.')) return;
   _tcp.manualLog.splice(idx, 1);
   _tcSaveProfile();
   _tcOpenManualLog();
