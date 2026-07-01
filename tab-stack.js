@@ -1179,10 +1179,10 @@ function editToggleEnhancedCompound(id){
   _editBuf.enhanced.enabled=_editBuf.enhanced.compounds.length>0;
   renderStackEditor();
 }
-function editSetEnhDose(id,v){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(c)c.dose=v;}
+function editSetEnhDose(id,v){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(!c)return;c.dose=v;var el=document.getElementById('enh-guide-'+id);if(el){var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===id;});el.innerHTML=_renderEnhancedGuide(cat,parseFloat(v||0));}}
 function editSetEnhUnit(id,v){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(c)c.unit=v;}
-function editSetEnhDoseAm(id,v){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(c)c.dose_am=v;}
-function editSetEnhDosePm(id,v){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(c)c.dose_pm=v;}
+function editSetEnhDoseAm(id,v){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(!c)return;c.dose_am=v;var el=document.getElementById('enh-guide-'+id);if(el){var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===id;});el.innerHTML=_renderEnhancedGuide(cat,parseFloat(c.dose_am||0)+parseFloat(c.dose_pm||0));}}
+function editSetEnhDosePm(id,v){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(!c)return;c.dose_pm=v;var el=document.getElementById('enh-guide-'+id);if(el){var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===id;});el.innerHTML=_renderEnhancedGuide(cat,parseFloat(c.dose_am||0)+parseFloat(c.dose_pm||0));}}
 function editSetEnhDays(id,di){var c=((_editBuf.enhanced&&_editBuf.enhanced.compounds)||[]).find(function(c){return c.id===id;});if(!c)return;if(!c.days)c.days=[];var idx=c.days.indexOf(di);if(idx!==-1){if(c.days.length>1)c.days.splice(idx,1);}else{c.days.push(di);}c.days.sort(function(a,b){return a-b;});renderStackEditor();}
 function _renderEditEnhanced(enh){
   if(!enh)enh={enabled:false,compounds:[]};
@@ -1208,7 +1208,7 @@ function _renderEditEnhanced(enh){
           html+='<div class="cfg-row"><div class="cfg-lbl">Dose</div><div class="dose-row"><input class="dose-in" type="text" value="'+String(selData.dose||'')+'" oninput="editSetEnhDose(\''+c.id+'\',this.value)" placeholder="0"><select class="unit-sel" onchange="editSetEnhUnit(\''+c.id+'\',this.value)">'+['mg/week','mg/day','mg/EOD','IU/day','IU/week','mg','ml'].map(function(u){return'<option'+(u===(selData.unit||'mg/week')?' selected':'')+'>'+u+'</option>';}).join('')+'</select></div></div>';
           html+='<div class="cfg-row"><div class="cfg-lbl">Days</div><div class="day-chips">'+DAYS_ORDER.map(function(di){var lbl=DAYS_SHORT[di];return'<div class="day-chip'+((selData.days||[]).includes(di)?' sel':'')+'" onclick="editSetEnhDays(\''+c.id+'\','+di+')">'+lbl+'</div>';}).join('')+'</div></div>';
         }
-        html+=_renderEnhancedGuide(c,c.amPm?(parseFloat(selData.dose_am||0)+parseFloat(selData.dose_pm||0)):parseFloat(selData.dose||0));
+        html+='<div id="enh-guide-'+c.id+'">'+_renderEnhancedGuide(c,c.amPm?(parseFloat(selData.dose_am||0)+parseFloat(selData.dose_pm||0)):parseFloat(selData.dose||0))+'</div>';
         html+='</div>';
       }
     });
@@ -1294,7 +1294,7 @@ function wizStepEnhanced(body,footer){
           html+='<div class="cfg-row"><div class="cfg-lbl">Dose</div><div class="dose-row"><input class="dose-in" type="text" value="'+String(selData.dose||'')+'" oninput="wizSetEnhDose(\''+c.id+'\',this.value)" placeholder="0"><select class="unit-sel" onchange="wizSetEnhUnit(\''+c.id+'\',this.value)">'+['mg/week','mg/day','mg/EOD','IU/day','IU/week','mg','ml'].map(function(u){return'<option'+(u===(selData.unit||'mg/week')?' selected':'')+'>'+u+'</option>';}).join('')+'</select></div></div>';
           html+='<div class="cfg-row"><div class="cfg-lbl">Days</div><div class="day-chips">'+DAYS_ORDER.map(function(di){var lbl=DAYS_SHORT[di];return'<div class="day-chip'+((selData.days||[]).includes(di)?' sel':'')+'" onclick="wizSetEnhDays(\''+c.id+'\','+di+')">'+lbl+'</div>';}).join('')+'</div></div>';
         }
-        html+=_renderEnhancedGuide(c,c.amPm?(parseFloat(selData.dose_am||0)+parseFloat(selData.dose_pm||0)):parseFloat(selData.dose||0));
+        html+='<div id="wiz-enh-guide-'+c.id+'">'+_renderEnhancedGuide(c,c.amPm?(parseFloat(selData.dose_am||0)+parseFloat(selData.dose_pm||0)):parseFloat(selData.dose||0))+'</div>';
         html+='</div>';
       }
     });
@@ -1322,10 +1322,10 @@ function wizToggleEnhancedCompound(id){
   _wiz.enhanced.enabled=_wiz.enhanced.compounds.length>0;
   wizStepEnhanced(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
 }
-function wizSetEnhDose(id,v){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(c)c.dose=v;}
+function wizSetEnhDose(id,v){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(!c)return;c.dose=v;var el=document.getElementById('wiz-enh-guide-'+id);if(el){var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===id;});el.innerHTML=_renderEnhancedGuide(cat,parseFloat(v||0));}}
 function wizSetEnhUnit(id,v){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(c)c.unit=v;}
-function wizSetEnhDoseAm(id,v){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(c)c.dose_am=v;}
-function wizSetEnhDosePm(id,v){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(c)c.dose_pm=v;}
+function wizSetEnhDoseAm(id,v){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(!c)return;c.dose_am=v;var el=document.getElementById('wiz-enh-guide-'+id);if(el){var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===id;});el.innerHTML=_renderEnhancedGuide(cat,parseFloat(c.dose_am||0)+parseFloat(c.dose_pm||0));}}
+function wizSetEnhDosePm(id,v){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(!c)return;c.dose_pm=v;var el=document.getElementById('wiz-enh-guide-'+id);if(el){var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===id;});el.innerHTML=_renderEnhancedGuide(cat,parseFloat(c.dose_am||0)+parseFloat(c.dose_pm||0));}}
 function wizSetEnhDays(id,di){var c=(_wiz.enhanced.compounds||[]).find(function(c){return c.id===id;});if(!c)return;if(!c.days)c.days=[];var idx=c.days.indexOf(di);if(idx!==-1){if(c.days.length>1)c.days.splice(idx,1);}else{c.days.push(di);}c.days.sort(function(a,b){return a-b;});wizStepEnhanced(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));}
 function wizStepValidate(body,footer){
   var g=(_wiz&&_wiz.goals)||[];
