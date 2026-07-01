@@ -3103,3 +3103,172 @@ if (typeof G._tcDrawManualChart === 'function') {
   G._tcp.measuredFT      = _bl_savedFT;
   G._tcp.currentDoseMgWk = _bl_savedDose;
 }
+
+// ── buildToday / buildStackStore: smoke tests ─────────────────────────────────
+// These tests catch the class of bug where "Today and Stacks don't load" because
+// a rendering function throws.  The DOM mock noops innerHTML writes, so we just
+// verify the functions complete without throwing.
+console.log('\n── buildToday: smoke test ──────────────────────────────────');
+{
+  const _bts = G._userStacks;
+  const _bta = G._activeStackIndices.slice();
+  const _btl = G._stacksLoaded;
+  const _btw = G.WEEKLY;
+  G._stacksLoaded = true;
+
+  // Stack with peptides + TRT + Enhanced (including amPm compound)
+  const smokeStack = {
+    name: 'Smoke Stack',
+    cycle_start: '2026-06-01',
+    cycle_length: 12,
+    peptides: [
+      { id: 'cjc-ipa', name: 'CJC-1295/Ipa', dot: '#3cffa0', days: [0,1,2,3,4,5,6],
+        times: ['AM','PM'], dose_am: '100', unit_am: 'mcg', dose_pm: '100', unit_pm: 'mcg', active: true }
+    ],
+    trt: { enabled: true, compounds: [
+      { id: 'testoviron', name: 'Testoviron Depot', dose: '125', unit: 'mg', freqVal: 1, freqUnit: 'weeks' }
+    ]},
+    enhanced: { enabled: true, compounds: [
+      { id: 'hgh', name: 'HGH', dot: '#a855f7', days: [0,1,2,3,4,5,6],
+        amPm: true, dose_am: '2', dose_pm: '0', unit: 'IU/day' }
+    ]}
+  };
+  G._userStacks = [smokeStack];
+  G._activeStackIndices = [0];
+  G.WEEKLY = G.buildWeeklyFromProtocol(smokeStack);
+
+  let btThrew = false;
+  try { G.buildToday(); }
+  catch(e) { btThrew = true; console.error('  buildToday threw:', e.message); }
+  check('buildToday: no crash with peptides+TRT+Enhanced stack', !btThrew);
+
+  // Also call with _stacksLoaded=false to test the spinner path
+  G._stacksLoaded = false;
+  let btThrew2 = false;
+  try { G.buildToday(); }
+  catch(e) { btThrew2 = true; console.error('  buildToday (spinner path) threw:', e.message); }
+  check('buildToday: no crash in spinner path (_stacksLoaded=false)', !btThrew2);
+
+  G._userStacks = _bts;
+  G._activeStackIndices = _bta;
+  G._stacksLoaded = _btl;
+  G.WEEKLY = _btw;
+}
+
+console.log('\n── buildStackStore: smoke test ─────────────────────────────');
+{
+  const _bss = G._userStacks;
+  const _bsa = G._activeStackIndices.slice();
+  const _bsl = G._stacksLoaded;
+  G._stacksLoaded = true;
+
+  const smokeStack2 = {
+    name: 'Smoke Stack 2',
+    cycle_start: '2026-06-01',
+    cycle_length: 8,
+    peptides: [{ id: 'retatrutide', name: 'Retatrutide', dot: '#f97316', days: [0,3],
+                 times: ['AM'], dose_am: '3', unit_am: 'mg', active: true }],
+    trt: { enabled: false, compounds: [] },
+    enhanced: { enabled: false, compounds: [] }
+  };
+  G._userStacks = [smokeStack2];
+  G._activeStackIndices = [0];
+
+  let bssThrew = false;
+  try { G.buildStackStore(); }
+  catch(e) { bssThrew = true; console.error('  buildStackStore threw:', e.message); }
+  check('buildStackStore: no crash with valid stack', !bssThrew);
+
+  // Multiple stacks
+  G._userStacks = [smokeStack2, smokeStack2, smokeStack2];
+  let bssThrew2 = false;
+  try { G.buildStackStore(); }
+  catch(e) { bssThrew2 = true; console.error('  buildStackStore (multi) threw:', e.message); }
+  check('buildStackStore: no crash with 3 stacks', !bssThrew2);
+
+  // Empty stacks
+  G._userStacks = [];
+  let bssThrew3 = false;
+  try { G.buildStackStore(); }
+  catch(e) { bssThrew3 = true; console.error('  buildStackStore (empty) threw:', e.message); }
+  check('buildStackStore: no crash with empty stacks array', !bssThrew3);
+
+  // _stacksLoaded=false → spinner path
+  G._stacksLoaded = false;
+  G._userStacks = [smokeStack2];
+  let bssThrew4 = false;
+  try { G.buildStackStore(); }
+  catch(e) { bssThrew4 = true; console.error('  buildStackStore (spinner) threw:', e.message); }
+  check('buildStackStore: no crash in spinner path (_stacksLoaded=false)', !bssThrew4);
+
+  G._userStacks = _bss;
+  G._activeStackIndices = _bsa;
+  G._stacksLoaded = _bsl;
+}
+
+// ── _getDynamicEnhancedDoses: Enhanced doses on Today tab ─────────────────────
+console.log('\n── _getDynamicEnhancedDoses ────────────────────────────────');
+{
+  const _des = G._userStacks;
+  const _dea = G._activeStackIndices.slice();
+
+  const enhStack = {
+    name: 'Enh Stack',
+    cycle_start: '2026-06-01',
+    cycle_length: 12,
+    peptides: [],
+    trt: { enabled: false, compounds: [] },
+    enhanced: { enabled: true, compounds: [
+      { id: 'hgh', name: 'HGH', dot: '#a855f7', days: [0,1,2,3,4,5,6],
+        amPm: true, dose_am: '2', dose_pm: '0', unit: 'IU/day' },
+      { id: 'bpc157', name: 'BPC-157', dot: '#22d3ee', days: [1,2,3,4,5],
+        dose: '250', unit: 'mcg' }
+    ]}
+  };
+  G._userStacks = [enhStack];
+  G._activeStackIndices = [0];
+
+  // Monday June 2, 2026 (dow=1) — both compounds scheduled
+  const monday = new Date(2026, 5, 2);
+  const monDoses = G._getDynamicEnhancedDoses(monday, true);
+  check('Enhanced: 2 doses on Mon (both scheduled)',   monDoses.length === 2, `got ${monDoses.length}`);
+  check('Enhanced: HGH present on Mon',               monDoses.some(d => d.name === 'HGH'));
+  check('Enhanced: BPC-157 present on Mon (weekday)', monDoses.some(d => d.name === 'BPC-157'));
+  check('Enhanced: dose IDs include date suffix',     monDoses.every(d => d.id && d.id.includes('_2026-')));
+
+  // Sunday June 7, 2026 (dow=0) — BPC-157 NOT scheduled (days=[1..5])
+  const sunday = new Date(2026, 5, 7);
+  const sunDoses = G._getDynamicEnhancedDoses(sunday, true);
+  check('Enhanced: 1 dose on Sun (BPC-157 not scheduled)', sunDoses.length === 1, `got ${sunDoses.length}`);
+  check('Enhanced: HGH present on Sun',               sunDoses.some(d => d.name === 'HGH'));
+  check('Enhanced: BPC-157 absent on Sun',            !sunDoses.some(d => d.name === 'BPC-157'));
+
+  // Date before cycle start → no doses
+  const preCycle = new Date(2026, 4, 30); // May 30, before June 1 start
+  const preDoses = G._getDynamicEnhancedDoses(preCycle, false);
+  check('Enhanced: 0 doses before cycle start',       preDoses.length === 0, `got ${preDoses.length}`);
+
+  // Date after cycle end (cycle_start + 12wks = Aug 24, 2026)
+  const postCycle = new Date(2026, 7, 25); // Aug 25
+  const postDoses = G._getDynamicEnhancedDoses(postCycle, false);
+  check('Enhanced: 0 doses after cycle end',          postDoses.length === 0, `got ${postDoses.length}`);
+
+  // Inactive stack → no doses
+  G._activeStackIndices = [];
+  const inactiveDoses = G._getDynamicEnhancedDoses(monday, false);
+  check('Enhanced: 0 doses for inactive stack',       inactiveDoses.length === 0, `got ${inactiveDoses.length}`);
+  G._activeStackIndices = [0];
+
+  // No enhanced.enabled → no doses
+  const noEnhStack = { ...enhStack, enhanced: { enabled: false, compounds: enhStack.enhanced.compounds } };
+  G._userStacks = [noEnhStack];
+  const noEnhDoses = G._getDynamicEnhancedDoses(monday, false);
+  check('Enhanced: 0 doses when enabled=false',       noEnhDoses.length === 0, `got ${noEnhDoses.length}`);
+
+  G._userStacks = _des;
+  G._activeStackIndices = _dea;
+}
+
+console.log('\n───────────────────────────────────────────────────────────');
+console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
+if(failed>0)process.exit(1);
