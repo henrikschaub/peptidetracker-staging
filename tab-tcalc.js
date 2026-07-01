@@ -419,12 +419,17 @@ function _tcCloseManualLog() {
   if (el) el.remove();
 }
 
-function _tcAddManualEntry() {
-  if (!_tcp.manualLog) _tcp.manualLog = [];
-  var defaultComp = _tcManualComps()[0] || 'topical';
-  // Default date: day after the latest existing entry, or today
+var _tcAddSheet = null;
+
+function _tcAddManualEntry() { _tcShowAddSheet(); }
+
+function _tcShowAddSheet() {
+  if (document.getElementById('tc-add-sheet-overlay')) return;
+  var comps = _tcManualComps();
+  if (!comps.length) return;
+  var defaultComp = comps[0];
   var defaultDate;
-  var existingDates = _tcp.manualLog.map(function(e){ return e.date; }).filter(Boolean).sort();
+  var existingDates = (_tcp.manualLog||[]).map(function(e){ return e.date; }).filter(Boolean).sort();
   if (existingDates.length > 0) {
     var p = existingDates[existingDates.length - 1].split('-');
     var next = new Date(+p[0], +p[1] - 1, +p[2] + 1);
@@ -434,19 +439,98 @@ function _tcAddManualEntry() {
   } else {
     defaultDate = new Date().toISOString().slice(0, 10);
   }
-  _tcp.manualLog.push({compId: defaultComp, doseMg: '', date: defaultDate});
-  _tcSaveProfile();
-  buildTCalc();
-  // Focus the dose field of the newly added (last) entry
-  requestAnimationFrame(function() {
-    var inputs = document.querySelectorAll('#tcalc-body input[type="number"]');
-    if (inputs.length) inputs[inputs.length - 1].focus();
-  });
+  _tcAddSheet = {isSeries: false};
+  var iSty = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--text);font-size:15px;font-family:inherit;outline:none;width:100%;box-sizing:border-box';
+  var lSty = 'font-size:11px;font-weight:700;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;display:block';
+  var compOpts = comps.map(function(id){ var n=_tcCompInfo(id).name; return '<option value="'+_esc(id)+'">'+_esc(n)+'</option>'; }).join('');
+  var ol = document.createElement('div');
+  ol.id = 'tc-add-sheet-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  ol.onclick = function(e){ if(e.target===ol)_tcCloseAddSheet(); };
+  ol.innerHTML =
+    '<div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 20px 36px;max-height:85vh;overflow-y:auto">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">' +
+    '<div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--text)">ADD INJECTION</div>' +
+    '<button onclick="_tcCloseAddSheet()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button>' +
+    '</div>' +
+    '<div style="margin-bottom:14px"><label style="'+lSty+'">COMPOUND</label>' +
+    '<select id="tc-as-comp" style="'+iSty+'">'+compOpts+'</select></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
+    '<div><label style="'+lSty+'">DOSE (mg)</label>' +
+    '<input id="tc-as-dose" type="number" min="0" max="9999" step="1" placeholder="e.g. 100" style="'+iSty+'"></div>' +
+    '<div><label style="'+lSty+'">DATE</label>' +
+    '<input id="tc-as-date" type="date" value="'+_esc(defaultDate)+'" style="'+iSty+'"></div>' +
+    '</div>' +
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px">' +
+    '<div onclick="_tcAsToggle(false)" style="padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)">' +
+    '<div id="tc-as-r1" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--accent);background:var(--accent);flex-shrink:0"></div>' +
+    '<div><div style="font-size:13px;font-weight:600;color:var(--text)">Single injection</div><div style="font-size:11px;color:var(--muted2)">One entry logged</div></div>' +
+    '</div>' +
+    '<div onclick="_tcAsToggle(true)" style="padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:10px">' +
+    '<div id="tc-as-r2" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--border);flex-shrink:0"></div>' +
+    '<div><div style="font-size:13px;font-weight:600;color:var(--text)">Recurring series</div><div style="font-size:11px;color:var(--muted2)">Log multiple injections at once</div></div>' +
+    '</div>' +
+    '</div>' +
+    '<div id="tc-as-series-opts" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+    '<div><label style="'+lSty+'">INJECTIONS</label>' +
+    '<input id="tc-as-count" type="number" min="2" max="365" step="1" value="10" style="'+iSty+'"></div>' +
+    '<div><label style="'+lSty+'">EVERY (DAYS)</label>' +
+    '<input id="tc-as-interval" type="number" min="1" max="90" step="1" value="2" style="'+iSty+'"></div>' +
+    '</div></div>' +
+    '<button onclick="_tcConfirmAddSheet()" style="width:100%;background:linear-gradient(135deg,#6688cc,#4466aa);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;letter-spacing:0.5px;padding:14px;cursor:pointer;font-family:inherit">ADD</button>' +
+    '</div>';
+  document.body.appendChild(ol);
+}
+
+function _tcAsToggle(isSeries) {
+  var r1=document.getElementById('tc-as-r1'); var r2=document.getElementById('tc-as-r2');
+  var opts=document.getElementById('tc-as-series-opts');
+  if(!r1||!r2||!opts)return;
+  if(isSeries){r1.style.background='';r1.style.borderColor='var(--border)';r2.style.background='var(--accent)';r2.style.borderColor='var(--accent)';opts.style.display='block';}
+  else{r1.style.background='var(--accent)';r1.style.borderColor='var(--accent)';r2.style.background='';r2.style.borderColor='var(--border)';opts.style.display='none';}
+  if(_tcAddSheet)_tcAddSheet.isSeries=isSeries;
+}
+
+function _tcCloseAddSheet() {
+  var ol=document.getElementById('tc-add-sheet-overlay');if(ol)ol.remove();_tcAddSheet=null;
+}
+
+function _tcConfirmAddSheet() {
+  var compEl=document.getElementById('tc-as-comp');
+  var doseEl=document.getElementById('tc-as-dose');
+  var dateEl=document.getElementById('tc-as-date');
+  var countEl=document.getElementById('tc-as-count');
+  var intervalEl=document.getElementById('tc-as-interval');
+  var compId=compEl?compEl.value:'';
+  var doseMg=doseEl?parseFloat(doseEl.value):0;
+  var startDate=dateEl?dateEl.value:'';
+  var isSeries=_tcAddSheet&&_tcAddSheet.isSeries;
+  if(!compId||!startDate||!(doseMg>0)){return;}
+  if(!_tcp.manualLog)_tcp.manualLog=[];
+  if(!isSeries){
+    _tcp.manualLog.push({compId:compId,doseMg:doseMg,date:startDate});
+  }else{
+    var count=countEl?Math.max(2,parseInt(countEl.value)||10):10;
+    var intervalDays=intervalEl?Math.max(1,parseInt(intervalEl.value)||2):2;
+    var seriesId=Date.now().toString(36);
+    var sp=startDate.split('-');
+    for(var i=0;i<count;i++){
+      var sd=new Date(+sp[0],+sp[1]-1,+sp[2]+i*intervalDays);
+      var ds=sd.getFullYear()+'-'+String(sd.getMonth()+1).padStart(2,'0')+'-'+String(sd.getDate()).padStart(2,'0');
+      _tcp.manualLog.push({compId:compId,doseMg:doseMg,date:ds,seriesId:seriesId});
+    }
+  }
+  _tcp.manualLog.sort(function(a,b){return(a.date||'')<(b.date||'')?-1:(a.date||'')>(b.date||'')?1:0;});
+  _tcSaveProfile();_tcCloseAddSheet();buildTCalc();
 }
 
 function _tcConfirmRemove(idx) {
   var ex = document.getElementById('tc-del-confirm');
   if (ex) ex.remove();
+  var entry = _tcp.manualLog && _tcp.manualLog[idx];
+  var sid = entry && entry.seriesId;
+  var seriesCount = sid ? _tcp.manualLog.filter(function(e){ return e.seriesId===sid; }).length : 0;
   var d = document.createElement('div');
   d.id = 'tc-del-confirm';
   d.style.cssText = 'position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
@@ -454,10 +538,18 @@ function _tcConfirmRemove(idx) {
     '<div style="background:#141414;border:1px solid #2a2a2a;border-radius:16px;padding:24px;max-width:300px;width:100%;text-align:center">' +
       '<div style="font-size:13px;color:var(--accent);font-weight:700;letter-spacing:0.5px;margin-bottom:6px">Delete this injection?</div>' +
       '<div style="font-size:12px;color:#555;margin-bottom:20px">This cannot be undone.</div>' +
-      '<div style="display:flex;gap:10px">' +
+      (sid && seriesCount > 1 ?
+        '<div style="display:flex;flex-direction:column;gap:8px">' +
+        '<button onclick="document.getElementById(\'tc-del-confirm\').remove();_tcRemoveManualEntry(' + idx + ')" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#ccc;font-size:13px;font-weight:700;padding:12px;cursor:pointer;font-family:inherit">Delete this entry only</button>' +
+        '<button onclick="document.getElementById(\'tc-del-confirm\').remove();_tcRemoveSeries(\''+sid+'\')" style="background:var(--danger,#ef4444);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;padding:12px;cursor:pointer;font-family:inherit">Delete all '+seriesCount+' in series</button>' +
+        '<button onclick="document.getElementById(\'tc-del-confirm\').remove()" style="background:none;border:none;color:#555;font-size:13px;cursor:pointer;padding:8px;font-family:inherit">Cancel</button>' +
+        '</div>'
+      :
+        '<div style="display:flex;gap:10px">' +
         '<button onclick="document.getElementById(\'tc-del-confirm\').remove()" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#888;font-size:13px;font-weight:700;padding:12px;cursor:pointer;font-family:inherit">Cancel</button>' +
         '<button onclick="document.getElementById(\'tc-del-confirm\').remove();_tcRemoveManualEntry(' + idx + ')" style="flex:1;background:var(--accent);border:none;border-radius:10px;color:#000;font-size:13px;font-weight:700;padding:12px;cursor:pointer;font-family:inherit">Delete</button>' +
-      '</div>' +
+        '</div>'
+      ) +
     '</div>';
   document.body.appendChild(d);
 }
@@ -465,6 +557,13 @@ function _tcConfirmRemove(idx) {
 function _tcRemoveManualEntry(idx) {
   if (!_tcp.manualLog) return;
   _tcp.manualLog.splice(idx, 1);
+  _tcSaveProfile();
+  buildTCalc();
+}
+
+function _tcRemoveSeries(seriesId) {
+  if (!_tcp.manualLog || !seriesId) return;
+  _tcp.manualLog = _tcp.manualLog.filter(function(e){ return e.seriesId !== seriesId; });
   _tcSaveProfile();
   buildTCalc();
 }
@@ -1133,6 +1232,69 @@ function _tcDrawChart(canvasId, total, stats, plan, sched, calFT, measuredFT) {
 
 // ── Export to stack ───────────────────────────────────────────────────────────
 
+function _tcCopyLogToStack() {
+  var log = _tcp.manualLog || [];
+  if (!log.length) { alert('No injections logged yet.'); return; }
+  if (typeof _userStacks === 'undefined' || !_userStacks.length) { alert('No stacks found. Create a stack first.'); return; }
+  var activeIdx = (typeof _activeStackIndices !== 'undefined' && _activeStackIndices.length > 0) ? _activeStackIndices[0] : 0;
+  if (activeIdx < 0 || activeIdx >= _userStacks.length) { alert('No active stack found.'); return; }
+  // Group by compId
+  var byComp = {};
+  log.forEach(function(e){ if(!e.compId||!e.date)return; if(!byComp[e.compId])byComp[e.compId]=[]; byComp[e.compId].push(e); });
+  var compIds = Object.keys(byComp);
+  if (!compIds.length) { alert('No valid entries to copy.'); return; }
+  var trtCompounds = [];
+  var enhCompounds = [];
+  compIds.forEach(function(cid){
+    var entries = byComp[cid].slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
+    // Derive interval from consecutive entry dates
+    var intervals = [];
+    for(var i=1;i<entries.length;i++){
+      var a=new Date(entries[i-1].date.replace(/-/g,'/')), b=new Date(entries[i].date.replace(/-/g,'/'));
+      var diff=Math.round((b-a)/86400000);
+      if(diff>0)intervals.push(diff);
+    }
+    var iv = intervals.length ? Math.round(intervals.reduce(function(s,v){return s+v;},0)/intervals.length) : 7;
+    var days;
+    if(iv<=1)days=[0,1,2,3,4,5,6];
+    else if(Math.abs(iv-2)<0.6)days=[1,3,5];
+    else if(Math.abs(iv-3.5)<0.6)days=[1,4];
+    else if(Math.abs(iv-7)<2)days=[1];
+    else days=[1];
+    // Most common dose
+    var doses=entries.map(function(e){return parseFloat(e.doseMg)||0;}).filter(Boolean);
+    var dose=doses.length?String(Math.round(doses.reduce(function(s,v){return s+v;},0)/doses.length)):'';
+    var cd=_tcCompInfo(cid);
+    var isTRT = (typeof TRT_CAT!=='undefined') && TRT_CAT.some(function(c){return c.id===cid;});
+    var isEnh = (typeof ENHANCEMENT_COMPOUNDS!=='undefined') && ENHANCEMENT_COMPOUNDS.some(function(c){return c.id===cid;});
+    var entry = {id:cid, name:cd.name||cid, dose:dose, unit:'mg', days:days, dot:cd.dot||'#888'};
+    if(isTRT||!isEnh) trtCompounds.push(entry);
+    else enhCompounds.push({id:cid,name:cd.name||cid,dose:dose,unit:'mg/week',days:days,dot:cd.dot||'#a855f7'});
+  });
+  var stack = _userStacks[activeIdx];
+  var lines = [];
+  if(trtCompounds.length){
+    if(!stack.trt)stack.trt={enabled:true,compounds:[]};
+    stack.trt.enabled=true;
+    trtCompounds.forEach(function(c){
+      var ex=(stack.trt.compounds||[]).findIndex(function(x){return x.id===c.id;});
+      if(ex!==-1)stack.trt.compounds[ex]=c;else(stack.trt.compounds=stack.trt.compounds||[]).push(c);
+      lines.push(c.name+' '+c.dose+'mg');
+    });
+  }
+  if(enhCompounds.length){
+    if(!stack.enhanced)stack.enhanced={enabled:true,compounds:[]};
+    stack.enhanced.enabled=true;
+    enhCompounds.forEach(function(c){
+      var ex=(stack.enhanced.compounds||[]).findIndex(function(x){return x.id===c.id;});
+      if(ex!==-1)stack.enhanced.compounds[ex]=c;else(stack.enhanced.compounds=stack.enhanced.compounds||[]).push(c);
+      lines.push(c.name+' '+c.dose+'mg');
+    });
+  }
+  if(typeof saveStacksToBackend==='function')saveStacksToBackend();
+  alert('Copied to "'+((stack.name)||'active stack')+'":\n'+lines.join('\n'));
+}
+
 function _tcExportPlan() {
   var plan = _tcCurrentPlan;
   if (!plan || !plan.compounds || plan.compounds.length === 0) return;
@@ -1245,9 +1407,9 @@ function buildTCalc() {
   html += '<div class="card-header"><div class="card-title-wrap">';
   html += '<div class="card-dot" style="background:#6688cc"></div>';
   html += '<div class="card-title">INJECTION SCHEDULE</div></div>';
-  html += '<div style="display:flex;align-items:center;gap:8px">';
+  html += '<div style="display:flex;align-items:center;gap:6px">';
   if (log.length > 0) {
-    html += '<span style="font-size:11px;color:var(--muted2)">' + log.length + ' entr' + (log.length === 1 ? 'y' : 'ies') + '</span>';
+    html += '<button onclick="_tcCopyLogToStack()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:10px;font-weight:700;letter-spacing:0.5px;cursor:pointer;padding:5px 10px;font-family:inherit">COPY TO STACK</button>';
   }
   html += '<button onclick="_tcAddManualEntry()" style="background:linear-gradient(135deg,#6688cc,#4466aa);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;letter-spacing:0.8px;cursor:pointer;padding:7px 14px;font-family:inherit">+ ADD</button>';
   html += '</div></div>';
@@ -1256,8 +1418,18 @@ function buildTCalc() {
   if (log.length === 0) {
     html += '<div style="text-align:center;padding:16px 0;color:var(--muted2);font-size:13px">No injections logged yet.<br><span style="font-size:12px;opacity:0.6">Tap + ADD to log your first injection.</span></div>';
   } else {
+    // Track series groups for visual display
+    var _seriesSeen = {};
+    var _seriesTotals = {};
+    log.forEach(function(e){ if(e.seriesId){_seriesTotals[e.seriesId]=(_seriesTotals[e.seriesId]||0)+1;} });
+
     log.forEach(function(entry, idx) {
       var cd = _tcCompInfo(entry.compId || (comps[0] || ''));
+      var sid = entry.seriesId;
+      var isSeries = !!sid;
+      var isFirstInSeries = isSeries && !_seriesSeen[sid];
+      if (sid) _seriesSeen[sid] = (_seriesSeen[sid] || 0) + 1;
+
       var compSelect = '<select onchange="_tcSetManualField(' + idx + ',\'compId\',this.value)" style="' + iSty + ';flex:1;min-width:0;font-size:14px">';
       comps.forEach(function(id) {
         var n = _tcCompInfo(id).name;
@@ -1265,18 +1437,49 @@ function buildTCalc() {
       });
       compSelect += '</select>';
 
-      html += '<div style="background:var(--surface2);border:1px solid ' + cd.dot + '33;border-radius:12px;padding:12px">';
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
-      html += '<span style="width:8px;height:8px;border-radius:50%;background:' + cd.dot + ';display:inline-block;flex-shrink:0"></span>';
-      html += compSelect;
-      html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:0;flex-shrink:0;line-height:1">✕</button>';
-      html += '</div>';
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-      html += '<div><div style="' + lSty + '">DOSE (mg)</div>';
-      html += '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
-      html += '<div><div style="' + lSty + '">DATE</div>';
-      html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
-      html += '</div></div>';
+      // Series header line — shown once before the first entry of each series
+      if (isFirstInSeries) {
+        var total = _seriesTotals[sid] || 1;
+        // Compute interval from log entries with same seriesId
+        var seriesEntries = log.filter(function(e){return e.seriesId===sid;}).map(function(e){return e.date||'';}).sort();
+        var iv = '';
+        if (seriesEntries.length >= 2) {
+          var d0 = new Date(seriesEntries[0].replace(/-/g,'/')), d1 = new Date(seriesEntries[1].replace(/-/g,'/'));
+          iv = Math.round((d1-d0)/86400000);
+        }
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;margin-bottom:-2px">';
+        html += '<span style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6688cc;text-transform:uppercase">⛓ Series</span>';
+        html += '<span style="font-size:10px;color:var(--muted2)">'+total+' injections'+(iv?' · every '+iv+' day'+(iv===1?'':'s'):'')+'</span>';
+        html += '</div>';
+      }
+
+      var borderCol = isSeries ? '#6688cc66' : cd.dot + '33';
+      var bgStyle = isSeries ? 'background:rgba(102,136,204,0.06);border:1px dashed ' + borderCol + ';' : 'background:var(--surface2);border:1px solid ' + borderCol + ';';
+      html += '<div style="'+bgStyle+'border-radius:12px;padding:12px'+(isSeries&&!isFirstInSeries?';margin-top:-4px':'')+(isSeries&&isFirstInSeries?';margin-top:2px':'')+';">';
+      if (isSeries) {
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+        html += '<span style="font-size:10px;font-weight:700;color:#6688cc;letter-spacing:0.5px">#' + _seriesSeen[sid] + ' / ' + (_seriesTotals[sid]||1) + '</span>';
+        html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:16px;cursor:pointer;padding:0;line-height:1">✕</button>';
+        html += '</div>';
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+        html += '<div><div style="' + lSty + '">DOSE (mg)</div>';
+        html += '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
+        html += '<div><div style="' + lSty + '">DATE</div>';
+        html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
+        html += '</div></div>';
+      } else {
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
+        html += '<span style="width:8px;height:8px;border-radius:50%;background:' + cd.dot + ';display:inline-block;flex-shrink:0"></span>';
+        html += compSelect;
+        html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:0;flex-shrink:0;line-height:1">✕</button>';
+        html += '</div>';
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+        html += '<div><div style="' + lSty + '">DOSE (mg)</div>';
+        html += '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
+        html += '<div><div style="' + lSty + '">DATE</div>';
+        html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
+        html += '</div></div>';
+      }
     });
   }
   html += '</div></div>';
