@@ -253,6 +253,11 @@ function renderStackEditor(){
   body.innerHTML=html;
 }
 function _renderEditPep(p,pi){
+  var eff=_effectiveDose(p,_editBuf.cycle_start);
+  var dispAmDose=eff?String(eff.dose):(p.dose_am||'');
+  var dispPmDose=eff?String(eff.dose):(p.dose_pm||'');
+  var dispAmUnit=eff?eff.unit:(p.unit_am||'mg');
+  var dispPmUnit=eff?eff.unit:(p.unit_pm||'mg');
   var dot=p.dot||'#888';
   var html='<div class="cfg-block" style="margin-bottom:8px;">';
   html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
@@ -266,14 +271,14 @@ function _renderEditPep(p,pi){
   html+='</div></div>';
   if(p.times&&p.times.includes('AM')){
     html+='<div class="cfg-row"><div class="cfg-lbl">AM Dose</div><div class="dose-row">';
-    html+='<input id="ed-dam-'+pi+'" class="dose-in" type="text" value="'+_esc(String(p.dose_am||''))+'" oninput="_editBuf.peptides['+pi+'].dose_am=this.value" placeholder="0">';
-    html+='<select id="ed-uam-'+pi+'" class="unit-sel" onchange="_editBuf.peptides['+pi+'].unit_am=this.value">'+UNITS.map(function(u){return'<option value="'+u+'"'+(u===(p.unit_am||'mg')?' selected':'')+'>'+(UNIT_LABELS[u]||u)+'</option>';}).join('')+'</select>';
+    html+='<input id="ed-dam-'+pi+'" class="dose-in" type="text" value="'+_esc(dispAmDose)+'" oninput="_editBuf.peptides['+pi+'].dose_am=this.value" placeholder="0">';
+    html+='<select id="ed-uam-'+pi+'" class="unit-sel" onchange="_editBuf.peptides['+pi+'].unit_am=this.value">'+UNITS.map(function(u){return'<option value="'+u+'"'+(u===dispAmUnit?' selected':'')+'>'+(UNIT_LABELS[u]||u)+'</option>';}).join('')+'</select>';
     html+='</div></div>';
   }
   if(p.times&&p.times.includes('PM')){
     html+='<div class="cfg-row"><div class="cfg-lbl">PM Dose</div><div class="dose-row">';
-    html+='<input id="ed-dpm-'+pi+'" class="dose-in" type="text" value="'+_esc(String(p.dose_pm||''))+'" oninput="_editBuf.peptides['+pi+'].dose_pm=this.value" placeholder="0">';
-    html+='<select id="ed-upm-'+pi+'" class="unit-sel" onchange="_editBuf.peptides['+pi+'].unit_pm=this.value">'+UNITS.map(function(u){return'<option value="'+u+'"'+(u===(p.unit_pm||'mg')?' selected':'')+'>'+(UNIT_LABELS[u]||u)+'</option>';}).join('')+'</select>';
+    html+='<input id="ed-dpm-'+pi+'" class="dose-in" type="text" value="'+_esc(dispPmDose)+'" oninput="_editBuf.peptides['+pi+'].dose_pm=this.value" placeholder="0">';
+    html+='<select id="ed-upm-'+pi+'" class="unit-sel" onchange="_editBuf.peptides['+pi+'].unit_pm=this.value">'+UNITS.map(function(u){return'<option value="'+u+'"'+(u===dispPmUnit?' selected':'')+'>'+(UNIT_LABELS[u]||u)+'</option>';}).join('')+'</select>';
     html+='</div></div>';
   }
   html+='<div class="cfg-row"><div class="cfg-lbl">Days</div><div class="day-chips">';
@@ -345,6 +350,15 @@ function editPickPeptide(id){
 }
 async function saveEditBuf(){
   _collectEditInputs();
+  // If the user changed a dose away from the active ramp value, cancel the ramp
+  (_editBuf.peptides||[]).forEach(function(p){
+    if(!p.dose_phases||!p.dose_phases.length)return;
+    var eff=_effectiveDose(p,_editBuf.cycle_start);
+    if(!eff)return;
+    var amChg=p.times&&p.times.includes('AM')&&String(p.dose_am||'')!==String(eff.dose);
+    var pmChg=p.times&&p.times.includes('PM')&&String(p.dose_pm||'')!==String(eff.dose);
+    if(amChg||pmChg)delete p.dose_phases;
+  });
   _userStacks[_editIdx]=_editBuf;
   updateWEEKLY();buildWeekStrip();buildToday();
   await saveStacksToBackend();
