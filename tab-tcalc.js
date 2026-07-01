@@ -478,13 +478,15 @@ function _tcDrawManualChart(canvasId, log) {
   if (_logPeak === 0) { for (var _ls2 = 0; _ls2 <= totalDays; _ls2++) if (total[_ls2] > _logPeak) _logPeak = total[_ls2]; }
   if (_logTrough === Infinity) _logTrough = _logPeak;
   var _logMean = (_logPeak + _logTrough) / 2 || _logPeak;
+  // Always compute absorbed totals — needed for both calFT and warm-start
+  var _totalAbsMg = 0;
+  sorted.forEach(function(e) { _totalAbsMg += parseFloat(e.doseMg) * ((_tcCompInfo(e.compId).bioavailability) || 1); });
+  var _effMgWk = _logDays > 0 ? _totalAbsMg / _logDays * 7 : 0;
+
   var calFT = null;
   if (_mftNum > 0 && _logMean > 0) {
     if (_curDose > 0) {
-      var _totalAbsMg = 0;
-      sorted.forEach(function(e) { _totalAbsMg += parseFloat(e.doseMg) * ((_tcCompInfo(e.compId).bioavailability) || 1); });
-      var _effMgWk = _logDays > 0 ? _totalAbsMg / _logDays * 7 : _curDose;
-      calFT = _mftNum * _effMgWk / _curDose / _logMean;
+      calFT = _mftNum * (_effMgWk || _curDose) / _curDose / _logMean;
     } else {
       calFT = _mftNum / _logMean;
     }
@@ -493,7 +495,9 @@ function _tcDrawManualChart(canvasId, log) {
   // Warm-start: pre-fill curve with residual from prior-protocol injections so
   // the chart starts at the user's measured free T rather than zero.
   // Uses standard ester-class intervals (not log gaps, which may be transitional).
-  if (calFT && _curDose > 0) {
+  // Falls back to the log's own effective mg/wk when "Dose at bloodwork" isn't filled in.
+  var _wsPriorDose = _curDose > 0 ? _curDose : _effMgWk;
+  if (calFT && _wsPriorDose > 0) {
     var _wsGroups = {}, _wsTotalAbsMg = 0;
     sorted.forEach(function(e) {
       var _wsBioav = (_tcCompInfo(e.compId).bioavailability || 1);
@@ -511,7 +515,7 @@ function _tcDrawManualChart(canvasId, log) {
         // Standard injection interval per ester class
         var wsIv = wsHl >= 20 ? 84 : wsHl >= 9 ? 14 : wsHl >= 3 ? 3.5 : 1;
         var wsCompFrac   = _wsGroups[wsId] / _wsTotalAbsMg;
-        var wsCompWk     = _curDose * wsCompFrac;
+        var wsCompWk     = _wsPriorDose * wsCompFrac;
         var wsDosePerInj = wsCompWk * wsIv / 7 * wsBioav;
         var wsLookback   = Math.ceil(wsHl * 10 / wsIv);
         for (var _wsk = 1; _wsk <= wsLookback; _wsk++) {
