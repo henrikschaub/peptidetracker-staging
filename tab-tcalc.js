@@ -568,6 +568,25 @@ function _tcRemoveSeries(seriesId) {
   buildTCalc();
 }
 
+function _tcConfirmRemoveSeries(sid) {
+  var ex = document.getElementById('tc-del-confirm');
+  if (ex) ex.remove();
+  var count = _tcp.manualLog ? _tcp.manualLog.filter(function(e){ return e.seriesId===sid; }).length : 0;
+  var d = document.createElement('div');
+  d.id = 'tc-del-confirm';
+  d.style.cssText = 'position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  d.innerHTML =
+    '<div style="background:#141414;border:1px solid #2a2a2a;border-radius:16px;padding:24px;max-width:300px;width:100%;text-align:center">' +
+      '<div style="font-size:13px;color:var(--accent);font-weight:700;letter-spacing:0.5px;margin-bottom:6px">Delete this series?</div>' +
+      '<div style="font-size:12px;color:#555;margin-bottom:20px">' + count + ' injections will be removed. This cannot be undone.</div>' +
+      '<div style="display:flex;gap:10px">' +
+      '<button onclick="document.getElementById(\'tc-del-confirm\').remove()" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#888;font-size:13px;font-weight:700;padding:12px;cursor:pointer;font-family:inherit">Cancel</button>' +
+      '<button onclick="document.getElementById(\'tc-del-confirm\').remove();_tcRemoveSeries(\'' + sid + '\')" style="flex:1;background:var(--danger,#ef4444);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;padding:12px;cursor:pointer;font-family:inherit">Delete</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(d);
+}
+
 function _tcSetManualField(idx, field, val) {
   if (!_tcp.manualLog || !_tcp.manualLog[idx]) return;
   _tcp.manualLog[idx][field] = val;
@@ -1418,60 +1437,73 @@ function buildTCalc() {
   if (log.length === 0) {
     html += '<div style="text-align:center;padding:16px 0;color:var(--muted2);font-size:13px">No injections logged yet.<br><span style="font-size:12px;opacity:0.6">Tap + ADD to log your first injection.</span></div>';
   } else {
-    // Track series groups for visual display
+    // Pre-compute series metadata
     var _seriesSeen = {};
     var _seriesTotals = {};
-    log.forEach(function(e){ if(e.seriesId){_seriesTotals[e.seriesId]=(_seriesTotals[e.seriesId]||0)+1;} });
+    var _seriesMeta = {};
+    log.forEach(function(e){
+      if(!e.seriesId)return;
+      var sid=e.seriesId;
+      _seriesTotals[sid]=(_seriesTotals[sid]||0)+1;
+      if(!_seriesMeta[sid]){_seriesMeta[sid]={compId:e.compId,doseMg:e.doseMg,firstDate:e.date,lastDate:e.date};}
+      else{if(e.date<_seriesMeta[sid].firstDate)_seriesMeta[sid].firstDate=e.date;if(e.date>_seriesMeta[sid].lastDate)_seriesMeta[sid].lastDate=e.date;}
+    });
+    Object.keys(_seriesMeta).forEach(function(sid){
+      if((_seriesTotals[sid]||0)<2)return;
+      var dates=log.filter(function(e){return e.seriesId===sid;}).map(function(e){return e.date||'';}).sort();
+      var d0=new Date(dates[0].replace(/-/g,'/')),d1=new Date(dates[1].replace(/-/g,'/'));
+      _seriesMeta[sid].interval=Math.round((d1-d0)/86400000);
+    });
+    var _tcFmtD=function(iso){if(!iso)return'';var p=iso.split('-');var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return parseInt(p[2],10)+' '+M[parseInt(p[1],10)-1];};
 
     log.forEach(function(entry, idx) {
       var cd = _tcCompInfo(entry.compId || (comps[0] || ''));
       var sid = entry.seriesId;
-      var isSeries = !!sid;
-      var isFirstInSeries = isSeries && !_seriesSeen[sid];
-      if (sid) _seriesSeen[sid] = (_seriesSeen[sid] || 0) + 1;
 
-      var compSelect = '<select onchange="_tcSetManualField(' + idx + ',\'compId\',this.value)" style="' + iSty + ';flex:1;min-width:0;font-size:14px">';
-      comps.forEach(function(id) {
-        var n = _tcCompInfo(id).name;
-        compSelect += '<option value="' + _esc(id) + '"' + (entry.compId === id ? ' selected' : '') + '>' + _esc(n) + '</option>';
-      });
-      compSelect += '</select>';
-
-      // Series header line — shown once before the first entry of each series
-      if (isFirstInSeries) {
+      if (sid) {
+        // Series entry — render ONE summary card per seriesId, skip the rest
+        if (_seriesSeen[sid]) return;
+        _seriesSeen[sid] = true;
+        var meta = _seriesMeta[sid] || {};
         var total = _seriesTotals[sid] || 1;
-        // Compute interval from log entries with same seriesId
-        var seriesEntries = log.filter(function(e){return e.seriesId===sid;}).map(function(e){return e.date||'';}).sort();
-        var iv = '';
-        if (seriesEntries.length >= 2) {
-          var d0 = new Date(seriesEntries[0].replace(/-/g,'/')), d1 = new Date(seriesEntries[1].replace(/-/g,'/'));
-          iv = Math.round((d1-d0)/86400000);
+        var iv = meta.interval;
+        var ivLabel = iv ? ' · every ' + iv + ' day' + (iv === 1 ? '' : 's') : '';
+        var mcd = _tcCompInfo(meta.compId || (comps[0] || ''));
+        // Stack visual: box-shadow creates two "cards" peeking behind the top card
+        html += '<div style="background:rgba(102,136,204,0.10);border:1px dashed #6688cc66;border-radius:12px;padding:12px;box-shadow:3px 3px 0 0 rgba(102,136,204,0.18),6px 6px 0 0 rgba(102,136,204,0.09);">';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+        html += '<div style="display:flex;align-items:center;gap:8px;">';
+        html += '<span style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6688cc;text-transform:uppercase">⛓ SERIES</span>';
+        html += '<span style="font-size:10px;color:var(--muted2)">' + total + ' injections' + ivLabel + '</span>';
+        html += '</div>';
+        html += '<button onclick="_tcConfirmRemoveSeries(\'' + _esc(sid) + '\')" style="background:none;border:none;color:var(--muted2);font-size:16px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0">✕</button>';
+        html += '</div>';
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+        html += '<span style="width:8px;height:8px;border-radius:50%;background:' + mcd.dot + ';display:inline-block;flex-shrink:0"></span>';
+        html += '<span style="font-size:14px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(mcd.name) + '</span>';
+        html += '</div>';
+        html += '<div style="display:flex;gap:24px;">';
+        html += '<div><div style="' + lSty + '">DOSE</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + _esc(String(meta.doseMg || '')) + ' mg</div></div>';
+        if (meta.firstDate) {
+          var dRange = _tcFmtD(meta.firstDate) + (meta.firstDate !== meta.lastDate ? ' → ' + _tcFmtD(meta.lastDate) : '');
+          html += '<div><div style="' + lSty + '">DATES</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + _esc(dRange) + '</div></div>';
         }
-        html += '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;margin-bottom:-2px">';
-        html += '<span style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6688cc;text-transform:uppercase">⛓ Series</span>';
-        html += '<span style="font-size:10px;color:var(--muted2)">'+total+' injections'+(iv?' · every '+iv+' day'+(iv===1?'':'s'):'')+'</span>';
         html += '</div>';
-      }
-
-      var borderCol = isSeries ? '#6688cc66' : cd.dot + '33';
-      var bgStyle = isSeries ? 'background:rgba(102,136,204,0.06);border:1px dashed ' + borderCol + ';' : 'background:var(--surface2);border:1px solid ' + borderCol + ';';
-      html += '<div style="'+bgStyle+'border-radius:12px;padding:12px'+(isSeries&&!isFirstInSeries?';margin-top:-4px':'')+(isSeries&&isFirstInSeries?';margin-top:2px':'')+';">';
-      if (isSeries) {
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-        html += '<span style="font-size:10px;font-weight:700;color:#6688cc;letter-spacing:0.5px">#' + _seriesSeen[sid] + ' / ' + (_seriesTotals[sid]||1) + '</span>';
-        html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:16px;cursor:pointer;padding:0;line-height:1">✕</button>';
         html += '</div>';
-        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-        html += '<div><div style="' + lSty + '">DOSE (mg)</div>';
-        html += '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
-        html += '<div><div style="' + lSty + '">DATE</div>';
-        html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
-        html += '</div></div>';
       } else {
+        // Single injection card
+        var compSelect = '<select onchange="_tcSetManualField(' + idx + ',\'compId\',this.value)" style="' + iSty + ';flex:1;min-width:0;font-size:14px">';
+        comps.forEach(function(id) {
+          var n = _tcCompInfo(id).name;
+          compSelect += '<option value="' + _esc(id) + '"' + (entry.compId === id ? ' selected' : '') + '>' + _esc(n) + '</option>';
+        });
+        compSelect += '</select>';
+        var borderCol = cd.dot + '33';
+        html += '<div style="background:var(--surface2);border:1px solid ' + borderCol + ';border-radius:12px;padding:12px;">';
         html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
         html += '<span style="width:8px;height:8px;border-radius:50%;background:' + cd.dot + ';display:inline-block;flex-shrink:0"></span>';
         html += compSelect;
-        html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:0;flex-shrink:0;line-height:1">✕</button>';
+        html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:2px 4px;flex-shrink:0;line-height:1">✕</button>';
         html += '</div>';
         html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
         html += '<div><div style="' + lSty + '">DOSE (mg)</div>';
