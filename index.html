@@ -647,16 +647,42 @@ async function refreshInjectionsCache(){
     return set;
   },new Set());
   if(!activeCycleIds.size){_injectionsCache={};_injCacheReady=true;return;}
+  var _validCids={};
+  _activeStackIndices.forEach(function(si){
+    var st=_userStacks[si];
+    if(!st||!st.cycle_start)return;
+    var cid=_stackCycleId(st);
+    _validCids[cid]=(typeof _getProtocolCompoundIds==='function')?_getProtocolCompoundIds(st):[];
+  });
   var today0=new Date(NOW);today0.setHours(0,0,0,0);
   var from=new Date(today0.getTime()-14*86400000);
   var to=new Date(today0.getTime()+90*86400000);
   var entries=await fetchInjectionsForRange(dateKey(from),dateKey(to));
   _injectionsCache={};
+  var _todayKey=dateKey(today0);
+  var _orphanBulkDel={};
   entries.forEach(function(e){
     if(!activeCycleIds.has(e.cycle_id))return;
+    var _vids=_validCids[e.cycle_id]||[];
+    if(_vids.length&&!_vids.includes(e.compound_id)){
+      if(e.date>=_todayKey){
+        if(!_orphanBulkDel[e.cycle_id])_orphanBulkDel[e.cycle_id]={};
+        _orphanBulkDel[e.cycle_id][e.compound_id]=true;
+      }
+      return;
+    }
     if(!_injectionsCache[e.date])_injectionsCache[e.date]=[];
     _injectionsCache[e.date].push(e);
   });
+  var _ockeys=Object.keys(_orphanBulkDel);
+  for(var _ci=0;_ci<_ockeys.length;_ci++){
+    var _cid=_ockeys[_ci];
+    var _cmpIds=Object.keys(_orphanBulkDel[_cid]);
+    for(var _oi=0;_oi<_cmpIds.length;_oi++){
+      try{await fetch(AGENT_URL+'/injections?cycle_id='+encodeURIComponent(_cid)+'&compound_id='+encodeURIComponent(_cmpIds[_oi])+'&from='+_todayKey,{method:'DELETE',headers:authHeaders()});}
+      catch(e){_logErr('delOrphanInj',e);}
+    }
+  }
   _injCacheReady=true;
 }
 // ── Stack conflict detection & safety modal ──────────────────────────────────
