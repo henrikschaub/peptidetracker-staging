@@ -1733,9 +1733,9 @@ function buildTCalc() {
         html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:2px 4px;flex-shrink:0;line-height:1">✕</button>';
         html += '</div>';
         html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-        html += '<div style="min-width:0"><div style="' + lSty + '">DOSE (mg)</div>';
+        html += '<div style="min-width:0;overflow:hidden"><div style="' + lSty + '">DOSE (mg)</div>';
         html += '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
-        html += '<div style="min-width:0"><div style="' + lSty + '">DATE</div>';
+        html += '<div style="min-width:0;overflow:hidden"><div style="' + lSty + '">DATE</div>';
         html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
         html += '</div></div>';
       }
