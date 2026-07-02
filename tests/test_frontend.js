@@ -61,6 +61,7 @@ const sandbox = vm.createContext({
   document:  {getElementById:()=>mockEl(),querySelectorAll:()=>[mockEl()],querySelector:()=>mockEl(),createElement:()=>mockEl(),body:mockEl(),head:mockEl(),createTextNode:()=>mockEl(),addEventListener:noop,hidden:false,documentElement:{style:{setProperty:noop,getPropertyValue:()=>''}}},
   fetch:     async()=>({ok:false,json:async()=>({})}),
   google:undefined,confirm:()=>false,alert:noop,Image:function(){},setTimeout:noop,clearTimeout:noop,setInterval:noop,console,
+  AbortController:class{constructor(){this.signal={};}abort(){}},
 });
 vm.runInContext(patchedScript, sandbox);
 // Load tab files so their functions/vars are available in the same sandbox

@@ -637,7 +637,7 @@ async function fetchInjectionsForRange(dateFrom,dateTo){
   try{
     var r=await fetch(AGENT_URL+'/injections?date_from='+dateFrom+'&date_to='+dateTo+'&active_only=false',{headers:authHeaders()});
     if(!r.ok){_logHttp('fetchInj',r.status,'/injections');return[];}
-    return await r.json();
+    var _d=await r.json();return Array.isArray(_d)?_d:[];
   }catch(e){_logErr('fetchInj',e);return[];}
 }
 async function refreshInjectionsCache(){
