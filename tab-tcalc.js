@@ -30,6 +30,46 @@ var _tcBwLoading      = false;
 var _tcBwAddExtras    = [];   // custom extra-test rows while add sheet is open
 var _tcEditSeriesId = null;   // seriesId currently open in the Edit Series sheet
 
+// ── Blood test catalogue ───────────────────────────────────────────────────────
+var _TC_BW_TESTS = [
+  {name:'Estradiol',          units:['pmol/L','pg/mL']},
+  {name:'LH',                 units:['IU/L']},
+  {name:'FSH',                units:['IU/L']},
+  {name:'Prolactin',          units:['mIU/L','ng/mL']},
+  {name:'Progesterone',       units:['nmol/L','ng/mL']},
+  {name:'DHT',                units:['nmol/L','pg/mL']},
+  {name:'Cortisol',           units:['nmol/L','µg/dL']},
+  {name:'IGF-1',              units:['nmol/L','ng/mL']},
+  {name:'TSH',                units:['mIU/L']},
+  {name:'Free T4',            units:['pmol/L','ng/dL']},
+  {name:'Free T3',            units:['pmol/L','pg/mL']},
+  {name:'Hematocrit',         units:['%']},
+  {name:'Hemoglobin',         units:['g/dL','g/L']},
+  {name:'RBC',                units:['10¹²/L']},
+  {name:'WBC',                units:['10⁹/L']},
+  {name:'Platelets',          units:['10⁹/L']},
+  {name:'ALT',                units:['U/L']},
+  {name:'AST',                units:['U/L']},
+  {name:'GGT',                units:['U/L']},
+  {name:'ALP',                units:['U/L']},
+  {name:'Bilirubin',          units:['µmol/L','mg/dL']},
+  {name:'Creatinine',         units:['µmol/L','mg/dL']},
+  {name:'eGFR',               units:['mL/min/1.73m²']},
+  {name:'Urea',               units:['mmol/L','mg/dL']},
+  {name:'Total Cholesterol',  units:['mmol/L','mg/dL']},
+  {name:'LDL',                units:['mmol/L','mg/dL']},
+  {name:'HDL',                units:['mmol/L','mg/dL']},
+  {name:'Triglycerides',      units:['mmol/L','mg/dL']},
+  {name:'Glucose',            units:['mmol/L','mg/dL']},
+  {name:'HbA1c',              units:['mmol/mol','%']},
+  {name:'Insulin',            units:['pmol/L','µIU/mL']},
+  {name:'Vitamin D',          units:['nmol/L','ng/mL']},
+  {name:'Ferritin',           units:['µg/L','ng/mL']},
+  {name:'Iron',               units:['µmol/L','µg/dL']},
+  {name:'Zinc',               units:['µmol/L']},
+  {name:'PSA',                units:['µg/L','ng/mL']},
+];
+
 // ── Frequency options ─────────────────────────────────────────────────────────
 
 var _TC_FREQ_OPTS = [
@@ -770,18 +810,40 @@ function _tcBwAddExtraRow() {
   _tcBwRenderExtras();
 }
 
+function _tcBwExtraTestChange(i, name) {
+  _tcBwAddExtras[i].name = name;
+  var t = _TC_BW_TESTS.find(function(x){return x.name===name;});
+  _tcBwAddExtras[i].unit = t ? t.units[0] : '';
+  _tcBwRenderExtras();
+}
+
 function _tcBwRenderExtras() {
   var container = document.getElementById('tc-bw-extras-container');
   if (!container) return;
-  var iSty = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px;font-family:inherit;outline:none;box-sizing:border-box';
+  var selSty = 'width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px;font-family:inherit;outline:none;box-sizing:border-box';
+  var iSty   = 'flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px;font-family:inherit;outline:none;box-sizing:border-box';
   var html = '';
   _tcBwAddExtras.forEach(function(row, i) {
+    var testOpts = '<option value="">Select test…</option>' +
+      _TC_BW_TESTS.map(function(t){
+        return '<option value="'+_esc(t.name)+'"'+(row.name===t.name?' selected':'')+'>'+_esc(t.name)+'</option>';
+      }).join('');
+    var curTest = _TC_BW_TESTS.find(function(t){return t.name===row.name;});
+    var unitOpts = curTest
+      ? curTest.units.map(function(u){
+          return '<option value="'+_esc(u)+'"'+(row.unit===u?' selected':'')+'>'+_esc(u)+'</option>';
+        }).join('')
+      : '<option value="">—</option>';
     html +=
-      '<div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:8px;align-items:center">' +
-      '<input placeholder="Test name" value="'+_esc(row.name||'')+'" oninput="_tcBwAddExtras['+i+'].name=this.value" style="'+iSty+'">' +
-      '<input placeholder="Value" value="'+_esc(row.value||'')+'" oninput="_tcBwAddExtras['+i+'].value=this.value" style="'+iSty+'">' +
-      '<input placeholder="Unit" value="'+_esc(row.unit||'')+'" oninput="_tcBwAddExtras['+i+'].unit=this.value" style="'+iSty+'">' +
-      '<button onclick="_tcBwRemoveExtra('+i+')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:16px;cursor:pointer;padding:6px 10px;line-height:1">×</button>' +
+      '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">' +
+        '<div style="display:flex;gap:6px;margin-bottom:8px;align-items:center">' +
+          '<select onchange="_tcBwExtraTestChange('+i+',this.value)" style="'+selSty+';flex:1">'+testOpts+'</select>' +
+          '<button onclick="_tcBwRemoveExtra('+i+')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:16px;cursor:pointer;padding:6px 10px;line-height:1;flex-shrink:0">×</button>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;align-items:center">' +
+          '<input placeholder="Value" type="number" value="'+_esc(row.value||'')+'" oninput="_tcBwAddExtras['+i+'].value=this.value" style="'+iSty+'">' +
+          '<select onchange="_tcBwAddExtras['+i+'].unit=this.value" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;flex-shrink:0"'+(curTest?'':' disabled')+'>'+unitOpts+'</select>' +
+        '</div>' +
       '</div>';
   });
   container.innerHTML = html;
