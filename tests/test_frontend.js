@@ -1457,18 +1457,18 @@ console.log('\n── dose dedup migration ────────────�
 
   check('end_date normalization in loadUserStacks',rawScript.includes('if(stack.end_date){var _cep=stack.end_date.split'));
 
-  check('buildToday uses getDosesForDate(NOW) instead of WEEKLY.forEach',
-    todayJs.includes('getDosesForDate(NOW)') && !todayJs.includes('WEEKLY.forEach(d=>'));
-  check('showDayInline uses getDosesForDate for future days',
-    todayJs.includes('doses=getDosesForDate(d)'));
-  check('showDayInline past days: getDosesForDate used inside isPast branch',
-    /if\(isPast\)[\s\S]{0,200}getDosesForDate\(d\)/.test(todayJs));
+  check('buildToday reads from _injectionsCache instead of getDosesForDate or WEEKLY',
+    todayJs.includes('_injectionsCache') && !todayJs.includes('getDosesForDate(NOW)') && !todayJs.includes('WEEKLY.forEach(d=>'));
+  check('showDayInline uses _injectionsCache for scheduled doses',
+    todayJs.includes('_injectionsCache[dk]') && !todayJs.includes('doses=getDosesForDate(d)'));
+  check('buildWeekStrip past days: falls back to getPastDoses within isPast branch',
+    /if\(isPast\)[\s\S]{0,400}getPastDoses\(d\)/.test(todayJs));
   check('showDayInline past days: getPastDoses used to surface orphaned logged doses',
     todayJs.includes('isPast') && todayJs.includes('getPastDoses(d)') && todayJs.includes('_findWeeklyItemInfo(bid)'));
   check('showDayInline past days: isChk does not use _pastChecked shortcut',
     !todayJs.includes('_pastChecked||checked') && !todayJs.includes('dose._pastChecked'));
-  check('buildWeekStrip uses getDosesForDate for future/today dots',
-    todayJs.includes('getDosesForDate(d).forEach'));
+  check('buildWeekStrip uses _injectionsCache for future/today dots',
+    todayJs.includes('_injectionsCache[dk]') && !todayJs.includes('getDosesForDate(d).forEach'));
   check('buildWeekStrip uses getPastDoses + _findWeeklyItemInfo for past dots',
     todayJs.includes('getPastDoses(d)') && todayJs.includes('_findWeeklyItemInfo(bid)'));
 
@@ -1500,13 +1500,13 @@ console.log('\n── dose dedup migration ────────────�
   G._activeStackIndices=[0];
   check('_getDynamicEnhancedDoses: no-date enhanced stack active → shows doses',G._getDynamicEnhancedDoses(mon22,true).length===1);
 
-  // buildToday and showDayInline must call _getDynamicEnhancedDoses
-  check('buildToday calls _getDynamicEnhancedDoses(NOW,true)',
-    todayJs.includes('_getDynamicEnhancedDoses(NOW,true)'));
-  check('showDayInline future branch calls _getDynamicEnhancedDoses(d,true)',
-    todayJs.includes('_getDynamicEnhancedDoses(d,true)'));
-  check('buildWeekStrip calls _getDynamicEnhancedDoses for future dots',
-    todayJs.includes('_getDynamicEnhancedDoses(d,false)'));
+  // buildToday/showDayInline/buildWeekStrip now use _injectionsCache (not _getDynamicEnhancedDoses directly)
+  check('buildToday reads enhanced doses from _injectionsCache, not _getDynamicEnhancedDoses directly',
+    todayJs.includes('_injectionsCache') && !todayJs.includes('_getDynamicEnhancedDoses(NOW,true)'));
+  check('showDayInline reads enhanced doses from _injectionsCache, not _getDynamicEnhancedDoses directly',
+    todayJs.includes('_injectionsCache') && !todayJs.includes('_getDynamicEnhancedDoses(d,true)'));
+  check('buildWeekStrip reads enhanced dots from _injectionsCache, not _getDynamicEnhancedDoses directly',
+    todayJs.includes('_injectionsCache') && !todayJs.includes('_getDynamicEnhancedDoses(d,false)'));
 
   check('tab-stack.js edit view has no Cycle End field (removed — use cycle length instead)',
     !tabStackJs.includes("id='edit-cycle-end'")&&!tabStackJs.includes('id="edit-cycle-end"'));
