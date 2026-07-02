@@ -523,7 +523,7 @@ function _tcConfirmAddSheet() {
     }
   }
   _tcp.manualLog.sort(function(a,b){return(a.date||'')<(b.date||'')?-1:(a.date||'')>(b.date||'')?1:0;});
-  _tcSaveProfile();_tcCloseAddSheet();buildTCalc();
+  _tcSaveProfile();_tcCloseAddSheet();buildTCalc();_tcSyncLogToBackend();
 }
 
 function _tcConfirmRemove(idx) {
@@ -560,6 +560,7 @@ function _tcRemoveManualEntry(idx) {
   _tcp.manualLog.splice(idx, 1);
   _tcSaveProfile();
   buildTCalc();
+  _tcSyncLogToBackend();
 }
 
 function _tcRemoveSeries(seriesId) {
@@ -567,6 +568,7 @@ function _tcRemoveSeries(seriesId) {
   _tcp.manualLog = _tcp.manualLog.filter(function(e){ return e.seriesId !== seriesId; });
   _tcSaveProfile();
   buildTCalc();
+  _tcSyncLogToBackend();
 }
 
 function _tcOpenEditSeriesSheet(sid) {
@@ -645,7 +647,7 @@ function _tcSaveEditSeries() {
     _tcp.manualLog.push({compId:compId,doseMg:doseMg,date:ds,seriesId:sid});
   }
   _tcp.manualLog.sort(function(a,b){return(a.date||'')<(b.date||'')?-1:(a.date||'')>(b.date||'')?1:0;});
-  _tcSaveProfile();_tcCloseEditSeriesSheet();buildTCalc();
+  _tcSaveProfile();_tcCloseEditSeriesSheet();buildTCalc();_tcSyncLogToBackend();
 }
 
 function _tcConfirmRemoveSeries(sid) {
@@ -673,6 +675,7 @@ function _tcSetManualField(idx, field, val) {
   _tcSaveProfile();
   if (field === 'compId') {
     buildTCalc();
+    _tcSyncLogToBackend();
   } else {
     var validLog = _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; });
     if (validLog.length > 0 && document.getElementById('tc-main-chart')) {
@@ -680,6 +683,7 @@ function _tcSetManualField(idx, field, val) {
     } else {
       buildTCalc();
     }
+    _tcSyncLogToBackend();
   }
 }
 
@@ -1329,128 +1333,65 @@ function _tcDrawChart(canvasId, total, stats, plan, sched, calFT, measuredFT) {
   }
 }
 
-// ── Export to stack ───────────────────────────────────────────────────────────
+// ── Push log to schedule (writes dated injection entries directly to backend) ──
 
-function _tcCopyLogToStack() {
-  var log = _tcp.manualLog || [];
-  if (!log.length) { alert('No injections logged yet.'); return; }
-  if (typeof _userStacks === 'undefined' || !_userStacks.length) { alert('No stacks found. Create a stack first.'); return; }
-  var activeIdx = (typeof _activeStackIndices !== 'undefined' && _activeStackIndices.length > 0) ? _activeStackIndices[0] : 0;
-  if (activeIdx < 0 || activeIdx >= _userStacks.length) { alert('No active stack found.'); return; }
-  // Group by compId
-  var byComp = {};
-  log.forEach(function(e){ if(!e.compId||!e.date)return; if(!byComp[e.compId])byComp[e.compId]=[]; byComp[e.compId].push(e); });
-  var compIds = Object.keys(byComp);
-  if (!compIds.length) { alert('No valid entries to copy.'); return; }
-  var trtCompounds = [];
-  var enhCompounds = [];
-  compIds.forEach(function(cid){
-    var entries = byComp[cid].slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
-    // Derive interval from consecutive entry dates
-    var _daySet={};
-    entries.forEach(function(e){if(e.date){_daySet[new Date(e.date.replace(/-/g,'/')).getDay()]=true;}});
-    var days=Object.keys(_daySet).map(Number).sort(function(a,b){return a-b;});
-    if(!days.length)days=[1];
-    // Most common dose
-    var doses=entries.map(function(e){return parseFloat(e.doseMg)||0;}).filter(Boolean);
-    var dose=doses.length?String(Math.round(doses.reduce(function(s,v){return s+v;},0)/doses.length)):'';
+async function _tcSyncLogToBackend() {
+  var h=(typeof authHeaders==='function')?authHeaders():null;
+  if(!h)return;
+  var _now=new Date();_now.setHours(0,0,0,0);
+  var todayStr=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0')+'-'+String(_now.getDate()).padStart(2,'0');
+
+  // Group future log entries (>= today) by compId
+  var byComp={};
+  (_tcp.manualLog||[]).forEach(function(e){
+    if(!e.compId||!e.date||!(parseFloat(e.doseMg)>0))return;
+    if(e.date<todayStr)return;
+    if(!byComp[e.compId])byComp[e.compId]=[];
+    byComp[e.compId].push(e);
+  });
+
+  // Clear all unlogged tcalc entries from today onwards (covers removed compounds too),
+  // then re-post each compound's future entries via batch upsert.
+  try{
+    await fetch(AGENT_URL+'/injections?cycle_id=tcalc&from_date='+todayStr,{method:'DELETE',headers:h});
+  }catch(_e){}
+
+  var compIds=Object.keys(byComp);
+  for(var _i=0;_i<compIds.length;_i++){
+    var cid=compIds[_i];
     var cd=_tcCompInfo(cid);
-    var isTRT = (typeof TRT_CAT!=='undefined') && TRT_CAT.some(function(c){return c.id===cid;});
-    var isEnh = (typeof ENHANCEMENT_COMPOUNDS!=='undefined') && ENHANCEMENT_COMPOUNDS.some(function(c){return c.id===cid;});
-    var entry = {id:cid, name:cd.name||cid, dose:dose, unit:'mg', days:days, dot:cd.dot||'#888', start_date:entries[0].date};
-    if(isTRT||!isEnh) trtCompounds.push(entry);
-    else enhCompounds.push({id:cid,name:cd.name||cid,dose:dose,unit:'mg/week',days:days,dot:cd.dot||'#a855f7'});
-  });
-  var stack = _userStacks[activeIdx];
-  var lines = [];
-  if(trtCompounds.length){
-    if(!stack.trt)stack.trt={enabled:true,compounds:[]};
-    stack.trt.enabled=true;
-    trtCompounds.forEach(function(c){
-      var ex=(stack.trt.compounds||[]).findIndex(function(x){return x.id===c.id;});
-      if(ex!==-1)stack.trt.compounds[ex]=c;else(stack.trt.compounds=stack.trt.compounds||[]).push(c);
-      lines.push(c.name+' '+c.dose+'mg');
+    var entries=byComp[cid].map(function(e){
+      return {
+        cycle_id:'tcalc',compound_id:cid,
+        compound_name:cd.name||cid,tier:'trt',
+        date:e.date,
+        dose:String(Math.round(parseFloat(e.doseMg)*10)/10),
+        unit:'mg',dot:cd.dot||'#e8a020',
+        source:'tcalc'
+      };
     });
+    try{
+      await fetch(AGENT_URL+'/injections/batch',{
+        method:'POST',
+        headers:Object.assign({'Content-Type':'application/json'},h),
+        body:JSON.stringify({cycle_id:'tcalc',compound_id:cid,from_date:todayStr,entries:entries})
+      });
+    }catch(_e){}
   }
-  if(enhCompounds.length){
-    if(!stack.enhanced)stack.enhanced={enabled:true,compounds:[]};
-    stack.enhanced.enabled=true;
-    enhCompounds.forEach(function(c){
-      var ex=(stack.enhanced.compounds||[]).findIndex(function(x){return x.id===c.id;});
-      if(ex!==-1)stack.enhanced.compounds[ex]=c;else(stack.enhanced.compounds=stack.enhanced.compounds||[]).push(c);
-      lines.push(c.name+' '+c.dose+'mg');
-    });
-  }
-  if(typeof saveStacksToBackend==='function')saveStacksToBackend();
-  alert('Copied to "'+((stack.name)||'active stack')+'":\n'+lines.join('\n'));
+
+  if(typeof refreshInjectionsCache==='function')await refreshInjectionsCache();
 }
 
-function _tcExportPlan() {
-  var plan = _tcCurrentPlan;
-  if (!plan || !plan.compounds || plan.compounds.length === 0) return;
-
-  var _enow=new Date(),_etodayStr=_enow.getFullYear()+'-'+String(_enow.getMonth()+1).padStart(2,'0')+'-'+String(_enow.getDate()).padStart(2,'0');
-  var trtCompounds = plan.compounds.map(function(cp) {
-    var iv = cp.intervalDays;
-    var days;
-    if      (iv <= 1)   days = [0,1,2,3,4,5,6];
-    else if (iv <= 2.5) days = [1,3,5];
-    else if (iv <= 5)   days = [1,4];
-    else                days = [1];
-    return {id:cp.compId, name:cp.cd.name, dose:String(cp.dosePerInj), unit:'mg', days:days, start_date:_etodayStr};
-  });
-
-  var nameStr = plan.compounds.length === 1
-    ? plan.compounds[0].cd.name + ' Protocol'
-    : plan.compounds.map(function(cp){ return cp.cd.name; }).join(' + ') + ' Protocol';
-
-  var newStack = {
-    name:         nameStr,
-    cycle_length: Math.round(plan.cycleDays / 7),
-    trt:          {enabled:true, compounds:trtCompounds},
-    peptides:     [],
-    enhanced:     {enabled:false, compounds:[]},
-    _tcalc:       true
-  };
-  if (typeof _userStacks !== 'undefined') {
-    _userStacks.push(newStack);
-    saveStacksToBackend();
-    var btn = document.getElementById('tab-btn-stacks');
-    if (btn) switchTab('stacks', btn);
-  }
-}
-
-// ── Copy plan to active stack ─────────────────────────────────────────────────
-
-function _tcCopyToActiveStack() {
-  var plan = _tcCurrentPlan;
-  if (!plan || !plan.compounds || plan.compounds.length === 0) {
-    alert('No T-Calc plan to copy.'); return;
-  }
-  if (typeof _userStacks === 'undefined' || _userStacks.length === 0) {
-    alert('No stacks found. Create a stack first in the Stacks tab.'); return;
-  }
-  var activeIdx = (typeof _activeStackIndices !== 'undefined' && _activeStackIndices.length > 0)
-    ? _activeStackIndices[0] : 0;
-  if (activeIdx < 0 || activeIdx >= _userStacks.length) {
-    alert('No active stack found.'); return;
-  }
-  var stack = _userStacks[activeIdx];
-  var _now=new Date(),_todayStr=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0')+'-'+String(_now.getDate()).padStart(2,'0');
-  var trtCompounds = plan.compounds.map(function(cp) {
-    var iv = cp.intervalDays;
-    var days;
-    if      (iv <= 1)   days = [0,1,2,3,4,5,6];
-    else if (iv <= 2.5) days = [1,3,5];
-    else if (iv <= 5)   days = [1,4];
-    else                days = [1];
-    return {id:cp.compId, name:cp.cd.name, dose:String(cp.dosePerInj), unit:'mg', days:days, start_date:_todayStr};
-  });
-  if (!stack.trt) stack.trt = {enabled:true, compounds:[]};
-  stack.trt.enabled   = true;
-  stack.trt.compounds = trtCompounds;
-  if (typeof saveStacksToBackend === 'function') saveStacksToBackend();
-  alert('TRT plan copied to "' + (stack.name || 'active stack') + '".');
+async function _tcPushLogToSchedule() {
+  var log=_tcp.manualLog||[];
+  if(!log.length){alert('No injections logged yet.');return;}
+  var h=(typeof authHeaders==='function')?authHeaders():null;
+  if(!h){alert('Sign in required.');return;}
+  var _now=new Date();_now.setHours(0,0,0,0);
+  var todayStr=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0')+'-'+String(_now.getDate()).padStart(2,'0');
+  await _tcSyncLogToBackend();
+  var futureCount=log.filter(function(e){return e.date>=todayStr&&parseFloat(e.doseMg)>0;}).length;
+  alert('Pushed '+futureCount+' future injection'+(futureCount===1?'':'s')+' to schedule.');
 }
 
 // ── Main build ────────────────────────────────────────────────────────────────
@@ -1499,7 +1440,7 @@ function buildTCalc() {
   html += '<div class="card-title">INJECTION SCHEDULE</div></div>';
   html += '<div style="display:flex;align-items:center;gap:6px">';
   if (log.length > 0) {
-    html += '<button onclick="_tcCopyLogToStack()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:10px;font-weight:700;letter-spacing:0.5px;cursor:pointer;padding:5px 10px;font-family:inherit">COPY TO STACK</button>';
+    html += '<button onclick="_tcPushLogToSchedule()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:10px;font-weight:700;letter-spacing:0.5px;cursor:pointer;padding:5px 10px;font-family:inherit">PUSH TO SCHEDULE</button>';
   }
   html += '<button onclick="_tcAddManualEntry()" style="background:linear-gradient(135deg,#6688cc,#4466aa);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;letter-spacing:0.8px;cursor:pointer;padding:7px 14px;font-family:inherit">+ ADD</button>';
   html += '</div></div>';

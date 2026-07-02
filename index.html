@@ -651,7 +651,6 @@ async function refreshInjectionsCache(){
     if(st&&st.cycle_start)set.add(_stackCycleId(st));
     return set;
   },new Set());
-  if(!activeCycleIds.size){_injectionsCache={};_injCacheReady=true;return;}
   var _validCids={};
   _activeStackIndices.forEach(function(si){
     var st=_userStacks[si];
@@ -667,6 +666,12 @@ async function refreshInjectionsCache(){
   var _todayKey=dateKey(today0);
   var _orphanBulkDel={};
   entries.forEach(function(e){
+    // T-calc entries always pass through — no orphan check, no cycle_id filter
+    if(e.cycle_id==='tcalc'){
+      if(!_injectionsCache[e.date])_injectionsCache[e.date]=[];
+      _injectionsCache[e.date].push(e);
+      return;
+    }
     if(!activeCycleIds.has(e.cycle_id))return;
     var _vids=_validCids[e.cycle_id]||[];
     if(_vids.length&&!_vids.includes(e.compound_id)){
@@ -684,7 +689,7 @@ async function refreshInjectionsCache(){
     var _cid=_ockeys[_ci];
     var _cmpIds=Object.keys(_orphanBulkDel[_cid]);
     for(var _oi=0;_oi<_cmpIds.length;_oi++){
-      try{await fetch(AGENT_URL+'/injections?cycle_id='+encodeURIComponent(_cid)+'&compound_id='+encodeURIComponent(_cmpIds[_oi])+'&from='+_todayKey,{method:'DELETE',headers:authHeaders()});}
+      try{await fetch(AGENT_URL+'/injections?cycle_id='+encodeURIComponent(_cid)+'&compound_id='+encodeURIComponent(_cmpIds[_oi])+'&from_date='+_todayKey,{method:'DELETE',headers:authHeaders()});}
       catch(e){_logErr('delOrphanInj',e);}
     }
   }
