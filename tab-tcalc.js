@@ -779,7 +779,7 @@ function _tcBwOpenAddSheet() {
     '<button onclick="_tcBwCloseAddSheet()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button>' +
     '</div>' +
     '<div style="margin-bottom:14px"><label style="'+lSty+'">DATE</label>' +
-    '<input id="tc-bw-date" type="date" value="'+_esc(todayStr)+'" style="'+iSty+'"></div>' +
+    '<input id="tc-bw-date" type="date" value="'+_esc(todayStr)+'" max="'+todayStr+'" style="'+iSty+'"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
     '<div><label style="'+lSty+'">TOTAL T (nmol/L)</label>' +
     '<input id="tc-bw-tt" type="number" min="0" max="200" step="0.1" placeholder="e.g. 16.2" value="'+_esc(defTT)+'" style="'+iSty+'"></div>' +
@@ -862,6 +862,7 @@ async function _tcBwConfirmAdd() {
   var doseEl = document.getElementById('tc-bw-dose');
   var date   = dateEl ? dateEl.value : '';
   if (!date) { alert('Date is required.'); return; }
+  if (date > new Date().toISOString().slice(0, 10)) { alert('Blood test date cannot be in the future.'); return; }
   var entry = {
     date:       date,
     total_t:    ttEl   && ttEl.value   ? parseFloat(ttEl.value)   : null,
