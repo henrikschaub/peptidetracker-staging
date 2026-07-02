@@ -1074,6 +1074,7 @@ function _getDynamicTRTDoses(d,withIds){
     if(st.cycle_length&&days>=st.cycle_length*7)return;
     (st.trt.compounds||[]).forEach(function(c){
       if(c.end_date&&d>parseLocalDate(c.end_date))return;
+      if(c.start_date&&d<parseLocalDate(c.start_date))return;
       var cat=TRT_CAT.find(function(t){return t.id===c.id;});
       if(c.days&&c.days.length){if(!c.days.includes(d.getDay()))return;}
       else{var freqDays=c.freqUnit==='weeks'?(c.freqVal||1)*7:(c.freqVal||1);if(freqDays<=0||days%freqDays!==0)return;}
