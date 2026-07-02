@@ -500,9 +500,9 @@ function _tcShowAddSheet() {
     '<div style="margin-bottom:14px"><label style="'+lSty+'">COMPOUND</label>' +
     '<select id="tc-as-comp" style="'+iSty+'">'+compOpts+'</select></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
-    '<div><label style="'+lSty+'">DOSE (mg)</label>' +
+    '<div style="min-width:0"><label style="'+lSty+'">DOSE (mg)</label>' +
     '<input id="tc-as-dose" type="number" min="0" max="9999" step="1" placeholder="e.g. 100" style="'+iSty+'"></div>' +
-    '<div><label style="'+lSty+'">DATE</label>' +
+    '<div style="min-width:0"><label style="'+lSty+'">DATE</label>' +
     '<input id="tc-as-date" type="date" value="'+_esc(defaultDate)+'" style="'+iSty+'"></div>' +
     '</div>' +
     '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px">' +
@@ -647,9 +647,9 @@ function _tcOpenEditSeriesSheet(sid) {
     '<div style="margin-bottom:14px"><label style="'+lSty+'">COMPOUND</label>' +
     '<select id="tc-es-comp" style="'+iSty+'">'+compOpts+'</select></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
-    '<div><label style="'+lSty+'">DOSE (mg)</label>' +
+    '<div style="min-width:0"><label style="'+lSty+'">DOSE (mg)</label>' +
     '<input id="tc-es-dose" type="number" min="0" max="9999" step="1" placeholder="e.g. 100" value="'+_esc(String(doseMg))+'" style="'+iSty+'"></div>' +
-    '<div><label style="'+lSty+'">START DATE</label>' +
+    '<div style="min-width:0"><label style="'+lSty+'">START DATE</label>' +
     '<input id="tc-es-date" type="date" value="'+_esc(startDate)+'" style="'+iSty+'"></div>' +
     '</div>' +
     '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">' +
@@ -1733,9 +1733,9 @@ function buildTCalc() {
         html += '<button onclick="_tcConfirmRemove(' + idx + ')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:2px 4px;flex-shrink:0;line-height:1">✕</button>';
         html += '</div>';
         html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-        html += '<div><div style="' + lSty + '">DOSE (mg)</div>';
+        html += '<div style="min-width:0"><div style="' + lSty + '">DOSE (mg)</div>';
         html += '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
-        html += '<div><div style="' + lSty + '">DATE</div>';
+        html += '<div style="min-width:0"><div style="' + lSty + '">DATE</div>';
         html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
         html += '</div></div>';
       }
