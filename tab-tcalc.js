@@ -1357,7 +1357,7 @@ function _tcCopyLogToStack() {
     var cd=_tcCompInfo(cid);
     var isTRT = (typeof TRT_CAT!=='undefined') && TRT_CAT.some(function(c){return c.id===cid;});
     var isEnh = (typeof ENHANCEMENT_COMPOUNDS!=='undefined') && ENHANCEMENT_COMPOUNDS.some(function(c){return c.id===cid;});
-    var entry = {id:cid, name:cd.name||cid, dose:dose, unit:'mg', days:days, dot:cd.dot||'#888'};
+    var entry = {id:cid, name:cd.name||cid, dose:dose, unit:'mg', days:days, dot:cd.dot||'#888', start_date:entries[0].date};
     if(isTRT||!isEnh) trtCompounds.push(entry);
     else enhCompounds.push({id:cid,name:cd.name||cid,dose:dose,unit:'mg/week',days:days,dot:cd.dot||'#a855f7'});
   });
@@ -1389,6 +1389,7 @@ function _tcExportPlan() {
   var plan = _tcCurrentPlan;
   if (!plan || !plan.compounds || plan.compounds.length === 0) return;
 
+  var _enow=new Date(),_etodayStr=_enow.getFullYear()+'-'+String(_enow.getMonth()+1).padStart(2,'0')+'-'+String(_enow.getDate()).padStart(2,'0');
   var trtCompounds = plan.compounds.map(function(cp) {
     var iv = cp.intervalDays;
     var days;
@@ -1396,7 +1397,7 @@ function _tcExportPlan() {
     else if (iv <= 2.5) days = [1,3,5];
     else if (iv <= 5)   days = [1,4];
     else                days = [1];
-    return {id:cp.compId, name:cp.cd.name, dose:String(cp.dosePerInj), unit:'mg', days:days};
+    return {id:cp.compId, name:cp.cd.name, dose:String(cp.dosePerInj), unit:'mg', days:days, start_date:_etodayStr};
   });
 
   var nameStr = plan.compounds.length === 1
@@ -1435,6 +1436,7 @@ function _tcCopyToActiveStack() {
     alert('No active stack found.'); return;
   }
   var stack = _userStacks[activeIdx];
+  var _now=new Date(),_todayStr=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0')+'-'+String(_now.getDate()).padStart(2,'0');
   var trtCompounds = plan.compounds.map(function(cp) {
     var iv = cp.intervalDays;
     var days;
@@ -1442,7 +1444,7 @@ function _tcCopyToActiveStack() {
     else if (iv <= 2.5) days = [1,3,5];
     else if (iv <= 5)   days = [1,4];
     else                days = [1];
-    return {id:cp.compId, name:cp.cd.name, dose:String(cp.dosePerInj), unit:'mg', days:days};
+    return {id:cp.compId, name:cp.cd.name, dose:String(cp.dosePerInj), unit:'mg', days:days, start_date:_todayStr};
   });
   if (!stack.trt) stack.trt = {enabled:true, compounds:[]};
   stack.trt.enabled   = true;
