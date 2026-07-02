@@ -113,7 +113,7 @@ function createNewStack(){initWizard();showWizard(false);}
 function viewStack(idx){_editReadOnly=true;showStackEditor(idx);}
 function editStack(idx){_editReadOnly=false;showStackEditor(idx);}
 // ── Inline Stack Editor ──────────────────────────────────────────────────────
-var _editBuf=null;var _editIdx=-1;var _editReadOnly=false;
+var _editBuf=null;var _editIdx=-1;var _editReadOnly=false;var _trtLogCache={};
 function _esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function showStackEditor(idx){
   if(idx<0||idx>=_userStacks.length)return;
@@ -852,47 +852,52 @@ function _renderTRTViewTab(st){
       html+='<div class="cfg-block" style="margin-bottom:8px;display:flex;align-items:center;gap:8px;">';
       html+='<div style="width:8px;height:8px;border-radius:50%;background:'+dot+';flex-shrink:0;"></div>';
       html+='<div style="font-size:13px;font-weight:600;color:var(--text);">'+_esc(c.name)+'</div>';
-      html+='<div style="font-size:12px;color:var(--muted2);">'+(c.dose?c.dose+(c.unit||'mg')+' ':'')+(c.days&&c.days.length?c.days.map(function(d){return DAYS_SHORT[d];}).join('/'):(c.freqVal?'every '+c.freqVal+' '+c.freqUnit:'TRT'))+'</div>';
+      html+='<div style="font-size:12px;color:var(--muted2);">'+(c.dose?c.dose+(c.unit||'mg')+' ':'')+(c.id!=='nebido'&&c.days&&c.days.length?c.days.map(function(d){return DAYS_SHORT[d];}).join('/'):(c.freqVal?'every '+c.freqVal+' '+c.freqUnit:'TRT'))+'</div>';
       html+='</div>';
     });
   }
   html+='<div class="wiz-section" style="margin-top:16px;margin-bottom:10px;">Injection Log</div>';
-  var _effCsLog=(function(){var _sc=st.cycle_start||'';if(_sc){var _csp=_sc.split('-');_sc=_csp[0]+'-'+(_csp[1]||'1').padStart(2,'0')+'-'+(_csp[2]||'1').padStart(2,'0');}return _sc;})();
-  if(!_effCsLog){
+  if(!st.cycle_start){
     html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">Set a start date to see the injection log for this stack.</div>';
   }else{
-  var _logStart=parseLocalDate(_effCsLog);
-  var _logEnd=st.cycle_length?new Date(_logStart.getTime()+st.cycle_length*7*86400000):new Date();
-  var log=window._peptideLog||[];
-  var entries=[];
-  log.forEach(function(e){
-    var trtDoses=(e.doses||[]).filter(function(id){return _isTRTDoseId(id);});
-    if(!trtDoses.length)return;
-    var dp=e.date.split('-');var dObj=new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]));
-    if(dObj<_logStart||dObj>_logEnd)return;
-    entries.push({date:e.date,doses:trtDoses});
-  });
-  entries.sort(function(a,b){return b.date.localeCompare(a.date);});
-  if(!entries.length){
-    html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">No TRT injections logged during this stack.</div>';
-  }else{
-    entries.forEach(function(e){
-      var dp=e.date.split('-');var dObj=new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]));
-      html+='<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">';
-      html+='<div style="font-size:12px;color:var(--muted2);min-width:90px;flex-shrink:0;">'+fmtDate(dObj)+'</div>';
-      html+='<div style="flex:1;">';
-      e.doses.forEach(function(id){
-        var cat=_trtCompoundFromDoseId(id)||{name:id,dot:'#e8a020'};
-        html+='<div style="font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px;margin-bottom:2px;">';
-        html+='<div style="width:7px;height:7px;border-radius:50%;background:'+(cat.dot||'#e8a020')+';flex-shrink:0;"></div>';
-        html+=_esc(cat.name||id);
-        html+='</div>';
-      });
-      html+='</div></div>';
-    });
+    var _cid=_stackCycleId(st);
+    if(!_trtLogCache.hasOwnProperty(_cid)){
+      _fetchTRTLog(st,_cid);
+      html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">Loading...</div>';
+    }else{
+      var _cachedInj=_trtLogCache[_cid];
+      var _byDate={};
+      _cachedInj.forEach(function(inj){if(!_byDate[inj.date])_byDate[inj.date]=[];_byDate[inj.date].push(inj);});
+      var _sortedDates=Object.keys(_byDate).sort(function(a,b){return b.localeCompare(a);});
+      if(!_sortedDates.length){
+        html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">No TRT injections logged during this stack.</div>';
+      }else{
+        _sortedDates.forEach(function(dateStr){
+          var dp=dateStr.split('-');var dObj=new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]));
+          html+='<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">';
+          html+='<div style="font-size:12px;color:var(--muted2);min-width:90px;flex-shrink:0;">'+fmtDate(dObj)+'</div>';
+          html+='<div style="flex:1;">';
+          _byDate[dateStr].forEach(function(inj){
+            html+='<div style="font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px;margin-bottom:2px;">';
+            html+='<div style="width:7px;height:7px;border-radius:50%;background:'+(inj.dot||'#e8a020')+';flex-shrink:0;"></div>';
+            html+=_esc(inj.compound_name||inj.compound_id);
+            html+='</div>';
+          });
+          html+='</div></div>';
+        });
+      }
+    }
   }
-  } // end _effCsLog else
   return html;
+}
+async function _fetchTRTLog(st,cycleId){
+  try{
+    var r=await fetch(AGENT_URL+'/injections?cycle_id='+encodeURIComponent(cycleId)+'&active_only=false',{headers:authHeaders()});
+    if(!r.ok){_trtLogCache[cycleId]=[];renderStackEditor();return;}
+    var all=await r.json();
+    _trtLogCache[cycleId]=(Array.isArray(all)?all:[]).filter(function(e){return e.tier==='trt'&&e.logged;});
+  }catch(e){_logErr('fetchTRTLog',e);_trtLogCache[cycleId]=[];}
+  renderStackEditor();
 }
 function setStackViewTab(t){_stackViewTab=t;renderStackEditor();}
 function setEditInnerTab(t){_collectEditInputs();_editInnerTab=t;renderStackEditor();}
@@ -1525,7 +1530,7 @@ function _genInjBatches(stack,cycleId,fromDate){
       for(var d=new Date(cStart);d<=cEnd;d=new Date(d.getTime()+86400000)){
         var daysSince=Math.floor((d-cycleStart)/86400000);
         var hit=false;
-        if(c.days&&c.days.length){hit=c.days.includes(d.getDay());}
+        if(c.id!=='nebido'&&c.days&&c.days.length){hit=c.days.includes(d.getDay());}
         else{var freqDays=c.freqUnit==='weeks'?(c.freqVal||1)*7:(c.freqVal||1);hit=freqDays>0&&daysSince%freqDays===0;}
         if(!hit)continue;
         compEntries.push({cycle_id:cycleId,date:dateKey(d),compound_id:c.id,compound_name:c.name,tier:'trt',dose:c.dose||'',unit:c.unit||'mg',dot:dot,time_of_day:null,active:true,logged:false});
