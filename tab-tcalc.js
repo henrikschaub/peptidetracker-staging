@@ -25,6 +25,9 @@ var _tcCurrentPlan    = null;
 var _tcExtraCatalog   = [];   // extra compounds fetched from /trt-catalog at runtime
 var _tcAgeMissing     = false; // true when user-settings returned but no user_age found
 var _tcBwOpen         = false; // whether the bloodwork panel is expanded
+var _tcBwEntries      = null; // null = not loaded; [] = loaded & empty; [...] = loaded
+var _tcBwLoading      = false;
+var _tcBwAddExtras    = [];   // custom extra-test rows while add sheet is open
 var _tcEditSeriesId = null;   // seriesId currently open in the Edit Series sheet
 
 // ── Frequency options ─────────────────────────────────────────────────────────
@@ -691,6 +694,145 @@ function _tcSetManualField(idx, field, val) {
 function _tcToggleBw() {
   _tcBwOpen = !_tcBwOpen;
   buildTCalc();
+}
+
+// ── Bloodwork backend functions ───────────────────────────────────────────────
+
+async function _tcFetchBwEntries() {
+  var h = (typeof authHeaders==='function') ? authHeaders() : null;
+  if (!h) { _tcBwEntries = []; _tcBwLoading = false; buildTCalc(); return; }
+  try {
+    var r = await fetch(AGENT_URL + '/bloodwork', {headers: h});
+    _tcBwEntries = r.ok ? (await r.json()) : [];
+  } catch(_e) { _tcBwEntries = []; }
+  _tcBwEntries.sort(function(a,b){ return (b.date||'') < (a.date||'') ? -1 : 1; });
+  // Sync most-recent entry into _tcp so calibration code reads correct values
+  var latest = _tcBwEntries[0];
+  if (latest) {
+    if (latest.total_t    != null) _tcp.totalT         = String(latest.total_t);
+    if (latest.shbg       != null) _tcp.shbg           = String(latest.shbg);
+    if (latest.free_t     != null) _tcp.measuredFT     = String(latest.free_t);
+    if (latest.dose_at_bw != null) _tcp.currentDoseMgWk = String(latest.dose_at_bw);
+  }
+  _tcBwLoading = false;
+  buildTCalc();
+}
+
+function _tcBwOpenAddSheet() {
+  _tcBwAddExtras = [];
+  var todayStr = new Date().toISOString().slice(0, 10);
+  var latest = (_tcBwEntries && _tcBwEntries.length) ? _tcBwEntries[0] : null;
+  var defTT   = latest && latest.total_t    != null ? String(latest.total_t)    : '';
+  var defSHBG = latest && latest.shbg       != null ? String(latest.shbg)       : '';
+  var defFT   = latest && latest.free_t     != null ? String(latest.free_t)     : '';
+  var defDose = latest && latest.dose_at_bw != null ? String(latest.dose_at_bw) : '';
+  var iSty = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--text);font-size:15px;font-family:inherit;outline:none;width:100%;box-sizing:border-box';
+  var lSty = 'font-size:11px;font-weight:700;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;display:block';
+  var ol = document.createElement('div');
+  ol.id = 'tc-bw-add-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  ol.onclick = function(e){ if(e.target===ol) _tcBwCloseAddSheet(); };
+  ol.innerHTML =
+    '<div id="tc-bw-add-sheet" style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 20px 36px;max-height:85vh;overflow-y:auto">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">' +
+    '<div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--text)">ADD BLOOD TEST</div>' +
+    '<button onclick="_tcBwCloseAddSheet()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button>' +
+    '</div>' +
+    '<div style="margin-bottom:14px"><label style="'+lSty+'">DATE</label>' +
+    '<input id="tc-bw-date" type="date" value="'+_esc(todayStr)+'" style="'+iSty+'"></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
+    '<div><label style="'+lSty+'">TOTAL T (nmol/L)</label>' +
+    '<input id="tc-bw-tt" type="number" min="0" max="200" step="0.1" placeholder="e.g. 16.2" value="'+_esc(defTT)+'" style="'+iSty+'"></div>' +
+    '<div><label style="'+lSty+'">SHBG (nmol/L)</label>' +
+    '<input id="tc-bw-shbg" type="number" min="0" max="300" step="1" placeholder="e.g. 45" value="'+_esc(defSHBG)+'" style="'+iSty+'"></div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
+    '<div><label style="'+lSty+'">FREE T (pmol/L)</label>' +
+    '<input id="tc-bw-ft" type="number" min="0" max="10000" step="1" placeholder="e.g. 217" value="'+_esc(defFT)+'" style="'+iSty+'"></div>' +
+    '<div><label style="'+lSty+'">DOSE AT BW (mg/wk)</label>' +
+    '<input id="tc-bw-dose" type="number" min="0" max="2000" step="10" placeholder="e.g. 150" value="'+_esc(defDose)+'" style="'+iSty+'"></div>' +
+    '</div>' +
+    '<div id="tc-bw-extras-container" style="margin-bottom:8px"></div>' +
+    '<button onclick="_tcBwAddExtraRow()" style="width:100%;background:none;border:1px dashed var(--border);border-radius:8px;color:var(--muted2);font-size:12px;font-weight:700;letter-spacing:0.5px;cursor:pointer;padding:10px;font-family:inherit;margin-bottom:14px">+ ADD TEST</button>' +
+    '<button onclick="_tcBwConfirmAdd()" style="width:100%;background:linear-gradient(135deg,#cc8844,#aa6622);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;letter-spacing:0.5px;padding:14px;cursor:pointer;font-family:inherit">SAVE</button>' +
+    '</div>';
+  document.body.appendChild(ol);
+}
+
+function _tcBwCloseAddSheet() {
+  var ol = document.getElementById('tc-bw-add-overlay');
+  if (ol) ol.remove();
+  _tcBwAddExtras = [];
+}
+
+function _tcBwAddExtraRow() {
+  _tcBwAddExtras.push({name: '', value: '', unit: ''});
+  _tcBwRenderExtras();
+}
+
+function _tcBwRenderExtras() {
+  var container = document.getElementById('tc-bw-extras-container');
+  if (!container) return;
+  var iSty = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px;font-family:inherit;outline:none;box-sizing:border-box';
+  var html = '';
+  _tcBwAddExtras.forEach(function(row, i) {
+    html +=
+      '<div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:8px;align-items:center">' +
+      '<input placeholder="Test name" value="'+_esc(row.name||'')+'" oninput="_tcBwAddExtras['+i+'].name=this.value" style="'+iSty+'">' +
+      '<input placeholder="Value" value="'+_esc(row.value||'')+'" oninput="_tcBwAddExtras['+i+'].value=this.value" style="'+iSty+'">' +
+      '<input placeholder="Unit" value="'+_esc(row.unit||'')+'" oninput="_tcBwAddExtras['+i+'].unit=this.value" style="'+iSty+'">' +
+      '<button onclick="_tcBwRemoveExtra('+i+')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:16px;cursor:pointer;padding:6px 10px;line-height:1">×</button>' +
+      '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function _tcBwRemoveExtra(i) {
+  _tcBwAddExtras.splice(i, 1);
+  _tcBwRenderExtras();
+}
+
+async function _tcBwConfirmAdd() {
+  var dateEl = document.getElementById('tc-bw-date');
+  var ttEl   = document.getElementById('tc-bw-tt');
+  var shbgEl = document.getElementById('tc-bw-shbg');
+  var ftEl   = document.getElementById('tc-bw-ft');
+  var doseEl = document.getElementById('tc-bw-dose');
+  var date   = dateEl ? dateEl.value : '';
+  if (!date) { alert('Date is required.'); return; }
+  var entry = {
+    date:       date,
+    total_t:    ttEl   && ttEl.value   ? parseFloat(ttEl.value)   : null,
+    shbg:       shbgEl && shbgEl.value ? parseFloat(shbgEl.value) : null,
+    free_t:     ftEl   && ftEl.value   ? parseFloat(ftEl.value)   : null,
+    dose_at_bw: doseEl && doseEl.value ? parseFloat(doseEl.value) : null,
+    extra:      _tcBwAddExtras.filter(function(r){ return r.name; })
+  };
+  var h = (typeof authHeaders==='function') ? authHeaders() : null;
+  if (!h) { alert('Sign in required.'); return; }
+  try {
+    var r = await fetch(AGENT_URL + '/bloodwork', {
+      method: 'POST',
+      headers: Object.assign({'Content-Type': 'application/json'}, h),
+      body: JSON.stringify(entry)
+    });
+    if (!r.ok) { alert('Failed to save.'); return; }
+  } catch(_e) { alert('Network error.'); return; }
+  _tcBwCloseAddSheet();
+  _tcBwEntries = null;
+  _tcBwLoading = true;
+  await _tcFetchBwEntries();
+}
+
+async function _tcBwDeleteEntry(id) {
+  var h = (typeof authHeaders==='function') ? authHeaders() : null;
+  if (!h) return;
+  try {
+    await fetch(AGENT_URL + '/bloodwork/' + encodeURIComponent(id), {method: 'DELETE', headers: h});
+  } catch(_e) {}
+  _tcBwEntries = null;
+  _tcBwLoading = true;
+  await _tcFetchBwEntries();
 }
 
 // Age-stratified free T reference midpoints (pmol/L) for when no bloodwork is entered.
@@ -1405,6 +1547,11 @@ function buildTCalc() {
     _tcLoadProfile();
   }
 
+  if (_tcBwEntries === null && !_tcBwLoading) {
+    _tcBwLoading = true;
+    _tcFetchBwEntries();
+  }
+
   var iSty = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--text);font-size:16px;font-family:inherit;outline:none;width:100%;box-sizing:border-box';
   var lSty = 'font-size:11px;font-weight:700;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;display:block';
 
@@ -1533,12 +1680,13 @@ function buildTCalc() {
   }
   html += '</div></div>';
 
-  // ── 3. BLOODWORK (collapsible) ────────────────────────────────────────────────
-  var bwSummary = mftNum > 0
-    ? 'Calibrated · ' + Math.round(mftNum) + ' pmol/L Free T'
-    : (parseFloat(_tcp.totalT) > 0
-        ? 'Total T ' + _tcp.totalT + ' nmol/L · no Free T'
-        : 'Not calibrated — tap to add');
+  // ── 3. BLOODWORK (collapsible list) ──────────────────────────────────────────
+  var _latestBw = (_tcBwEntries && _tcBwEntries.length) ? _tcBwEntries[0] : null;
+  var bwSummary = _latestBw
+    ? (_latestBw.free_t != null
+        ? 'Calibrated · ' + Math.round(_latestBw.free_t) + ' pmol/L Free T'
+        : (_latestBw.total_t != null ? 'Total T ' + _latestBw.total_t + ' nmol/L' : _latestBw.date))
+    : (_tcBwEntries === null ? 'Loading…' : 'No entries — tap to add');
 
   html += '<div class="card">';
   html += '<div class="card-header" onclick="_tcToggleBw()" style="cursor:pointer;user-select:none">';
@@ -1553,9 +1701,9 @@ function buildTCalc() {
   html += '</div></div>';
 
   if (_tcBwOpen) {
-    html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:16px">';
+    html += '<div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">';
 
-    // Age display (prefilled from /user-settings via _tcp.birthYear)
+    // Age display
     if (_tcp.birthYear) {
       var _bwAge = new Date().getFullYear() - parseInt(_tcp.birthYear);
       html += '<div style="background:var(--surface2);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">';
@@ -1566,60 +1714,88 @@ function buildTCalc() {
       html += '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:#f59e0b;">⚠ Age not set — go to Body Comp → Age to enable age-stratified reference ranges.</div>';
     }
 
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
-    html += '<div><label style="' + lSty + '">Total T (nmol/L)</label>';
-    html += '<input type="number" min="0" max="200" step="0.1" value="' + _esc(_tcp.totalT) + '" placeholder="e.g. 16.2" oninput="_tcp.totalT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
-    html += '<div><label style="' + lSty + '">SHBG (nmol/L)</label>';
-    html += '<input type="number" min="0" max="300" step="1" value="' + _esc(_tcp.shbg) + '" placeholder="e.g. 45" oninput="_tcp.shbg=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
+    // ADD ENTRY button
+    html += '<div style="display:flex;justify-content:flex-end">';
+    html += '<button onclick="event.stopPropagation();_tcBwOpenAddSheet()" style="background:linear-gradient(135deg,#cc8844,#aa6622);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;letter-spacing:0.8px;cursor:pointer;padding:7px 14px;font-family:inherit">+ ADD ENTRY</button>';
     html += '</div>';
 
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
-    html += '<div><label style="' + lSty + '">Free T measured (pmol/L)</label>';
-    html += '<input type="number" min="0" max="10000" step="1" value="' + _esc(_tcp.measuredFT) + '" placeholder="e.g. 223" oninput="_tcp.measuredFT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
-    html += '<div><label style="' + lSty + '">Dose at bloodwork (mg/wk)</label>';
-    html += '<input type="number" min="0" max="2000" step="10" value="' + _esc(_tcp.currentDoseMgWk) + '" placeholder="e.g. 150" oninput="_tcp.currentDoseMgWk=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
-    html += '</div>';
+    // Entry list
+    if (_tcBwEntries === null) {
+      html += '<div style="text-align:center;padding:16px 0;color:var(--muted2);font-size:13px">Loading…</div>';
+    } else if (_tcBwEntries.length === 0) {
+      html += '<div style="text-align:center;padding:16px 0;color:var(--muted2);font-size:13px">No blood test entries yet.<br><span style="font-size:12px;opacity:0.6">Tap + ADD ENTRY to log your first result.</span></div>';
+    } else {
+      var _fmtBwDate = function(iso) {
+        if (!iso) return '';
+        var p = iso.split('-');
+        var M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return parseInt(p[2],10) + ' ' + M[parseInt(p[1],10)-1] + ' ' + p[0];
+      };
+      _tcBwEntries.forEach(function(entry, idx) {
+        var isLatest = idx === 0;
+        var parts = [];
+        if (entry.total_t    != null) parts.push('Total T ' + entry.total_t + ' nmol/L');
+        if (entry.shbg       != null) parts.push('SHBG ' + entry.shbg + ' nmol/L');
+        if (entry.free_t     != null) parts.push('Free T ' + entry.free_t + ' pmol/L');
+        if (entry.dose_at_bw != null) parts.push(entry.dose_at_bw + ' mg/wk');
+        if (entry.extra && entry.extra.length) parts.push('+' + entry.extra.length + ' more');
+        html += '<div style="background:var(--surface2);border:1px solid ' + (isLatest ? '#cc884455' : 'var(--border)') + ';border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px">';
+        html += '<div style="min-width:0;flex:1">';
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:' + (parts.length ? '4' : '0') + 'px">';
+        html += '<span style="font-size:14px;font-weight:700;color:var(--text)">' + _esc(_fmtBwDate(entry.date)) + '</span>';
+        if (isLatest) html += '<span style="font-size:9px;font-weight:800;letter-spacing:0.8px;background:#cc884433;color:#cc8844;border-radius:4px;padding:2px 6px">LATEST</span>';
+        html += '</div>';
+        if (parts.length) html += '<div style="font-size:12px;color:var(--muted2);line-height:1.6">' + _esc(parts.join(' · ')) + '</div>';
+        html += '</div>';
+        html += '<button onclick="event.stopPropagation();_tcBwDeleteEntry(\'' + _esc(entry.id) + '\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:18px;line-height:1;cursor:pointer;padding:4px 9px;flex-shrink:0">×</button>';
+        html += '</div>';
+      });
+    }
 
+    // Target free T — user preference, stays editable
+    html += '<div style="border-top:1px solid var(--border);padding-top:12px">';
     html += '<div><label style="' + lSty + '">Target free T (pmol/L)</label>';
     html += '<input type="number" min="0" max="10000" step="10" value="' + _esc(_tcp.targetFT) + '" placeholder="225–675 optimal · 600–1000 high-normal TRT" oninput="_tcp.targetFT=this.value;_tcSaveProfile()" onchange="buildTCalc()" style="' + iSty + '"></div>';
+    html += '</div>';
 
-    // Calculated outputs from entered values
-    var _bwTT    = parseFloat(_tcp.totalT)          || 0;
-    var _bwSHBG  = parseFloat(_tcp.shbg)            || 0;
-    var _bwMFT   = parseFloat(_tcp.measuredFT)      || 0;
-    var _bwDose  = parseFloat(_tcp.currentDoseMgWk) || 0;
-    var _bwTgt   = parseFloat(_tcp.targetFT)        || 0;
-    var _bwVerm  = (_bwTT > 0 && _bwSHBG > 0) ? _tcVermeulenFT(_bwTT, _bwSHBG) : null;
-    var _bwFrac  = _bwMFT > 0 && _bwTT > 0 ? _bwMFT / (_bwTT * 1000)
-                 : (_bwVerm !== null && _bwTT > 0 ? _bwVerm / (_bwTT * 1000) : null);
-    var _bwTgtTT = (_bwTgt > 0 && _bwFrac > 0) ? (_bwTgt / _bwFrac / 1000) : null;
-    var _bwMgNm  = (_bwDose > 0 && _bwTT > 0) ? (_bwTT / _bwDose) : null;
-
-    if (_bwVerm !== null || _bwTgtTT !== null) {
-      html += '<div style="background:var(--surface2);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:8px">';
-      if (_bwVerm !== null) {
-        html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
-        html += '<span style="font-size:13px;color:var(--muted)">Vermeulen est. free T</span>';
-        html += '<span style="font-size:15px;font-weight:700;color:var(--text)">' + Math.round(_bwVerm) + ' pmol/L</span></div>';
+    // Calculated outputs from latest entry
+    var _bwTgt = parseFloat(_tcp.targetFT) || 0;
+    if (_latestBw) {
+      var _bwTT   = parseFloat(_latestBw.total_t)   || 0;
+      var _bwSHBG = parseFloat(_latestBw.shbg)       || 0;
+      var _bwMFT  = parseFloat(_latestBw.free_t)     || 0;
+      var _bwDose = parseFloat(_latestBw.dose_at_bw) || 0;
+      var _bwVerm = (_bwTT > 0 && _bwSHBG > 0) ? _tcVermeulenFT(_bwTT, _bwSHBG) : null;
+      var _bwFrac = _bwMFT > 0 && _bwTT > 0 ? _bwMFT / (_bwTT * 1000)
+                  : (_bwVerm !== null && _bwTT > 0 ? _bwVerm / (_bwTT * 1000) : null);
+      var _bwTgtTT = (_bwTgt > 0 && _bwFrac > 0) ? (_bwTgt / _bwFrac / 1000) : null;
+      var _bwMgNm  = (_bwDose > 0 && _bwTT > 0) ? (_bwTT / _bwDose) : null;
+      if (_bwVerm !== null || _bwTgtTT !== null) {
+        html += '<div style="background:var(--surface2);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:8px">';
+        if (_bwVerm !== null) {
+          html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
+          html += '<span style="font-size:13px;color:var(--muted)">Vermeulen est. free T</span>';
+          html += '<span style="font-size:15px;font-weight:700;color:var(--text)">' + Math.round(_bwVerm) + ' pmol/L</span></div>';
+        }
+        if (_bwFrac !== null) {
+          html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
+          html += '<span style="font-size:13px;color:var(--muted)">Free T fraction</span>';
+          html += '<span style="font-size:15px;font-weight:700;color:var(--text)">' + (_bwFrac * 100).toFixed(2) + '%</span></div>';
+        }
+        if (_bwTgtTT !== null) {
+          html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
+          html += '<span style="font-size:13px;color:var(--muted)">Total T needed</span>';
+          html += '<span style="font-size:15px;font-weight:700;color:var(--accent)">' + _bwTgtTT.toFixed(1) + ' nmol/L</span></div>';
+        }
+        if (_bwMgNm !== null && _bwTgtTT !== null) {
+          html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
+          html += '<span style="font-size:13px;color:var(--muted)">Weekly dose needed</span>';
+          html += '<span style="font-size:15px;font-weight:700;color:var(--accent)">' + Math.round(_bwTgtTT / _bwMgNm) + ' mg/wk</span></div>';
+        }
+        html += '</div>';
       }
-      if (_bwFrac !== null) {
-        html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
-        html += '<span style="font-size:13px;color:var(--muted)">Free T fraction</span>';
-        html += '<span style="font-size:15px;font-weight:700;color:var(--text)">' + (_bwFrac * 100).toFixed(2) + '%</span></div>';
-      }
-      if (_bwTgtTT !== null) {
-        html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
-        html += '<span style="font-size:13px;color:var(--muted)">Total T needed</span>';
-        html += '<span style="font-size:15px;font-weight:700;color:var(--accent)">' + _bwTgtTT.toFixed(1) + ' nmol/L</span></div>';
-      }
-      if (_bwMgNm !== null && _bwTgtTT !== null) {
-        html += '<div style="display:flex;justify-content:space-between;align-items:baseline">';
-        html += '<span style="font-size:13px;color:var(--muted)">Weekly dose needed</span>';
-        html += '<span style="font-size:15px;font-weight:700;color:var(--accent)">' + Math.round(_bwTgtTT / _bwMgNm) + ' mg/wk</span></div>';
-      }
-      html += '</div>';
-    } else {
-      html += '<div style="font-size:13px;color:var(--muted2);line-height:1.5">Enter bloodwork values to calibrate the graph and enable dose calculations.<br>Optimal male free T: 225–675 pmol/L · High-normal TRT: 600–1000 pmol/L</div>';
+    } else if (_tcBwEntries && _tcBwEntries.length === 0) {
+      html += '<div style="font-size:13px;color:var(--muted2);line-height:1.5">Add blood test entries to calibrate the plasma curve and enable dose calculations.<br>Optimal male free T: 225–675 pmol/L · High-normal TRT: 600–1000 pmol/L</div>';
     }
 
     html += '</div>'; // close padding
