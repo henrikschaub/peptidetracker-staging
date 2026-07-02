@@ -252,6 +252,8 @@ const BC_KEY='proto-bodycomp-v2';
 let weights=[];
 let _viewDate=null;
 let _syncPending=true;
+var _injectionsCache={};
+var _injCacheReady=false;
 let _userProtocol=null;
 let _protocolLoaded=false;
 let _wiz={step:0,goals:[],peptides:[],trt:{enabled:false,compounds:[]},editMode:false};
@@ -586,8 +588,15 @@ async function loadUserStacks(){
   updateWEEKLY();
   _stacksLoaded=true;
   buildStackStore();
+  // Fetch injection cache; auto-generate if backend has no entries for active stacks
+  await refreshInjectionsCache();
+  if(!Object.keys(_injectionsCache).length&&_activeStackIndices.some(function(si){return _userStacks[si]&&_userStacks[si].cycle_start;})){
+    await generateInjectionsForActiveStacks(null);
+    await refreshInjectionsCache();
+  }
   buildWeekStrip();
   buildToday();
+  buildSchedule();
   _scanAndShowStartupConflicts();
 }
 // ── Update WEEKLY from active stack ──────────────────────────────────────────
@@ -622,6 +631,33 @@ async function saveStacksToBackend(){
   }
   // Backend unavailable but data is safe in localStorage
   return {ok:true,synced:false,code:lastCode};
+}
+// ── Injection cache ───────────────────────────────────────────────────────────
+async function fetchInjectionsForRange(dateFrom,dateTo){
+  try{
+    var r=await fetch(AGENT_URL+'/injections?date_from='+dateFrom+'&date_to='+dateTo+'&active_only=false',{headers:authHeaders()});
+    if(!r.ok){_logHttp('fetchInj',r.status,'/injections');return[];}
+    var _d=await r.json();return Array.isArray(_d)?_d:[];
+  }catch(e){_logErr('fetchInj',e);return[];}
+}
+async function refreshInjectionsCache(){
+  var activeCycleIds=_activeStackIndices.reduce(function(set,si){
+    var st=_userStacks[si];
+    if(st&&st.cycle_start)set.add(_stackCycleId(st));
+    return set;
+  },new Set());
+  if(!activeCycleIds.size){_injectionsCache={};_injCacheReady=true;return;}
+  var today0=new Date(NOW);today0.setHours(0,0,0,0);
+  var from=new Date(today0.getTime()-14*86400000);
+  var to=new Date(today0.getTime()+90*86400000);
+  var entries=await fetchInjectionsForRange(dateKey(from),dateKey(to));
+  _injectionsCache={};
+  entries.forEach(function(e){
+    if(!activeCycleIds.has(e.cycle_id))return;
+    if(!_injectionsCache[e.date])_injectionsCache[e.date]=[];
+    _injectionsCache[e.date].push(e);
+  });
+  _injCacheReady=true;
 }
 // ── Stack conflict detection & safety modal ──────────────────────────────────
 var _pendingConflictData=null;

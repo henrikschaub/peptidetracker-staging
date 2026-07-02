@@ -90,8 +90,11 @@ async function wizSave(){
   _userStacks=_userStacks.slice(0,4);
   var res=await saveStacksToBackend();
   updateWEEKLY();
+  var _savedStack=_wiz.stackIndex>=0?_userStacks[_wiz.stackIndex]:null;
+  if(_savedStack&&_savedStack.cycle_start){var _today0=new Date(NOW);_today0.setHours(0,0,0,0);await generateAndPushInjections(_savedStack,_today0);await refreshInjectionsCache();}
   buildWeekStrip();
   buildToday();
+  buildSchedule();
   buildStackStore();
   closeWizard();
   switchTab('stacks',document.getElementById('tab-btn-stacks'));
@@ -360,8 +363,10 @@ async function saveEditBuf(){
     if(amChg||pmChg)delete p.dose_phases;
   });
   _userStacks[_editIdx]=_editBuf;
-  updateWEEKLY();buildWeekStrip();buildToday();
+  updateWEEKLY();
   await saveStacksToBackend();
+  if(_editBuf&&_editBuf.cycle_start){var _editToday0=new Date(NOW);_editToday0.setHours(0,0,0,0);await generateAndPushInjections(_editBuf,_editToday0);await refreshInjectionsCache();}
+  buildWeekStrip();buildToday();buildSchedule();
   buildStackStore();
   buildTimeline();
 }
@@ -1450,4 +1455,127 @@ function showWizard(editModeUnused){
   }
   setTimeout(function(){_wizOverlay.classList.add('open');},10);
   wizRender();
+}
+
+// ── Injection generation ──────────────────────────────────────────────────────
+
+function _stackCycleId(stack){
+  var name=(stack.name||'stack').replace(/\s+/g,'_').toLowerCase().replace(/[^a-z0-9_]/g,'');
+  return name+'_'+(stack.cycle_start||'nostart');
+}
+
+function _effectiveDoseAt(p,cycleStart,targetDate){
+  if(!p||!p.dose_phases||!p.dose_phases.length||!cycleStart)return null;
+  var sd=parseLocalDate(cycleStart);
+  var wk=Math.floor((targetDate-sd)/604800000);
+  if(wk<0)wk=0;
+  var phases=p.dose_phases.slice().sort(function(a,b){return a.w-b.w;});
+  var cur=phases[0];
+  for(var i=1;i<phases.length;i++){if(wk>=phases[i].w)cur=phases[i];}
+  return cur?{dose:cur.d,unit:cur.u}:null;
+}
+
+function _genInjBatches(stack,cycleId,fromDate){
+  if(!stack||!stack.cycle_start)return[];
+  var cycleStart=parseLocalDate(stack.cycle_start);
+  var cycleEnd;
+  if(stack.cycle_length&&stack.cycle_length>0){cycleEnd=new Date(cycleStart.getTime()+stack.cycle_length*7*86400000);}
+  else{cycleEnd=new Date(NOW.getTime()+365*86400000);}
+  var genStart=fromDate?new Date(Math.max(cycleStart.getTime(),fromDate.getTime())):cycleStart;
+  var batches=[];
+
+  // Peptides
+  (stack.peptides||[]).forEach(function(p){
+    if(p.active===false)return;
+    var days=p.days||[0,1,2,3,4,5,6];
+    var times=p.times||['AM'];
+    var dot=p.dot||'#888';
+    var pStart=p.start_date?parseLocalDate(p.start_date):cycleStart;
+    var pEnd=p.end_date?parseLocalDate(p.end_date):null;
+    var compEntries=[];
+    for(var d=new Date(genStart);d<=cycleEnd;d=new Date(d.getTime()+86400000)){
+      if(!days.includes(d.getDay()))continue;
+      if(d<pStart)continue;
+      if(pEnd&&d>pEnd)continue;
+      var eff=_effectiveDoseAt(p,stack.cycle_start,d);
+      var dk=dateKey(d);
+      if(times.includes('AM')&&times.includes('PM')){
+        var dAm=eff?eff.dose:(p.dose_am||p.dose||'');var uAm=eff?eff.unit:(p.unit_am||'');
+        var dPm=eff?eff.dose:(p.dose_pm||p.dose||'');var uPm=eff?eff.unit:(p.unit_pm||'');
+        if(dAm)compEntries.push({cycle_id:cycleId,date:dk,compound_id:p.id,compound_name:p.name,tier:'peptide',dose:dAm,unit:uAm,dot:dot,time_of_day:'AM',active:true,logged:false});
+        if(dPm)compEntries.push({cycle_id:cycleId,date:dk,compound_id:p.id,compound_name:p.name,tier:'peptide',dose:dPm,unit:uPm,dot:dot,time_of_day:'PM',active:true,logged:false});
+      }else{
+        var t=times[0]||'AM';
+        var dose=eff?eff.dose:(t==='AM'?(p.dose_am||p.dose||''):(p.dose_pm||p.dose||''));
+        var unit=eff?eff.unit:(t==='AM'?(p.unit_am||''):(p.unit_pm||''));
+        if(dose)compEntries.push({cycle_id:cycleId,date:dk,compound_id:p.id,compound_name:p.name,tier:'peptide',dose:dose,unit:unit,dot:dot,time_of_day:t,active:true,logged:false});
+      }
+    }
+    if(compEntries.length)batches.push({compound_id:p.id,from_date:dateKey(genStart),entries:compEntries});
+  });
+
+  // TRT compounds
+  if(stack.trt&&stack.trt.enabled){
+    (stack.trt.compounds||[]).forEach(function(c){
+      var cat=(typeof TRT_CAT!=='undefined')?TRT_CAT.find(function(t){return t.id===c.id;}):null;
+      var dot=cat?cat.dot:'#e8a020';
+      var cStart=c.start_date?new Date(Math.max(parseLocalDate(c.start_date).getTime(),genStart.getTime())):new Date(genStart);
+      var cEnd=c.end_date?new Date(Math.min(parseLocalDate(c.end_date).getTime(),cycleEnd.getTime())):new Date(cycleEnd);
+      var compEntries=[];
+      for(var d=new Date(cStart);d<=cEnd;d=new Date(d.getTime()+86400000)){
+        var daysSince=Math.floor((d-cycleStart)/86400000);
+        var hit=false;
+        if(c.days&&c.days.length){hit=c.days.includes(d.getDay());}
+        else{var freqDays=c.freqUnit==='weeks'?(c.freqVal||1)*7:(c.freqVal||1);hit=freqDays>0&&daysSince%freqDays===0;}
+        if(!hit)continue;
+        compEntries.push({cycle_id:cycleId,date:dateKey(d),compound_id:c.id,compound_name:c.name,tier:'trt',dose:c.dose||'',unit:c.unit||'mg',dot:dot,time_of_day:null,active:true,logged:false});
+      }
+      if(compEntries.length)batches.push({compound_id:c.id,from_date:dateKey(cStart),entries:compEntries});
+    });
+  }
+
+  // Enhanced compounds
+  if(stack.enhanced&&stack.enhanced.enabled){
+    (stack.enhanced.compounds||[]).forEach(function(c){
+      var dot=c.dot||'#a855f7';
+      var eCat=(typeof ENHANCEMENT_COMPOUNDS!=='undefined')?(ENHANCEMENT_COMPOUNDS||[]).find(function(ec){return ec.id===c.id;}):null;
+      var isAmPm=c.amPm||(eCat&&eCat.amPm);
+      var baseUnit=c.unit?(c.unit.split('/')[0]):'';
+      var compEntries=[];
+      for(var d=new Date(genStart);d<=cycleEnd;d=new Date(d.getTime()+86400000)){
+        if(c.days&&c.days.length&&!c.days.includes(d.getDay()))continue;
+        var dk=dateKey(d);
+        if(isAmPm){
+          if(c.dose_am&&parseFloat(c.dose_am)!==0)compEntries.push({cycle_id:cycleId,date:dk,compound_id:c.id,compound_name:c.name,tier:'enhanced',dose:c.dose_am,unit:baseUnit,dot:dot,time_of_day:'AM',active:true,logged:false});
+          if(c.dose_pm&&parseFloat(c.dose_pm)!==0)compEntries.push({cycle_id:cycleId,date:dk,compound_id:c.id,compound_name:c.name,tier:'enhanced',dose:c.dose_pm,unit:baseUnit,dot:dot,time_of_day:'PM',active:true,logged:false});
+        }else{
+          compEntries.push({cycle_id:cycleId,date:dk,compound_id:c.id,compound_name:c.name,tier:'enhanced',dose:c.dose||'',unit:c.unit||'',dot:dot,time_of_day:null,active:true,logged:false});
+        }
+      }
+      if(compEntries.length)batches.push({compound_id:c.id,from_date:dateKey(genStart),entries:compEntries});
+    });
+  }
+
+  return batches;
+}
+
+async function generateAndPushInjections(stack,fromDate){
+  if(!stack||!stack.cycle_start)return;
+  var cycleId=_stackCycleId(stack);
+  var batches=_genInjBatches(stack,cycleId,fromDate);
+  for(var i=0;i<batches.length;i++){
+    var b=batches[i];
+    try{
+      var r=await fetch(AGENT_URL+'/injections/batch',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({cycle_id:cycleId,compound_id:b.compound_id,from_date:b.from_date,entries:b.entries})});
+      if(!r.ok)_logHttp('genInj',r.status,'/injections/batch');
+    }catch(e){_logErr('genInj',e);}
+  }
+}
+
+async function generateInjectionsForActiveStacks(fromDate){
+  for(var i=0;i<_activeStackIndices.length;i++){
+    var si=_activeStackIndices[i];
+    var st=_userStacks[si];
+    if(st&&st.cycle_start)await generateAndPushInjections(st,fromDate);
+  }
 }
