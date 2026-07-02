@@ -482,7 +482,7 @@ function buildWeeklyFromProtocol(proto){
   proto.peptides.forEach(function(p){
     if(p.active===false)return;
     var _trtEntry=(typeof TRT_CAT!=='undefined')?TRT_CAT.find(function(c){return c.id===p.id;}):null;
-    var days=p.days||(_trtEntry&&_trtEntry.defaultDays?_trtEntry.defaultDays.slice():[0,1,2,3,4,5,6]);
+    var days=p.days||(_trtEntry?(_trtEntry.defaultDays?_trtEntry.defaultDays.slice():[1]):[0,1,2,3,4,5,6]);
     var times=p.times||['AM'];
     var dot=p.dot||'#888';
     var startDate=p.start_date?parseLocalDate(p.start_date):null;
