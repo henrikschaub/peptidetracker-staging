@@ -588,10 +588,15 @@ async function loadUserStacks(){
   updateWEEKLY();
   _stacksLoaded=true;
   buildStackStore();
-  // Fetch injection cache; auto-generate if backend has no entries for active stacks
+  // Fetch injection cache; regenerate if backend has no entries, or if this is the
+  // first load since the Nebido/orphan fix (v1.384) to replace stale daily entries
   await refreshInjectionsCache();
-  if(!Object.keys(_injectionsCache).length&&_activeStackIndices.some(function(si){return _userStacks[si]&&_userStacks[si].cycle_start;})){
-    await generateInjectionsForActiveStacks(null);
+  var _hasActiveStacks=_activeStackIndices.some(function(si){return _userStacks[si]&&_userStacks[si].cycle_start;});
+  var _injRegenDone=getData('proto-inj-regen','');
+  if(_hasActiveStacks&&(_injRegenDone!=='1.384'||!Object.keys(_injectionsCache).length)){
+    var _regenFrom=new Date(NOW);_regenFrom.setHours(0,0,0,0);
+    await generateInjectionsForActiveStacks(_regenFrom);
+    setData('proto-inj-regen','1.384');
     await refreshInjectionsCache();
   }
   buildWeekStrip();
