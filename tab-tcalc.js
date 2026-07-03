@@ -1134,8 +1134,14 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     _anchorDay = Math.round((new Date(_bwAnchorDate + 'T12:00:00') - firstDate) / 86400000);
     _anchorCutoffDate = _bwAnchorDate;
   } else {
+    // Anchor at "today" when it falls within the injection span — the measured level is a
+    // current, mid-cycle waypoint.  When "today" is OUTSIDE the span (a fully washed-out
+    // all-past log, or an all-future plan) anchor at day 0 instead: total[0] is immune to
+    // every later injection (PkConc(dt=0)=0), so calFT cannot move and the peak can only
+    // rise as injections are added.  Anchoring in the washout tail was the trap — its
+    // value climbs with the accumulating depot, which shrank calFT and dropped the peak.
     var _nowDayA = Math.round((Date.now() - firstDate.getTime()) / 86400000);
-    _anchorDay = Math.max(0, Math.min(totalDays, _nowDayA));
+    _anchorDay = (_nowDayA >= 0 && _nowDayA <= _logDays) ? _nowDayA : 0;
     var _adD = new Date(firstDate.getTime() + _anchorDay * 86400000);
     _anchorCutoffDate = _adD.getFullYear() + '-' + String(_adD.getMonth() + 1).padStart(2, '0') + '-' + String(_adD.getDate()).padStart(2, '0');
   }

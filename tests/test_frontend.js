@@ -3664,6 +3664,34 @@ if (typeof G._tcDrawManualChart === 'function') {
     );
   }
 
+  // All-past edge case: a fully washed-out cycle logged entirely in the past (today falls
+  // outside the injection span).  Appending more past injections must still not lower the
+  // peak — the anchor falls back to day 0, whose value is immune to every later injection.
+  function _nbPastSeries(n){
+    var a = [];
+    var _start = new Date(_nbBase.getTime() - 200*86400000);
+    for (var i=0;i<n;i++){ var d=new Date(_start.getTime()+i*2*86400000); a.push({compId:'nebido', doseMg:'102', date:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}); }
+    return a;
+  }
+  var _nbPastThrew = false, _nbP1 = null, _nbP2 = null;
+  try {
+    _nbCalFT = null; _nbFillNums = []; G._tcDrawManualChart('tc-manual-chart', _nbPastSeries(10)); _nbP1 = {calFT:_nbCalFT, peak:Math.max.apply(null,_nbFillNums.concat([0]))};
+    _nbCalFT = null; _nbFillNums = []; G._tcDrawManualChart('tc-manual-chart', _nbPastSeries(20)); _nbP2 = {calFT:_nbCalFT, peak:Math.max.apply(null,_nbFillNums.concat([0]))};
+  } catch(e) { _nbPastThrew = true; console.error('  no-bloodwork all-past test threw:', e.message); }
+  check('no-bloodwork anchor (all-past): no crash', !_nbPastThrew);
+  if (!_nbPastThrew && _nbP1 && _nbP2 && _nbP1.calFT != null && _nbP2.calFT != null) {
+    check(
+      'no-bloodwork anchor (all-past): calFT must not change when more past injections are appended',
+      Math.abs(_nbP2.calFT - _nbP1.calFT) < 1e-9,
+      'short calFT='+_nbP1.calFT.toFixed(8)+' extended calFT='+_nbP2.calFT.toFixed(8)
+    );
+    check(
+      'no-bloodwork anchor (all-past): peak must not drop when more past injections are appended',
+      _nbP2.peak >= _nbP1.peak,
+      'short peak='+_nbP1.peak+' extended peak='+_nbP2.peak
+    );
+  }
+
   G._tcp.measuredFT         = _nbSavedFT;
   G._tcp.currentDoseMgWk    = _nbSavedDose;
   G._tcBwEntries            = _nbSavedBwE;
