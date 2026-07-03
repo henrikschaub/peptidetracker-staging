@@ -668,6 +668,34 @@ function _tcCloseEditSeriesSheet() {
   var ol=document.getElementById('tc-edit-series-overlay');if(ol)ol.remove();_tcEditSeriesId=null;
 }
 
+function _tcShowSeriesDetail(sid) {
+  if (!_tcp || !_tcp.manualLog) return;
+  var entries = _tcp.manualLog.filter(function(e){ return e.seriesId === sid; }).sort(function(a,b){ return (a.date||'') < (b.date||'') ? -1 : (a.date||'') > (b.date||'') ? 1 : 0; });
+  if (!entries.length) return;
+  var mcd = _tcCompInfo(entries[0].compId || '');
+  var fmtD = function(iso){ if(!iso)return''; var p=iso.split('-'); var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return parseInt(p[2],10)+' '+M[parseInt(p[1],10)-1]; };
+  var lSty = 'font-size:11px;font-weight:700;letter-spacing:0.8px;color:var(--muted);text-transform:uppercase';
+  var listHtml = entries.map(function(e, i){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">' +
+      '<div style="'+lSty+'">INJ ' + (i+1) + '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">' + fmtD(e.date||'') + '</div>' +
+      '<div style="font-size:13px;font-weight:600;color:#6688cc">' + _esc(String(e.doseMg||'')) + ' mg</div>' +
+      '</div>';
+  }).join('');
+  var ol = document.createElement('div');
+  ol.id = 'tc-series-detail-overlay';
+  ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  ol.onclick = function(e){ if(e.target===ol) ol.remove(); };
+  ol.innerHTML =
+    '<div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 20px 36px;max-height:80vh;overflow-y:auto">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+    '<div><div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--text)">SERIES INJECTIONS</div>' +
+    '<div style="font-size:11px;color:var(--muted2);margin-top:2px">' + _esc(mcd.name) + ' · ' + entries.length + ' injections</div></div>' +
+    '<button onclick="document.getElementById(\'tc-series-detail-overlay\').remove()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button>' +
+    '</div>' + listHtml + '</div>';
+  document.body.appendChild(ol);
+}
+
 function _tcSaveEditSeries() {
   var sid = _tcEditSeriesId;
   if (!sid || !_tcp || !_tcp.manualLog) return;
@@ -1694,15 +1722,15 @@ function buildTCalc() {
         var editBtnStyle = 'background:none;border:1px solid #6688cc66;border-radius:6px;color:#6688cc;font-size:10px;font-weight:700;letter-spacing:0.5px;cursor:pointer;padding:4px 8px;font-family:inherit;flex-shrink:0';
         var deleteBtnStyle = 'background:none;border:none;color:var(--muted2);font-size:16px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0';
         // Stack visual: box-shadow creates two "cards" peeking behind the top card
-        html += '<div style="background:rgba(102,136,204,0.10);border:1px dashed #6688cc66;border-radius:12px;padding:12px;box-shadow:3px 3px 0 0 rgba(102,136,204,0.18),6px 6px 0 0 rgba(102,136,204,0.09);">';
+        html += '<div onclick="_tcShowSeriesDetail(\'' + _esc(sid) + '\')" style="background:rgba(102,136,204,0.10);border:1px dashed #6688cc66;border-radius:12px;padding:12px;box-shadow:3px 3px 0 0 rgba(102,136,204,0.18),6px 6px 0 0 rgba(102,136,204,0.09);cursor:pointer;">';
         html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
         html += '<div style="display:flex;align-items:center;gap:8px;">';
         html += '<span style="font-size:10px;font-weight:800;letter-spacing:1px;color:#6688cc;text-transform:uppercase">⛓ SERIES</span>';
         html += '<span style="font-size:10px;color:var(--muted2)">' + total + ' injections' + ivLabel + '</span>';
         html += '</div>';
         html += '<div style="display:flex;align-items:center;gap:6px;">';
-        html += '<button onclick="_tcOpenEditSeriesSheet(\'' + _esc(sid) + '\')" style="' + editBtnStyle + '">EDIT</button>';
-        html += '<button onclick="_tcConfirmRemoveSeries(\'' + _esc(sid) + '\')" style="' + deleteBtnStyle + '">✕</button>';
+        html += '<button onclick="event.stopPropagation();_tcOpenEditSeriesSheet(\'' + _esc(sid) + '\')" style="' + editBtnStyle + '">EDIT</button>';
+        html += '<button onclick="event.stopPropagation();_tcConfirmRemoveSeries(\'' + _esc(sid) + '\')" style="' + deleteBtnStyle + '">✕</button>';
         html += '</div>';
         html += '</div>';
         html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
