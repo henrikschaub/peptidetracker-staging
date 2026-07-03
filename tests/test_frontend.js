@@ -3331,13 +3331,17 @@ console.log('\n── _getDynamicEnhancedDoses ───────────
 }
 
 // Regression: adding future injections must not lower the pre-bw peak.
-// Bug (fixed in PR #444): calFT used _effMgWk (totalMg / logDays × 7) which dropped
-// when a sparser second series extended logDays, shrinking calFT and pulling the entire
-// curve — including the dense first-series peak — downward.
-// Fix: anchor calFT = measuredFT / total[bwAnchorDay] after warm-start is applied.
-// Because _tcPkConc returns 0 for dt<0, injections after bwAnchorDay contribute nothing
-// to total[bwAnchorDay], so calFT is immune to log extensions beyond the bw date.
-console.log('\n── calFT anchor: adding post-bw injections must not lower existing peak (PR #444) ──');
+// Root cause: warm-start (_curDose > 0 path) computed compound fractions from ALL
+// injections. Adding post-bw Nebido shifted the Testoviron/Nebido fraction mix,
+// changing total[anchorDay], which changed calFT and pulled the whole curve down.
+// Fix: warm-start uses only pre-bw injections for compound fractions, so
+// total[anchorDay] (and therefore calFT) is immune to post-bw log extensions.
+//
+// Test strategy: the chart draws ctx.fillText(Math.round(peakV), ...) for the peak
+// concentration label. This encodes the ABSOLUTE pmol/L peak — unlike canvas Y
+// coordinates which autoscale and are identical regardless of calFT shifts.
+// The second-largest positive number in all fillText calls is Math.round(peakV).
+console.log('\n── calFT anchor: adding post-bw injections must not lower existing peak (PR #444/#448) ──');
 if (typeof G._tcDrawManualChart === 'function') {
   var _cfSavedFT    = G._tcp.measuredFT;
   var _cfSavedDose  = G._tcp.currentDoseMgWk;
@@ -3348,34 +3352,30 @@ if (typeof G._tcDrawManualChart === 'function') {
   G._tcp.currentDoseMgWk = '250';   // _curDose > 0: the code path that had the bug
   G._tcBwEntries = [{date:'2026-06-27', free_t:217, total_t:600, shbg:40}];
 
-  // Instrument canvas: track minimum Y drawn (lower Y = higher on screen = higher pmol/L)
-  function _cfMakeCapture() {
-    var minY = Infinity;
-    return {
-      ctx: {
-        scale:noop, beginPath:noop, arc:noop, fill:noop, stroke:noop,
-        fillText:noop, closePath:noop, save:noop, restore:noop, fillRect:noop,
-        setLineDash:noop, strokeRect:noop, translate:noop, rotate:noop,
-        measureText:()=>({width:0}), createLinearGradient:()=>({addColorStop:noop}),
-        moveTo:function(x,y){ if(isFinite(y)&&y<minY) minY=y; },
-        lineTo:function(x,y){ if(isFinite(y)&&y<minY) minY=y; }
-      },
-      get minY(){ return minY; }
-    };
-  }
+  // Instrument canvas: capture calFT directly via canvas._testCalFTHook.
+  // The chart sets canvas._testCalFTHook(calFT) after computing the final calFT scalar.
+  // This avoids canvas-autoscale issues (minY, fillText, etc. all change with vMax).
+  var _cfMockCtx = {
+    scale:noop, beginPath:noop, arc:noop, fill:noop, stroke:noop,
+    fillText:noop, closePath:noop, save:noop, restore:noop, fillRect:noop,
+    setLineDash:noop, strokeRect:noop, translate:noop, rotate:noop, moveTo:noop, lineTo:noop,
+    measureText:function(){ return {width:0}; },
+    createLinearGradient:function(){ return {addColorStop:noop}; }
+  };
   function _cfRunChart(log) {
-    var cap = _cfMakeCapture();
+    var capturedCalFT = null;
     G.document.getElementById = function(id) {
       if (id==='tc-manual-chart') return {
         style:{}, classList:{add:noop,remove:noop,contains:()=>false},
         offsetWidth:350, offsetHeight:250,
-        getContext: function(){ return cap.ctx; }
+        _testCalFTHook: function(v){ capturedCalFT = v; },
+        getContext: function(){ return _cfMockCtx; }
       };
       return _cfSavedGetEl(id);
     };
     G._tcDrawManualChart('tc-manual-chart', log);
     G.document.getElementById = _cfSavedGetEl;
-    return cap.minY;
+    return capturedCalFT;
   }
 
   // Short log: Henrik's exact scenario — 2 Testoviron + 10 Nebido every 2 days
@@ -3407,23 +3407,24 @@ if (typeof G._tcDrawManualChart === 'function') {
     {compId:'nebido', doseMg:'100', date:'2026-08-26'}
   ]);
 
-  var _cfThrew = false, _cfMinY1 = Infinity, _cfMinY2 = Infinity;
+  var _cfThrew = false, _cfCalFT1 = null, _cfCalFT2 = null;
   try {
-    _cfMinY1 = _cfRunChart(_cfLog1);
-    _cfMinY2 = _cfRunChart(_cfLog2);
+    _cfCalFT1 = _cfRunChart(_cfLog1);
+    _cfCalFT2 = _cfRunChart(_cfLog2);
   } catch(e) {
     _cfThrew = true;
     console.error('  calFT anchor test threw:', e.message);
   }
   check('calFT anchor: no crash', !_cfThrew);
-  if (!_cfThrew && isFinite(_cfMinY1) && isFinite(_cfMinY2)) {
-    // Extended log has all of short log + more injections after bw date.
-    // Peak must be >= short-log peak (minY must be <= short-log minY).
-    // Allow 1px tolerance for floating-point rounding in yOf().
+  check('calFT anchor: calFT captured for short log', !_cfThrew && _cfCalFT1 !== null);
+  check('calFT anchor: calFT captured for extended log', !_cfThrew && _cfCalFT2 !== null);
+  if (!_cfThrew && _cfCalFT1 !== null && _cfCalFT2 !== null) {
+    // calFT must be identical between short and extended log — it is anchored at the
+    // bloodwork date and must not shift when post-bw injections are added.
     check(
-      'calFT anchor: adding post-bw injections must not lower the pre-bw peak (PR #444 regression)',
-      _cfMinY2 <= _cfMinY1 + 1,
-      'short-log minY='+Math.round(_cfMinY1)+' extended-log minY='+Math.round(_cfMinY2)
+      'calFT anchor: calFT must not change when post-bw injections are added (PR #448 regression)',
+      Math.abs(_cfCalFT2 - _cfCalFT1) < 1e-9,
+      'short-log calFT='+_cfCalFT1.toFixed(8)+' extended-log calFT='+_cfCalFT2.toFixed(8)
     );
   }
 

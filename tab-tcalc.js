@@ -1124,8 +1124,15 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   if (calFT && _mftNum > 0) {
     if (_curDose > 0) {
       // Known prior dose: model each compound's residual from a steady-state protocol.
+      // Use only injections up to the bloodwork date so that adding post-bw injections
+      // cannot change the compound-fraction mix and thereby shift total[anchorDay].
+      var _wsFilterDate = (_tcBwEntries && _tcBwEntries.length) ? _tcBwEntries[0].date : null;
+      var _wsSorted = _wsFilterDate
+        ? sorted.filter(function(e){ return e.date <= _wsFilterDate; })
+        : sorted;
+      if (_wsSorted.length === 0) _wsSorted = sorted;
       var _wsGroups = {}, _wsTotalAbsMg = 0;
-      sorted.forEach(function(e) {
+      _wsSorted.forEach(function(e) {
         var _wsBioav = (_tcCompInfo(e.compId).bioavailability || 1);
         var _wsAbs   = parseFloat(e.doseMg) * _wsBioav;
         _wsTotalAbsMg += _wsAbs;
@@ -1177,6 +1184,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
       calFT = _mftNum / total[_anchorDay];
     }
   }
+  if (canvas._testCalFTHook) canvas._testCalFTHook(calFT);
 
   var scale     = calFT || 1;
   var unitLabel = calFT ? 'pmol/L' : 'mg';
