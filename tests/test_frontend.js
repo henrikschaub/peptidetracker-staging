@@ -3700,13 +3700,15 @@ if (typeof G._tcDrawManualChart === 'function') {
 }
 
 // Regression: PRE-CYCLE baseline bloodwork (draw dated BEFORE the first injection).
-// This is the normal workflow — you get baseline bloodwork before starting a cycle — and
-// it was the real peak-drop Henrik reported.  A pre-cycle draw made the anchor day negative,
-// which skipped the calFT anchor entirely and fell back to calFT = _mftNum / _logMean over a
-// window that grew as injections were added, so more injections lowered the peak.  Fix:
-// clamp a pre-cycle (out-of-span) draw to an in-span anchor, whose value is immune to later
-// injections, so the peak can only rise.
-console.log('\n── pre-cycle baseline bloodwork: appending injections must not lower peak (Henrik report) ──');
+// This is the normal workflow — you get baseline bloodwork before starting a cycle — and it
+// is the case Henrik reported twice.  Two properties must hold:
+//   1. The curve must START at the measured baseline free T (displayed[0] === measuredFT) and
+//      rise from there — not begin near zero and only cross the baseline days later.
+//   2. Appending injections must NOT lower the peak (calFT is invariant), and the peak must be
+//      physiological — anchoring the floor at the tiny day-0 residual made it absurdly high.
+// The injected accumulation is scaled so its value at "today" is one baseline unit, which is
+// invariant to injections planned after today.
+console.log('\n── pre-cycle baseline bloodwork: starts at baseline, peak rises, no drop (Henrik report) ──');
 if (typeof G._tcDrawManualChart === 'function') {
   var _pbSavedFT   = G._tcp.measuredFT;
   var _pbSavedDose = G._tcp.currentDoseMgWk;
@@ -3716,11 +3718,16 @@ if (typeof G._tcDrawManualChart === 'function') {
 
   G._tcp.measuredFT      = '217';
   G._tcp.currentDoseMgWk = '';
-  // Baseline draw dated well before the first injection (2026-06-27).
-  G._tcBwEntries = [{date:'2026-02-15', free_t:217, total_t:600, shbg:40}];
+
+  // Dates anchored to "today" so the first injection is 6 days ago (today falls inside the
+  // injection span, as in Henrik's live app) regardless of when the test runs.
+  var _pbBase = new Date(); _pbBase.setHours(12,0,0,0);
+  function _pbDate(off){ var d=new Date(_pbBase.getTime()+off*86400000); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  // Baseline draw dated ~4 months before the first injection (a genuine pre-cycle baseline).
+  G._tcBwEntries = [{date:_pbDate(-132), free_t:217, total_t:600, shbg:40}];
   G._tcGhStack   = [];
 
-  var _pbCalFT = null, _pbFillNums = [];
+  var _pbCalFT = null, _pbStart = null, _pbFillNums = [];
   var _pbMockCtx = {
     scale:noop, beginPath:noop, arc:noop, fill:noop, stroke:noop,
     fillText:function(t){ if(/^\d+$/.test(String(t))) _pbFillNums.push(Number(t)); },
@@ -3733,38 +3740,49 @@ if (typeof G._tcDrawManualChart === 'function') {
     if (id === 'tc-manual-chart') return {
       style:{}, classList:{add:noop,remove:noop,contains:function(){return false;}},
       offsetWidth:350, offsetHeight:250,
-      _testCalFTHook: function(v){ _pbCalFT = v; },
+      _testCalFTHook:  function(v){ _pbCalFT = v; },
+      _testStartHook:  function(v){ _pbStart = v; },
       getContext: function(){ return _pbMockCtx; }
     };
     return _pbSavedGetEl(id);
   };
 
-  // Henrik's exact schedule: 2 Testoviron loaders + 10 Nebido, then +10 more Nebido.
+  // Henrik's exact schedule: 2 Testoviron loaders (6/5 days ago) + 10 Nebido, then +10 more.
   var _pbLog1 = [
-    {compId:'testoviron', doseMg:'100', date:'2026-06-27'},
-    {compId:'testoviron', doseMg:'150', date:'2026-06-28'}
+    {compId:'testoviron', doseMg:'100', date:_pbDate(-6)},
+    {compId:'testoviron', doseMg:'150', date:_pbDate(-5)}
   ];
-  for (var _pbi=0; _pbi<10; _pbi++){ var _pd=new Date(new Date('2026-06-29').getTime()+_pbi*2*86400000); _pbLog1.push({compId:'nebido', doseMg:'102', date:_pd.getFullYear()+'-'+String(_pd.getMonth()+1).padStart(2,'0')+'-'+String(_pd.getDate()).padStart(2,'0')}); }
+  for (var _pbi=0; _pbi<10; _pbi++){ _pbLog1.push({compId:'nebido', doseMg:'102', date:_pbDate(-4 + _pbi*2)}); }
   var _pbLog2 = _pbLog1.slice();
-  for (var _pbj=0; _pbj<10; _pbj++){ var _pd2=new Date(new Date('2026-07-21').getTime()+_pbj*4*86400000); _pbLog2.push({compId:'nebido', doseMg:'100', date:_pd2.getFullYear()+'-'+String(_pd2.getMonth()+1).padStart(2,'0')+'-'+String(_pd2.getDate()).padStart(2,'0')}); }
+  for (var _pbj=0; _pbj<10; _pbj++){ _pbLog2.push({compId:'nebido', doseMg:'100', date:_pbDate(18 + _pbj*4)}); }
 
-  function _pbRun(lg){ _pbCalFT=null; _pbFillNums=[]; G._tcDrawManualChart('tc-manual-chart', lg); return {calFT:_pbCalFT, peak:Math.max.apply(null,_pbFillNums.concat([0]))}; }
+  function _pbRun(lg){ _pbCalFT=null; _pbStart=null; _pbFillNums=[]; G._tcDrawManualChart('tc-manual-chart', lg); return {calFT:_pbCalFT, start:_pbStart, peak:Math.max.apply(null,_pbFillNums.concat([0]))}; }
 
   var _pbThrew=false, _pbR1=null, _pbR2=null;
   try { _pbR1 = _pbRun(_pbLog1); _pbR2 = _pbRun(_pbLog2); }
   catch(e){ _pbThrew=true; console.error('  pre-cycle baseline test threw:', e.message); }
   check('pre-cycle baseline: no crash', !_pbThrew);
-  check('pre-cycle baseline: calFT captured (short & extended)', !_pbThrew && _pbR1 && _pbR2 && _pbR1.calFT != null && _pbR2.calFT != null);
-  if (!_pbThrew && _pbR1 && _pbR2 && _pbR1.calFT != null && _pbR2.calFT != null) {
+  check('pre-cycle baseline: calFT & start captured', !_pbThrew && _pbR1 && _pbR2 && _pbR1.calFT != null && _pbR1.start != null);
+  if (!_pbThrew && _pbR1 && _pbR2 && _pbR1.calFT != null && _pbR1.start != null) {
+    check(
+      'pre-cycle baseline: curve STARTS at the measured baseline (217 pmol/L)',
+      Math.abs(_pbR1.start - 217) <= 1 && Math.abs(_pbR2.start - 217) <= 1,
+      'short start='+_pbR1.start.toFixed(2)+' extended start='+_pbR2.start.toFixed(2)
+    );
     check(
       'pre-cycle baseline: calFT must not change when injections are appended',
       Math.abs(_pbR2.calFT - _pbR1.calFT) < 1e-9,
       'short calFT='+_pbR1.calFT.toFixed(8)+' extended calFT='+_pbR2.calFT.toFixed(8)
     );
     check(
-      'pre-cycle baseline: peak must not drop when injections are appended',
+      'pre-cycle baseline: peak rises (does not drop) when injections are appended',
       _pbR2.peak >= _pbR1.peak,
       'short peak='+_pbR1.peak+' extended peak='+_pbR2.peak
+    );
+    check(
+      'pre-cycle baseline: peak is physiological, not absurdly inflated (< 3000 pmol/L)',
+      _pbR2.peak < 3000,
+      'extended peak='+_pbR2.peak
     );
   }
 
