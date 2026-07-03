@@ -1130,16 +1130,25 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   // so a no-bloodwork schedule re-scaled — and its peak dropped — as injections grew).
   var _bwAnchorDate = _tcBwEntries && _tcBwEntries.length ? _tcBwEntries[0].date : null;
   var _anchorDay, _anchorCutoffDate;
-  if (_bwAnchorDate) {
-    _anchorDay = Math.round((new Date(_bwAnchorDate + 'T12:00:00') - firstDate) / 86400000);
+  var _bwAnchorDay = _bwAnchorDate
+    ? Math.round((new Date(_bwAnchorDate + 'T12:00:00') - firstDate) / 86400000)
+    : null;
+  if (_bwAnchorDay !== null && _bwAnchorDay >= 0 && _bwAnchorDay <= totalDays) {
+    // Bloodwork drawn on/after the first injection — anchor exactly at the draw date.  A
+    // real draw is always in the past and planned injections are in the future (after the
+    // draw), so total[drawDay] stays invariant to them and the peak cannot drop.
+    _anchorDay = _bwAnchorDay;
     _anchorCutoffDate = _bwAnchorDate;
   } else {
-    // Anchor at "today" when it falls within the injection span — the measured level is a
-    // current, mid-cycle waypoint.  When "today" is OUTSIDE the span (a fully washed-out
-    // all-past log, or an all-future plan) anchor at day 0 instead: total[0] is immune to
-    // every later injection (PkConc(dt=0)=0), so calFT cannot move and the peak can only
-    // rise as injections are added.  Anchoring in the washout tail was the trap — its
-    // value climbs with the accumulating depot, which shrank calFT and dropped the peak.
+    // Either no bloodwork, or bloodwork drawn OUTSIDE the injection span — before the cycle
+    // (a pre-cycle baseline draw, the normal case) or after it washed out.  In all of these
+    // the measured level is a baseline/reference, not a mid-cycle waypoint, so anchor at a
+    // stable in-span day: "today" when it falls within the span, otherwise day 0.  total[0]
+    // is immune to every later injection (PkConc(dt=0)=0), so calFT cannot move and the peak
+    // can only rise as injections are added.  A pre-cycle bloodwork made _anchorDay negative,
+    // which skipped the anchor entirely and fell back to calFT = _mftNum / _logMean over a
+    // window that grew with the schedule — that was the reported peak drop.  Anchoring in the
+    // washout tail is likewise avoided: its value climbs with the accumulating depot.
     var _nowDayA = Math.round((Date.now() - firstDate.getTime()) / 86400000);
     _anchorDay = (_nowDayA >= 0 && _nowDayA <= _logDays) ? _nowDayA : 0;
     var _adD = new Date(firstDate.getTime() + _anchorDay * 86400000);
