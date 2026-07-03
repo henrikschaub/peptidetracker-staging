@@ -31,6 +31,9 @@ var _tcBwAddExtras    = [];   // custom extra-test rows while add sheet is open
 var _tcEditSeriesId = null;   // seriesId currently open in the Edit Series sheet
 var _tcChartZoom   = 'whole'; // active zoom level: 'today' | 'week' | 'month' | 'whole'
 var _tcChartPanOffset = 0;   // horizontal pan in days (float, only used in zoomed modes)
+var _tcGhStack = [];          // [{pepId, startDateStr, interactions}] — GH compounds from active stacks
+var _tcSysInter = null;       // compounds map from /systemic-interactions
+var _tcActiveStacks = null;   // raw response from /protocol/stacks
 
 // ── Blood test catalogue ───────────────────────────────────────────────────────
 var _TC_BW_TESTS = [
@@ -143,6 +146,26 @@ function _tcLoadProfile() {
       buildTCalc();
     })
     .catch(function(){ _tcAgeMissing = true; buildTCalc(); });
+  // GH→SHBG interaction parameters (public endpoint, no auth)
+  fetch(AGENT_URL + '/systemic-interactions')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d) {
+      if (!d || !d.compounds) return;
+      _tcSysInter = d.compounds;
+      _tcComputeGhStack();
+      buildTCalc();
+    })
+    .catch(function(){});
+  // Active peptide stacks — find GH compounds for SHBG model
+  fetch(AGENT_URL + '/protocol/stacks', {headers: h})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d) {
+      if (!d) return;
+      _tcActiveStacks = d;
+      _tcComputeGhStack();
+      buildTCalc();
+    })
+    .catch(function(){});
 }
 
 function _tcSaveProfile() {
@@ -154,6 +177,24 @@ function _tcSaveProfile() {
     headers: Object.assign({'Content-Type':'application/json'}, h),
     body: JSON.stringify(_tcp)
   }).catch(function(){});
+}
+
+function _tcComputeGhStack() {
+  if (!_tcActiveStacks || !_tcSysInter) return;
+  _tcGhStack = [];
+  var idxs = _tcActiveStacks.active_indices ||
+    (_tcActiveStacks.active_index != null ? [_tcActiveStacks.active_index] : []);
+  idxs.forEach(function(idx) {
+    var stack = (_tcActiveStacks.stacks || [])[idx];
+    if (!stack) return;
+    (stack.peptides || []).forEach(function(pep) {
+      var pepId = pep.id;
+      if (!pepId || !_tcSysInter[pepId]) return;
+      var inter = _tcSysInter[pepId];
+      if (!inter.shbg || inter.shbg.direction !== 'suppress') return;
+      _tcGhStack.push({pepId: pepId, startDateStr: pep.start_date || '', interactions: inter});
+    });
+  });
 }
 
 // ── Compound helpers ──────────────────────────────────────────────────────────
@@ -1104,6 +1145,54 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   var scale     = calFT || 1;
   var unitLabel = calFT ? 'pmol/L' : 'mg';
 
+  // Time-varying SHBG → free-T model when GH-axis compounds are active in protocol
+  var calFT_arr = null;
+  var _ghAnnot  = '';
+  if (calFT && _tcGhStack.length > 0) {
+    var _ttNum  = parseFloat(_tcp.totalT) || 0;
+    var _shbgBw = parseFloat(_tcp.shbg)   || 0;
+    var _bwDate = _tcBwEntries && _tcBwEntries[0] ? _tcBwEntries[0].date : null;
+    if (_ttNum > 0 && _shbgBw > 0) {
+      var _vermBw = _tcVermeulenFT(_ttNum, _shbgBw);
+      if (_vermBw) {
+        calFT_arr = new Float64Array(totalDays + 1);
+        for (var _i0 = 0; _i0 <= totalDays; _i0++) calFT_arr[_i0] = calFT;
+        var _nowDayGh = Math.round((Date.now() - firstDate.getTime()) / 86400000);
+        var _maxSuppNow = 0;
+        _tcGhStack.forEach(function(gh) {
+          var _ghStart = gh.startDateStr ? new Date(gh.startDateStr + 'T12:00:00') : null;
+          if (!_ghStart) return;
+          var _maxSupp  = gh.interactions.shbg.maxSuppression;
+          var _halfTime = gh.interactions.shbg.halfTimeDays;
+          var _ghDay0   = Math.round((_ghStart - firstDate) / 86400000);
+          // Infer SHBG_baseline: back-calculate from bloodwork SHBG if GH was already active at bw date
+          var _shbgBase = _shbgBw;
+          if (_bwDate) {
+            var _bwMs = new Date(_bwDate + 'T12:00:00') - _ghStart;
+            if (_bwMs > 0) {
+              var _tBwOnGh = _bwMs / 86400000;
+              var _suppBw  = _maxSupp * (1 - Math.exp(-_tBwOnGh / _halfTime));
+              if (_suppBw < 0.95) _shbgBase = _shbgBw / (1 - _suppBw);
+            }
+          }
+          for (var _ct = 0; _ct <= totalDays; _ct++) {
+            var _tOnGh = Math.max(0, _ct - _ghDay0);
+            var _supp  = _maxSupp * (1 - Math.exp(-_tOnGh / _halfTime));
+            var _shbgT = Math.max(1, _shbgBase * (1 - _supp));
+            var _vermT = _tcVermeulenFT(_ttNum, _shbgT);
+            if (!_vermT) return;
+            var _cft = calFT * (_vermT / _vermBw);
+            if (_cft > calFT_arr[_ct]) calFT_arr[_ct] = _cft;
+          }
+          var _nowOnGh = Math.max(0, _nowDayGh - _ghDay0);
+          var _nowSupp = _maxSupp * (1 - Math.exp(-_nowOnGh / _halfTime));
+          if (_nowSupp > _maxSuppNow) _maxSuppNow = _nowSupp;
+        });
+        if (_maxSuppNow > 0.01) _ghAnnot = 'GH: SHBG −' + Math.round(_maxSuppNow * 100) + '%';
+      }
+    }
+  }
+
   var dpr  = window.devicePixelRatio || 1;
   var cssW = canvas.offsetWidth || 300;
   var cssH = 150;
@@ -1117,7 +1206,10 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   var cH  = cssH - PAD.top  - PAD.bottom;
 
   var maxV = 0;
-  for (var i = 0; i <= totalDays; i++) if (total[i] * scale > maxV) maxV = total[i] * scale;
+  for (var i = 0; i <= totalDays; i++) {
+    var _sv = total[i] * (calFT_arr ? calFT_arr[i] : scale);
+    if (_sv > maxV) maxV = _sv;
+  }
   if (_mftNum && calFT && _mftNum > maxV) maxV = _mftNum * 1.1;
   if (!maxV) { ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.fillText('No data', 10, 40); return; }
   var vMax = maxV * 1.1;
@@ -1126,7 +1218,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   var xDays = totalDays;
   if (_mftNum && calFT) {
     for (var _xi = totalDays; _xi > 0; _xi--) {
-      if (total[_xi] * scale >= _mftNum) { xDays = _xi; break; }
+      if (total[_xi] * (calFT_arr ? calFT_arr[_xi] : scale) >= _mftNum) { xDays = _xi; break; }
     }
   }
 
@@ -1143,7 +1235,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   // Find peak within visible window
   var peakV = 0, peakT = 0;
   for (var _pi = xStart; _pi <= xEnd; _pi++) {
-    var _pv = total[_pi] * scale;
+    var _pv = total[_pi] * (calFT_arr ? calFT_arr[_pi] : scale);
     if (_pv > peakV) { peakV = _pv; peakT = _pi; }
   }
 
@@ -1180,6 +1272,13 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   ctx.textAlign = 'center'; ctx.fillStyle = '#444'; ctx.font = '8px DM Sans,sans-serif';
   ctx.fillText(unitLabel, 0, 0); ctx.restore();
 
+  // GH SHBG suppression annotation (top-right of chart)
+  if (_ghAnnot) {
+    ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'right';
+    ctx.fillStyle = '#3cffa077';
+    ctx.fillText(_ghAnnot, PAD.left + cW, PAD.top + 9);
+  }
+
   var lineColor = _tcCompInfo(sorted[0].compId).dot || '#e8a020';
 
   // Peak highlight line + y-axis label
@@ -1195,12 +1294,16 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
   grad.addColorStop(0, lineColor + '55'); grad.addColorStop(1, lineColor + '00');
   ctx.beginPath(); ctx.moveTo(xOf(xStart), PAD.top + cH);
-  for (var t2 = xStart; t2 <= xEnd; t2++) ctx.lineTo(xOf(t2), yOf(total[t2] * scale || 0));
+  for (var t2 = xStart; t2 <= xEnd; t2++) {
+    ctx.lineTo(xOf(t2), yOf(total[t2] * (calFT_arr ? calFT_arr[t2] : scale) || 0));
+  }
   ctx.lineTo(xOf(xEnd), PAD.top + cH);
   ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
-  ctx.beginPath(); ctx.moveTo(xOf(xStart), yOf(total[xStart] * scale || 0));
-  for (var t3 = xStart + 1; t3 <= xEnd; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] * scale || 0));
+  ctx.beginPath(); ctx.moveTo(xOf(xStart), yOf(total[xStart] * (calFT_arr ? calFT_arr[xStart] : scale) || 0));
+  for (var t3 = xStart + 1; t3 <= xEnd; t3++) {
+    ctx.lineTo(xOf(t3), yOf(total[t3] * (calFT_arr ? calFT_arr[t3] : scale) || 0));
+  }
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
 
   // "Now" vertical line for zoomed views
