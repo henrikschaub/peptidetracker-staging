@@ -3518,6 +3518,79 @@ if (typeof G._tcDrawManualChart === 'function') {
   G.document.getElementById = _cf2SavedGetEl;
 }
 
+// Regression: path 2 (curDose=0) calFT anchor with anchorDay=0 (BW same day as first injection).
+// Root cause: when _p2BwDay=0, total[0]=0 for all injections (tcPkConc(dt=0)=0), so the
+// pre-BW scan yielded _p2Pk=0 and fell back to _logMean (full-log mean, unstable).
+// Post-BW injections increased _logMean → inflated _p2Baseline → shifted total[0] → changed calFT.
+// Fix: when _p2Pk=0, compute _p2Baseline from BW-date injections' own settled PK.
+console.log('\n── calFT anchor path-2 anchorDay=0 (BW=first injection day): post-bw injections must not shift calFT ──');
+if (typeof G._tcDrawManualChart === 'function') {
+  var _cf3SavedFT   = G._tcp.measuredFT;
+  var _cf3SavedDose = G._tcp.currentDoseMgWk;
+  var _cf3SavedBwE  = G._tcBwEntries;
+  var _cf3SavedGetEl = G.document.getElementById;
+
+  G._tcp.measuredFT       = '217';
+  G._tcp.currentDoseMgWk  = '';   // _curDose === 0 → path 2
+  G._tcBwEntries = [{date:'2026-06-27', free_t:217, total_t:600, shbg:40}];
+
+  var _cf3MockCtx = {
+    scale:noop, beginPath:noop, arc:noop, fill:noop, stroke:noop,
+    fillText:noop, closePath:noop, save:noop, restore:noop, fillRect:noop,
+    setLineDash:noop, strokeRect:noop, translate:noop, rotate:noop, moveTo:noop, lineTo:noop,
+    measureText:function(){ return {width:0}; },
+    createLinearGradient:function(){ return {addColorStop:noop}; }
+  };
+  var _cf3Captured = null;
+  G.document.getElementById = function(id) {
+    if (id === 'tc-manual-chart') return {
+      style:{}, classList:{add:noop,remove:noop,contains:function(){return false;}},
+      offsetWidth:350, offsetHeight:250,
+      _testCalFTHook: function(v){ _cf3Captured = v; },
+      getContext: function(){ return _cf3MockCtx; }
+    };
+    return _cf3SavedGetEl(id);
+  };
+
+  function _cf3RunChart(lg) { _cf3Captured = null; G._tcDrawManualChart('tc-manual-chart', lg, false); return _cf3Captured; }
+
+  // Short log: BW date = first injection date (anchorDay=0)
+  var _cf3Log1 = [
+    {compId:'testoviron', doseMg:'100', date:'2026-06-27'}
+  ];
+  // Extended log: add post-BW injections — must not change calFT
+  var _cf3Log2 = [
+    {compId:'testoviron', doseMg:'100', date:'2026-06-27'},
+    {compId:'testoviron', doseMg:'100', date:'2026-07-04'},
+    {compId:'testoviron', doseMg:'100', date:'2026-07-18'},
+    {compId:'testoviron', doseMg:'100', date:'2026-08-01'}
+  ];
+
+  var _cf3CalFT1 = null, _cf3CalFT2 = null, _cf3Threw = false;
+  try {
+    _cf3CalFT1 = _cf3RunChart(_cf3Log1);
+    _cf3CalFT2 = _cf3RunChart(_cf3Log2);
+  } catch(e) {
+    _cf3Threw = true;
+    console.error('  calFT path-2 anchorDay=0 test threw:', e.message);
+  }
+  check('calFT path-2 anchorDay=0: no crash', !_cf3Threw);
+  check('calFT path-2 anchorDay=0: calFT captured for short log',    !_cf3Threw && _cf3CalFT1 !== null);
+  check('calFT path-2 anchorDay=0: calFT captured for extended log', !_cf3Threw && _cf3CalFT2 !== null);
+  if (!_cf3Threw && _cf3CalFT1 !== null && _cf3CalFT2 !== null) {
+    check(
+      'calFT path-2 anchorDay=0: calFT must not change when post-bw injections added',
+      Math.abs(_cf3CalFT2 - _cf3CalFT1) < 1e-9,
+      'short calFT='+_cf3CalFT1.toFixed(8)+' extended calFT='+_cf3CalFT2.toFixed(8)
+    );
+  }
+
+  G._tcp.measuredFT         = _cf3SavedFT;
+  G._tcp.currentDoseMgWk    = _cf3SavedDose;
+  G._tcBwEntries            = _cf3SavedBwE;
+  G.document.getElementById = _cf3SavedGetEl;
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
