@@ -1200,7 +1200,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
               }
             });
             var _bwDayPk = 0, _bwDayTr = Infinity;
-            for (var _bwst = _midLog; _bwst <= _logDays; _bwst++) {
+            for (var _bwst = 0; _bwst <= totalDays; _bwst++) {
               if (_bwDayArr[_bwst] > _bwDayPk) _bwDayPk = _bwDayArr[_bwst];
               if (_bwDayArr[_bwst] < _bwDayTr) _bwDayTr = _bwDayArr[_bwst];
             }
