@@ -1164,6 +1164,20 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     }
   }
 
+  // Anchor calFT at the bloodwork date so that adding future injections cannot
+  // re-scale the pre-bw portion of the curve.  total[] now includes any warm-start
+  // residual, so total[anchorDay] reflects exactly what the model predicts at the
+  // moment of the blood draw — and calFT is chosen to make that equal _mftNum.
+  // Injections after anchorDay contribute 0 at anchorDay (PkConc(dt<0)=0), so
+  // calFT is immune to log extensions beyond the bloodwork date.
+  var _bwAnchorDate = _tcBwEntries && _tcBwEntries.length ? _tcBwEntries[0].date : null;
+  if (calFT && _bwAnchorDate && _mftNum > 0) {
+    var _anchorDay = Math.round((new Date(_bwAnchorDate + 'T12:00:00') - firstDate) / 86400000);
+    if (_anchorDay >= 0 && _anchorDay <= totalDays && total[_anchorDay] > 0) {
+      calFT = _mftNum / total[_anchorDay];
+    }
+  }
+
   var scale     = calFT || 1;
   var unitLabel = calFT ? 'pmol/L' : 'mg';
 
