@@ -30,6 +30,7 @@ var _tcBwLoading      = false;
 var _tcBwAddExtras    = [];   // custom extra-test rows while add sheet is open
 var _tcEditSeriesId = null;   // seriesId currently open in the Edit Series sheet
 var _tcChartZoom   = 'whole'; // active zoom level: 'today' | 'week' | 'month' | 'whole'
+var _tcChartPanOffset = 0;   // horizontal pan in days (float, only used in zoomed modes)
 
 // ── Blood test catalogue ───────────────────────────────────────────────────────
 var _TC_BW_TESTS = [
@@ -699,8 +700,10 @@ function _tcShowSeriesDetail(sid) {
 
 function _tcSetChartZoom(z) {
   _tcChartZoom = z;
+  _tcChartPanOffset = 0;
   var validLog = (_tcp && _tcp.manualLog) ? _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; }) : [];
   _tcDrawManualChart('tc-main-chart', validLog, z);
+  _tcAttachPanListeners(document.getElementById('tc-main-chart'));
   ['today','week','month','whole'].forEach(function(zz) {
     var btn = document.getElementById('tc-zoom-' + zz);
     if (!btn) return;
@@ -708,6 +711,49 @@ function _tcSetChartZoom(z) {
     btn.style.color        = zz === z ? '#6688cc' : 'var(--muted2)';
     btn.style.borderColor  = zz === z ? '#6688cc66' : 'var(--border)';
   });
+}
+
+function _tcAttachPanListeners(canvas) {
+  if (!canvas) return;
+  if (canvas._tcTouchStart) {
+    canvas.removeEventListener('touchstart', canvas._tcTouchStart);
+    canvas.removeEventListener('touchmove', canvas._tcTouchMove);
+    canvas.removeEventListener('touchend', canvas._tcTouchEnd);
+    canvas.removeEventListener('mousedown', canvas._tcMouseDown);
+    canvas.removeEventListener('mousemove', canvas._tcMouseMove);
+    canvas.removeEventListener('mouseup', canvas._tcMouseEnd);
+    canvas._tcTouchStart = null;
+  }
+  var state = canvas._tcPanState;
+  if (!state || state.zoom === 'whole') { canvas.style.cursor = ''; canvas.style.touchAction = ''; return; }
+  canvas.style.cursor = 'grab';
+  canvas.style.touchAction = 'pan-y';
+  var _pDX = null, _pDY = null, _pOff = null;
+  canvas._tcTouchStart = function(e) {
+    var t = e.touches ? e.touches[0] : e;
+    _pDX = t.clientX; _pDY = t.clientY; _pOff = _tcChartPanOffset;
+  };
+  canvas._tcTouchMove = function(e) {
+    if (_pDX === null) return;
+    var t = e.touches ? e.touches[0] : e;
+    var dx = t.clientX - _pDX, dy = t.clientY - (_pDY || 0);
+    if (e.touches && Math.abs(dx) <= Math.abs(dy)) return;
+    if (e.preventDefault) e.preventDefault();
+    var s = canvas._tcPanState || state;
+    _tcChartPanOffset = _pOff - dx * ((s.xEnd - s.xStart) / (s.cW || 250));
+    var vl = (_tcp && _tcp.manualLog) ? _tcp.manualLog.filter(function(e2){ return e2.date && e2.doseMg && parseFloat(e2.doseMg) > 0; }) : [];
+    _tcDrawManualChart(canvas.id, vl, _tcChartZoom);
+  };
+  canvas._tcTouchEnd = function() { _pDX = null; };
+  canvas._tcMouseDown = canvas._tcTouchStart;
+  canvas._tcMouseMove = function(e) { if (e.buttons & 1) canvas._tcTouchMove(e); };
+  canvas._tcMouseEnd = canvas._tcTouchEnd;
+  canvas.addEventListener('touchstart', canvas._tcTouchStart, {passive: true});
+  canvas.addEventListener('touchmove', canvas._tcTouchMove, {passive: false});
+  canvas.addEventListener('touchend', canvas._tcTouchEnd);
+  canvas.addEventListener('mousedown', canvas._tcMouseDown);
+  canvas.addEventListener('mousemove', canvas._tcMouseMove);
+  canvas.addEventListener('mouseup', canvas._tcMouseEnd);
 }
 
 function _tcSaveEditSeries() {
@@ -1087,10 +1133,11 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   // Zoom window
   var _zoom = zoom3 || _tcChartZoom || 'whole';
   var nowDay = Math.round((Date.now() - firstDate.getTime()) / 86400000);
+  var panDays = _zoom !== 'whole' ? Math.round(_tcChartPanOffset || 0) : 0;
   var xStart = 0, xEnd = xDays;
-  if (_zoom === 'today')       { xStart = Math.max(0, nowDay - 2); xEnd = Math.min(xDays, nowDay + 2); }
-  else if (_zoom === 'week')   { xStart = Math.max(0, nowDay - 3); xEnd = Math.min(xDays, nowDay + 4); }
-  else if (_zoom === 'month')  { xStart = Math.max(0, nowDay - 15); xEnd = Math.min(xDays, nowDay + 15); }
+  if (_zoom === 'today')       { xStart = Math.max(0, nowDay - 2 + panDays); xEnd = Math.min(xDays, nowDay + 2 + panDays); }
+  else if (_zoom === 'week')   { xStart = Math.max(0, nowDay - 3 + panDays); xEnd = Math.min(xDays, nowDay + 4 + panDays); }
+  else if (_zoom === 'month')  { xStart = Math.max(0, nowDay - 15 + panDays); xEnd = Math.min(xDays, nowDay + 15 + panDays); }
   if (xEnd <= xStart) xEnd = Math.min(xDays, xStart + 7);
 
   // Find peak within visible window
@@ -1181,6 +1228,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     var lbl = labelDate.getDate() + ' ' + _MONTHS[labelDate.getMonth()];
     ctx.fillText(lbl, lx, PAD.top + cH + 18);
   }
+  canvas._tcPanState = {xStart: xStart, xEnd: xEnd, cW: cW, zoom: _zoom};
 }
 
 // ── OPTIMIZER ─────────────────────────────────────────────────────────────────
@@ -1935,6 +1983,6 @@ function buildTCalc() {
   el.innerHTML = html;
 
   if (validLog.length > 0) {
-    requestAnimationFrame(function() { _tcDrawManualChart('tc-main-chart', validLog, _tcChartZoom); });
+    requestAnimationFrame(function() { _tcDrawManualChart('tc-main-chart', validLog, _tcChartZoom); _tcAttachPanListeners(document.getElementById('tc-main-chart')); });
   }
 }
