@@ -180,8 +180,9 @@ function _tcSaveProfile() {
 }
 
 function _tcComputeGhStack() {
-  if (!_tcActiveStacks || !_tcSysInter) return;
+  if (!_tcSysInter) return;
   _tcGhStack = [];
+  if (_tcActiveStacks) {
   var idxs = _tcActiveStacks.active_indices ||
     (_tcActiveStacks.active_index != null ? [_tcActiveStacks.active_index] : []);
   idxs.forEach(function(idx) {
@@ -216,6 +217,17 @@ function _tcComputeGhStack() {
         _tcGhStack.push({pepId: cId, startDateStr: c.start_date || cycleStart, interactions: inter});
       });
     }
+  });
+  }
+  // Over-the-counter supplements that affect SHBG (e.g. Boron). Uses the same
+  // systemic-interaction model as compounds — each active supplement whose id has
+  // an SHBG interaction is added to the free-T model at its own start date.
+  var _supps = (typeof _supplements !== 'undefined' && _supplements) ? _supplements : [];
+  _supps.forEach(function(s) {
+    if (!s || !s.supp_id) return;
+    var inter = _tcSysInter[s.supp_id];
+    if (!inter || !inter.shbg || inter.shbg.direction !== 'suppress') return;
+    _tcGhStack.push({pepId: 'supp_' + s.supp_id, startDateStr: s.start_date || '', interactions: inter});
   });
 }
 
@@ -1992,6 +2004,7 @@ async function _tcPushLogToSchedule() {
 // ── Main build ────────────────────────────────────────────────────────────────
 
 function buildTCalc() {
+  _tcComputeGhStack();  // refresh SHBG stack (compounds + supplements like Boron)
   var el = document.getElementById('tcalc-body');
   if (!el) return;
 

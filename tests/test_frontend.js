@@ -3851,6 +3851,50 @@ if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
   check('syncSupplementsFromAgent is defined', typeof G.syncSupplementsFromAgent === 'function');
   check('pushSupplementToAgent / deleteSupplementFromAgent defined',
     typeof G.pushSupplementToAgent === 'function' && typeof G.deleteSupplementFromAgent === 'function');
+
+  // ── checkboxes: slots + taken-state rendering ──
+  check('_suppSlots: AM & PM expands to two slots',
+    JSON.stringify(G._suppSlots('AMPM')) === '["AM","PM"]');
+  check('_suppSlots: AM / PM single slot',
+    JSON.stringify(G._suppSlots('AM')) === '["AM"]' && JSON.stringify(G._suppSlots('PM')) === '["PM"]');
+  check('toggleSupplementDose + syncSupplementLogFromAgent defined',
+    typeof G.toggleSupplementDose === 'function' && typeof G.syncSupplementLogFromAgent === 'function');
+
+  if (typeof G.renderTodaySupplements === 'function') {
+    var _cbHTML = null;
+    var _savedGE2 = G.document.getElementById;
+    var _capEl2 = { set innerHTML(v){ _cbHTML = v; }, get innerHTML(){ return _cbHTML; } };
+    G.document.getElementById = function(id){ return id==='today-supplements' ? _capEl2 : _savedGE2(id); };
+    // an AM&PM daily supplement → two checkbox slots; mark the AM slot taken
+    G._supplements = [{id:'x', supp_id:'vitd3', name:'Vitamin D3', dose:'5000 IU', freq:'daily', timing:'AMPM'}];
+    G._suppLog = {};
+    G._suppLog[G._suppLogKey('vitd3','2026-07-01','AM')] = true;
+    G.renderTodaySupplements(new Date('2026-07-01T09:00:00'));
+    check('checkbox row: renders a check-box element', typeof _cbHTML==='string' && /check-box/.test(_cbHTML));
+    check('checkbox row: AM slot shows as checked', typeof _cbHTML==='string' && /check-box checked/.test(_cbHTML));
+    check('checkbox row: badge counts done / total slots', typeof _cbHTML==='string' && /1 \/ 2/.test(_cbHTML));
+    check('checkbox row: onclick wires toggleSupplementDose', typeof _cbHTML==='string' && /toggleSupplementDose\(/.test(_cbHTML));
+    G.document.getElementById = _savedGE2;
+    G._supplements = []; G._suppLog = {};
+  }
+
+  // ── SHBG: supplements feed the free-T (systemic-interaction) model ──
+  if (typeof G._tcComputeGhStack === 'function') {
+    var _savedSys = G._tcSysInter, _savedStacks = G._tcActiveStacks, _savedSupp = G._supplements, _savedGh = G._tcGhStack;
+    G._tcSysInter = { boron: { shbg: { direction:'suppress', maxSuppression:0.25, halfTimeDays:14 } } };
+    G._tcActiveStacks = null;
+    G._supplements = [{id:'b', supp_id:'boron', name:'Boron', dose:'6 mg', freq:'daily', timing:'AM', start_date:'2026-06-01'}];
+    G._tcGhStack = [];
+    G._tcComputeGhStack();
+    check('SHBG model includes an active Boron supplement',
+      Array.isArray(G._tcGhStack) && G._tcGhStack.some(function(e){ return e.pepId==='supp_boron' && e.interactions && e.interactions.shbg; }));
+    // a supplement with no systemic interaction is NOT added
+    G._supplements = [{id:'c', supp_id:'vitc', name:'Vitamin C', dose:'1000 mg', freq:'daily', timing:'AM'}];
+    G._tcComputeGhStack();
+    check('SHBG model ignores supplements with no interaction',
+      G._tcGhStack.every(function(e){ return e.pepId !== 'supp_vitc'; }));
+    G._tcSysInter = _savedSys; G._tcActiveStacks = _savedStacks; G._supplements = _savedSupp || []; G._tcGhStack = _savedGh || [];
+  }
 } else {
   check('SUPPLEMENT_CAT defined (tab-supplements.js loaded)', false);
 }

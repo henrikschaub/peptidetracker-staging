@@ -49,10 +49,17 @@ var SUPP_FREQ_LABELS  = {daily:'Daily', eod:'Every other day', weekly:'Weekly'};
 var SUPP_TIMING_LABELS= {AM:'AM', PM:'PM', AMPM:'AM & PM'};
 
 var _supplements = [];   // user's regimen (cache mirror of backend)
+var _suppLog = {};       // { 'suppId|YYYY-MM-DD|slot': true } — taken doses (cache mirror)
+var _suppViewDate = null;// date currently shown in the Today section (for re-render after toggle)
 
 function _suppEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _suppCat(id){ return SUPPLEMENT_CAT.find(function(c){return c.id===id;}); }
-function _suppToday(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _suppDateKey(d){ var x=new Date(d); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
+function _suppToday(){ return _suppDateKey(new Date()); }
+// Dose slots per timing: AM & PM is two doses/day, each checked independently.
+function _suppSlots(timing){ return timing==='AMPM' ? ['AM','PM'] : (timing==='PM' ? ['PM'] : ['AM']); }
+function _suppLogKey(id,date,slot){ return id+'|'+date+'|'+slot; }
+function _suppIsTaken(id,date,slot){ return !!_suppLog[_suppLogKey(id,date,slot)]; }
 
 // ── persistence / sync ──────────────────────────────────────────────────────
 function _suppLoadCache(){ _supplements = getData('pep-supplements', []) || []; }
@@ -67,10 +74,57 @@ async function syncSupplementsFromAgent(){
     if(Array.isArray(data)){
       _supplements = data;
       _suppSaveCache();
-      if(typeof renderTodaySupplements==='function') renderTodaySupplements(NOW);
+      if(typeof _tcComputeGhStack==='function') _tcComputeGhStack();  // Boron etc. → free-T model
+      if(typeof renderTodaySupplements==='function') renderTodaySupplements(_suppViewDate||NOW);
       if(_currentTab==='supplements') buildSupplements();
     }
   }catch(e){ _logErr('syncSupplements', e); }
+}
+
+// ── taken-dose log (checkboxes) ──────────────────────────────────────────────
+function _suppLoadLogCache(){ _suppLog = getData('pep-supp-log', {}) || {}; }
+function _suppSaveLogCache(){ setData('pep-supp-log', _suppLog); }
+
+async function syncSupplementLogFromAgent(){
+  _suppLoadLogCache();
+  try{
+    var r = await fetch(AGENT_URL + '/supplement-log', {headers: authHeaders()});
+    if(!r.ok){ _logHttp('syncSuppLog', r.status, '/supplement-log'); return; }
+    var data = await r.json();
+    if(Array.isArray(data)){
+      var m = {};
+      data.forEach(function(e){ m[_suppLogKey(e.supp_id, e.date, e.slot || 'AM')] = true; });
+      _suppLog = m;
+      _suppSaveLogCache();
+      if(typeof renderTodaySupplements==='function') renderTodaySupplements(_suppViewDate||NOW);
+    }
+  }catch(e){ _logErr('syncSuppLog', e); }
+}
+
+async function toggleSupplementDose(suppId, dstr, slot){
+  var key = _suppLogKey(suppId, dstr, slot);
+  var was = !!_suppLog[key];
+  if(was) delete _suppLog[key]; else _suppLog[key] = true;
+  _suppSaveLogCache();
+  if(typeof renderTodaySupplements==='function') renderTodaySupplements(_suppViewDate||NOW);
+  try{
+    var r = await fetch(AGENT_URL + '/supplement-log', {
+      method:'POST',
+      headers: authHeaders({'Content-Type':'application/json'}),
+      body: JSON.stringify({supp_id:suppId, date:dstr, slot:slot, taken:!was})
+    });
+    if(!r.ok){
+      _logHttp('suppLogToggle', r.status, '/supplement-log');
+      if(was) _suppLog[key]=true; else delete _suppLog[key];
+      _suppSaveLogCache();
+      if(typeof renderTodaySupplements==='function') renderTodaySupplements(_suppViewDate||NOW);
+    }
+  }catch(e){
+    _logErr('suppLogToggle', e);
+    if(was) _suppLog[key]=true; else delete _suppLog[key];
+    _suppSaveLogCache();
+    if(typeof renderTodaySupplements==='function') renderTodaySupplements(_suppViewDate||NOW);
+  }
 }
 
 async function pushSupplementToAgent(s){
@@ -113,31 +167,39 @@ function _supplementsForDay(date){
 }
 
 // ── Today / week-carousel section (shown under injections) ───────────────────
+// Each active supplement is expanded into its dose slots (AM, PM, or both) and
+// rendered as a checkbox row, checkable like an injection. Checked state is
+// per supplement + day + slot and persisted to the backend.
 function renderTodaySupplements(date){
   var wrap = document.getElementById('today-supplements');
   if(!wrap) return;
-  var active = _supplementsForDay(date || NOW);
+  var theDate = date || NOW;
+  _suppViewDate = theDate;
+  var active = _supplementsForDay(theDate);
   if(!active.length){ wrap.innerHTML=''; return; }
-  // order: AM group, then PM group; AM&PM appears in both
-  var order = {AM:0, AMPM:1, PM:2};
-  active = active.slice().sort(function(a,b){
-    var oa=order[a.timing]!=null?order[a.timing]:1, ob=order[b.timing]!=null?order[b.timing]:1;
-    if(oa!==ob) return oa-ob;
-    return (a.name||'').localeCompare(b.name||'');
+  var dstr = _suppDateKey(theDate);
+  var slotOrder = {AM:0, PM:1};
+  var rows = [];
+  active.forEach(function(s){ _suppSlots(s.timing).forEach(function(slot){ rows.push({s:s, slot:slot}); }); });
+  rows.sort(function(a,b){
+    if(slotOrder[a.slot]!==slotOrder[b.slot]) return slotOrder[a.slot]-slotOrder[b.slot];
+    return (a.s.name||'').localeCompare(b.s.name||'');
   });
-  var rows = active.map(function(s){
-    var chip = SUPP_TIMING_LABELS[s.timing] || 'AM';
-    return '<div class="check-item" style="cursor:default">' +
-      '<div style="width:8px;height:8px;border-radius:50%;background:var(--accent3,#7bd88f);flex-shrink:0;margin-right:4px"></div>' +
-      '<div class="check-main"><div class="check-name" style="color:var(--text)">' + _suppEsc(s.name) + '</div>' +
-      (s.dose ? '<div class="check-detail">' + _suppEsc(s.dose) + '</div>' : '') + '</div>' +
-      '<div class="check-time">' + _suppEsc(chip) + '</div></div>';
+  var done = 0;
+  var html = rows.map(function(r){
+    var taken = _suppIsTaken(r.s.supp_id, dstr, r.slot);
+    if(taken) done++;
+    return '<div class="check-item'+(taken?' checked-item':'')+'" onclick="toggleSupplementDose(\''+_suppEsc(r.s.supp_id)+'\',\''+dstr+'\',\''+r.slot+'\')">' +
+      '<div class="check-box'+(taken?' checked':'')+'"><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
+      '<div class="check-main"><div class="check-name" style="color:var(--text)">' + _suppEsc(r.s.name) + '</div>' +
+      (r.s.dose ? '<div class="check-detail">' + _suppEsc(r.s.dose) + '</div>' : '') + '</div>' +
+      '<div class="check-time">' + r.slot + '</div></div>';
   }).join('');
   wrap.innerHTML =
     '<div class="card">' +
     '<div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3,#7bd88f)"></div>' +
-    '<div class="card-title">SUPPLEMENTS</div></div><span class="card-badge badge-today">' + active.length + '</span></div>' +
-    '<div class="checklist">' + rows + '</div></div>';
+    '<div class="card-title">SUPPLEMENTS</div></div><span class="card-badge ' + (done===rows.length?'badge-done':'badge-today') + '">' + done + ' / ' + rows.length + '</span></div>' +
+    '<div class="checklist">' + html + '</div></div>';
 }
 
 // ── Supplements tab ──────────────────────────────────────────────────────────
@@ -268,7 +330,7 @@ async function _suppConfirmAdd(editId){
   _suppSaveCache();
   _suppCloseAddSheet();
   buildSupplements();
-  if(typeof renderTodaySupplements==='function') renderTodaySupplements(NOW);
+  _suppRefreshDerived();
   // persist to backend (source of truth) — reconcile id for new entries
   var saved = await pushSupplementToAgent(Object.assign({}, entry, editId ? {} : {id: undefined}));
   if(saved && saved.id){
@@ -284,6 +346,14 @@ async function _suppDelete(id){
   _supplements = (_supplements||[]).filter(function(s){ return s.id!==id; });
   _suppSaveCache();
   buildSupplements();
-  if(typeof renderTodaySupplements==='function') renderTodaySupplements(NOW);
+  _suppRefreshDerived();
   await deleteSupplementFromAgent(id);
+}
+
+// After the regimen changes: refresh the Today section and the T-Calc SHBG model
+// (a supplement like Boron shifts the free-T curve).
+function _suppRefreshDerived(){
+  if(typeof renderTodaySupplements==='function') renderTodaySupplements(_suppViewDate||NOW);
+  if(typeof _tcComputeGhStack==='function') _tcComputeGhStack();
+  if(_currentTab==='tcalc' && typeof buildTCalc==='function') buildTCalc();
 }
