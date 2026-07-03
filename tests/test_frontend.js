@@ -3330,6 +3330,109 @@ console.log('\n── _getDynamicEnhancedDoses ───────────
   G._activeStackIndices = _dea;
 }
 
+// Regression: adding future injections must not lower the pre-bw peak.
+// Bug (fixed in PR #444): calFT used _effMgWk (totalMg / logDays × 7) which dropped
+// when a sparser second series extended logDays, shrinking calFT and pulling the entire
+// curve — including the dense first-series peak — downward.
+// Fix: anchor calFT = measuredFT / total[bwAnchorDay] after warm-start is applied.
+// Because _tcPkConc returns 0 for dt<0, injections after bwAnchorDay contribute nothing
+// to total[bwAnchorDay], so calFT is immune to log extensions beyond the bw date.
+console.log('\n── calFT anchor: adding post-bw injections must not lower existing peak (PR #444) ──');
+if (typeof G._tcDrawManualChart === 'function') {
+  var _cfSavedFT    = G._tcp.measuredFT;
+  var _cfSavedDose  = G._tcp.currentDoseMgWk;
+  var _cfSavedBwE   = G._tcBwEntries;
+  var _cfSavedGetEl = G.document.getElementById;
+
+  G._tcp.measuredFT      = '217';
+  G._tcp.currentDoseMgWk = '250';   // _curDose > 0: the code path that had the bug
+  G._tcBwEntries = [{date:'2026-06-27', free_t:217, total_t:600, shbg:40}];
+
+  // Instrument canvas: track minimum Y drawn (lower Y = higher on screen = higher pmol/L)
+  function _cfMakeCapture() {
+    var minY = Infinity;
+    return {
+      ctx: {
+        scale:noop, beginPath:noop, arc:noop, fill:noop, stroke:noop,
+        fillText:noop, closePath:noop, save:noop, restore:noop, fillRect:noop,
+        setLineDash:noop, strokeRect:noop, translate:noop, rotate:noop,
+        measureText:()=>({width:0}), createLinearGradient:()=>({addColorStop:noop}),
+        moveTo:function(x,y){ if(isFinite(y)&&y<minY) minY=y; },
+        lineTo:function(x,y){ if(isFinite(y)&&y<minY) minY=y; }
+      },
+      get minY(){ return minY; }
+    };
+  }
+  function _cfRunChart(log) {
+    var cap = _cfMakeCapture();
+    G.document.getElementById = function(id) {
+      if (id==='tc-manual-chart') return {
+        style:{}, classList:{add:noop,remove:noop,contains:()=>false},
+        offsetWidth:350, offsetHeight:250,
+        getContext: function(){ return cap.ctx; }
+      };
+      return _cfSavedGetEl(id);
+    };
+    G._tcDrawManualChart('tc-manual-chart', log);
+    G.document.getElementById = _cfSavedGetEl;
+    return cap.minY;
+  }
+
+  // Short log: Henrik's exact scenario — 2 Testoviron + 10 Nebido every 2 days
+  var _cfLog1 = [
+    {compId:'testoviron', doseMg:'100', date:'2026-06-27'},
+    {compId:'testoviron', doseMg:'150', date:'2026-06-28'},
+    {compId:'nebido', doseMg:'102', date:'2026-06-29'},
+    {compId:'nebido', doseMg:'102', date:'2026-07-01'},
+    {compId:'nebido', doseMg:'102', date:'2026-07-03'},
+    {compId:'nebido', doseMg:'102', date:'2026-07-05'},
+    {compId:'nebido', doseMg:'102', date:'2026-07-07'},
+    {compId:'nebido', doseMg:'102', date:'2026-07-09'},
+    {compId:'nebido', doseMg:'102', date:'2026-07-11'},
+    {compId:'nebido', doseMg:'102', date:'2026-07-13'},
+    {compId:'nebido', doseMg:'102', date:'2026-07-15'},
+    {compId:'nebido', doseMg:'102', date:'2026-07-17'}
+  ];
+  // Extended: same + 10 more Nebido every 4 days (all after bw date Jun 27)
+  var _cfLog2 = _cfLog1.concat([
+    {compId:'nebido', doseMg:'100', date:'2026-07-21'},
+    {compId:'nebido', doseMg:'100', date:'2026-07-25'},
+    {compId:'nebido', doseMg:'100', date:'2026-07-29'},
+    {compId:'nebido', doseMg:'100', date:'2026-08-02'},
+    {compId:'nebido', doseMg:'100', date:'2026-08-06'},
+    {compId:'nebido', doseMg:'100', date:'2026-08-10'},
+    {compId:'nebido', doseMg:'100', date:'2026-08-14'},
+    {compId:'nebido', doseMg:'100', date:'2026-08-18'},
+    {compId:'nebido', doseMg:'100', date:'2026-08-22'},
+    {compId:'nebido', doseMg:'100', date:'2026-08-26'}
+  ]);
+
+  var _cfThrew = false, _cfMinY1 = Infinity, _cfMinY2 = Infinity;
+  try {
+    _cfMinY1 = _cfRunChart(_cfLog1);
+    _cfMinY2 = _cfRunChart(_cfLog2);
+  } catch(e) {
+    _cfThrew = true;
+    console.error('  calFT anchor test threw:', e.message);
+  }
+  check('calFT anchor: no crash', !_cfThrew);
+  if (!_cfThrew && isFinite(_cfMinY1) && isFinite(_cfMinY2)) {
+    // Extended log has all of short log + more injections after bw date.
+    // Peak must be >= short-log peak (minY must be <= short-log minY).
+    // Allow 1px tolerance for floating-point rounding in yOf().
+    check(
+      'calFT anchor: adding post-bw injections must not lower the pre-bw peak (PR #444 regression)',
+      _cfMinY2 <= _cfMinY1 + 1,
+      'short-log minY='+Math.round(_cfMinY1)+' extended-log minY='+Math.round(_cfMinY2)
+    );
+  }
+
+  G._tcp.measuredFT          = _cfSavedFT;
+  G._tcp.currentDoseMgWk     = _cfSavedDose;
+  G._tcBwEntries             = _cfSavedBwE;
+  G.document.getElementById  = _cfSavedGetEl;
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
