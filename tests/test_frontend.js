@@ -3434,6 +3434,90 @@ if (typeof G._tcDrawManualChart === 'function') {
   G.document.getElementById  = _cfSavedGetEl;
 }
 
+// Regression: path 2 (curDose=0) calFT anchor must also be immune to post-BW injections.
+// Root cause: flat baseline added in the else branch used _logMean computed from the
+// full log.  Post-BW injections increased _logMean, which inflated total[anchorDay],
+// which lowered calFT and pulled the whole curve down — same symptom as PR #448 but
+// on the curDose=0 code path.
+console.log('\n── calFT anchor path-2 (curDose=0): post-bw injections must not shift calFT ──');
+if (typeof G._tcDrawManualChart === 'function') {
+  var _cf2SavedFT   = G._tcp.measuredFT;
+  var _cf2SavedDose = G._tcp.currentDoseMgWk;
+  var _cf2SavedBwE  = G._tcBwEntries;
+  var _cf2SavedGetEl = G.document.getElementById;
+
+  G._tcp.measuredFT      = '217';
+  G._tcp.currentDoseMgWk = '';    // _curDose === 0 → path 2 (no prior-dose warm-start)
+  G._tcBwEntries = [{date:'2026-06-27', free_t:217, total_t:600, shbg:40}];
+
+  var _cf2MockCtx = {
+    scale:noop, beginPath:noop, arc:noop, fill:noop, stroke:noop,
+    fillText:noop, closePath:noop, save:noop, restore:noop, fillRect:noop,
+    setLineDash:noop, strokeRect:noop, translate:noop, rotate:noop, moveTo:noop, lineTo:noop,
+    measureText:function(){ return {width:0}; },
+    createLinearGradient:function(){ return {addColorStop:noop}; }
+  };
+  function _cf2RunChart(log) {
+    var captured = null;
+    G.document.getElementById = function(id) {
+      if (id === 'tc-manual-chart') return {
+        style:{}, classList:{add:noop,remove:noop,contains:function(){return false;}},
+        offsetWidth:350, offsetHeight:250,
+        _testCalFTHook: function(v){ captured = v; },
+        getContext: function(){ return _cf2MockCtx; }
+      };
+      return _cf2SavedGetEl(id);
+    };
+    G._tcDrawManualChart('tc-manual-chart', log);
+    G.document.getElementById = _cf2SavedGetEl;
+    return captured;
+  }
+
+  // Short log: injections starting 3 days before BW (anchorDay=3 > 0 — fixes are active)
+  var _cf2Log1 = [
+    {compId:'testoviron', doseMg:'125', date:'2026-06-24'},
+    {compId:'testoviron', doseMg:'125', date:'2026-06-26'},
+    {compId:'testoviron', doseMg:'125', date:'2026-06-28'}
+  ];
+  // Extended: same + 10 Nebido injections after BW date (Jun 27)
+  var _cf2Log2 = _cf2Log1.concat([
+    {compId:'nebido', doseMg:'100', date:'2026-07-01'},
+    {compId:'nebido', doseMg:'100', date:'2026-07-05'},
+    {compId:'nebido', doseMg:'100', date:'2026-07-09'},
+    {compId:'nebido', doseMg:'100', date:'2026-07-13'},
+    {compId:'nebido', doseMg:'100', date:'2026-07-17'},
+    {compId:'nebido', doseMg:'100', date:'2026-07-21'},
+    {compId:'nebido', doseMg:'100', date:'2026-07-25'},
+    {compId:'nebido', doseMg:'100', date:'2026-07-29'},
+    {compId:'nebido', doseMg:'100', date:'2026-08-02'},
+    {compId:'nebido', doseMg:'100', date:'2026-08-06'}
+  ]);
+
+  var _cf2Threw = false, _cf2CalFT1 = null, _cf2CalFT2 = null;
+  try {
+    _cf2CalFT1 = _cf2RunChart(_cf2Log1);
+    _cf2CalFT2 = _cf2RunChart(_cf2Log2);
+  } catch(e) {
+    _cf2Threw = true;
+    console.error('  calFT path-2 anchor test threw:', e.message);
+  }
+  check('calFT path-2 anchor: no crash', !_cf2Threw);
+  check('calFT path-2 anchor: calFT captured for short log',    !_cf2Threw && _cf2CalFT1 !== null);
+  check('calFT path-2 anchor: calFT captured for extended log', !_cf2Threw && _cf2CalFT2 !== null);
+  if (!_cf2Threw && _cf2CalFT1 !== null && _cf2CalFT2 !== null) {
+    check(
+      'calFT path-2 anchor: calFT must not change when post-bw injections added (curDose=0 regression)',
+      Math.abs(_cf2CalFT2 - _cf2CalFT1) < 1e-9,
+      'short calFT='+_cf2CalFT1.toFixed(8)+' extended calFT='+_cf2CalFT2.toFixed(8)
+    );
+  }
+
+  G._tcp.measuredFT         = _cf2SavedFT;
+  G._tcp.currentDoseMgWk    = _cf2SavedDose;
+  G._tcBwEntries            = _cf2SavedBwE;
+  G.document.getElementById = _cf2SavedGetEl;
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);

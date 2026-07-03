@@ -1165,8 +1165,29 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
       // here was wrong: it represented a fictional prior-dose residual that drained away
       // at peak time (making the peak read too low) and post-dose (making levels appear
       // to crash faster than the compound's half-life actually dictates).
+      //
+      // When a BW entry exists, derive the baseline from only the pre-BW portion of
+      // total[] so that post-BW injections cannot inflate it, shift total[anchorDay],
+      // and thereby move calFT — the same immunity applied to the _curDose > 0 path.
+      var _p2Baseline = _logMean;
+      if (_tcBwEntries && _tcBwEntries.length) {
+        var _p2BwDay = Math.round((new Date(_tcBwEntries[0].date + 'T12:00:00') - firstDate) / 86400000);
+        if (_p2BwDay >= 0) {
+          var _p2MaxT = Math.min(_logDays, _p2BwDay);
+          var _p2Pk = 0, _p2Tr = Infinity;
+          for (var _p2i = 0; _p2i <= _p2MaxT; _p2i++) {
+            if (total[_p2i] > _p2Pk) _p2Pk = total[_p2i];
+            if (total[_p2i] < _p2Tr) _p2Tr = total[_p2i];
+          }
+          if (_p2Pk > 0) {
+            if (_p2Tr === Infinity) _p2Tr = _p2Pk;
+            _p2Baseline = (_p2Pk + _p2Tr) / 2 || _p2Pk;
+          }
+          // If _p2Pk === 0 the BW was on day 0; no pre-BW curve exists — fall through.
+        }
+      }
       for (var _blt = 0; _blt <= totalDays; _blt++) {
-        total[_blt] += _logMean;
+        total[_blt] += _p2Baseline;
       }
     }
   }
