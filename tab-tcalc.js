@@ -1167,50 +1167,68 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   var scale     = calFT || 1;
   var unitLabel = calFT ? 'pmol/L' : 'mg';
 
-  // Time-varying SHBG → free-T model when GH-axis compounds are active in protocol
+  // Time-varying SHBG → free-T model when SHBG-suppressing compounds are active in protocol.
+  // Combines multiple compounds multiplicatively:
+  //   SHBG(t) = SHBG_baseline × ∏_i (1 − maxSupp_i × (1 − e^(−t_i/halfTime_i)))
+  // SHBG_baseline is back-calculated from the bloodwork SHBG using the same product at bw date,
+  // so the model is exactly anchored at the measured value.
   var calFT_arr = null;
   var _ghAnnot  = '';
   if (calFT && _tcGhStack.length > 0) {
     var _ttNum  = parseFloat(_tcp.totalT) || 0;
     var _shbgBw = parseFloat(_tcp.shbg)   || 0;
-    var _bwDate = _tcBwEntries && _tcBwEntries[0] ? _tcBwEntries[0].date : null;
     if (_ttNum > 0 && _shbgBw > 0) {
       var _vermBw = _tcVermeulenFT(_ttNum, _shbgBw);
       if (_vermBw) {
-        calFT_arr = new Float64Array(totalDays + 1);
-        for (var _i0 = 0; _i0 <= totalDays; _i0++) calFT_arr[_i0] = calFT;
-        var _nowDayGh = Math.round((Date.now() - firstDate.getTime()) / 86400000);
-        var _maxSuppNow = 0;
+        // Precompute per-compound parameters (day offsets relative to firstDate)
+        var _ghParams = [];
         _tcGhStack.forEach(function(gh) {
           var _ghStart = gh.startDateStr ? new Date(gh.startDateStr + 'T12:00:00') : null;
           if (!_ghStart) return;
-          var _maxSupp  = gh.interactions.shbg.maxSuppression;
-          var _halfTime = gh.interactions.shbg.halfTimeDays;
-          var _ghDay0   = Math.round((_ghStart - firstDate) / 86400000);
-          // Infer SHBG_baseline: back-calculate from bloodwork SHBG if GH was already active at bw date
-          var _shbgBase = _shbgBw;
-          if (_bwDate) {
-            var _bwMs = new Date(_bwDate + 'T12:00:00') - _ghStart;
-            if (_bwMs > 0) {
-              var _tBwOnGh = _bwMs / 86400000;
-              var _suppBw  = _maxSupp * (1 - Math.exp(-_tBwOnGh / _halfTime));
-              if (_suppBw < 0.95) _shbgBase = _shbgBw / (1 - _suppBw);
-            }
-          }
-          for (var _ct = 0; _ct <= totalDays; _ct++) {
-            var _tOnGh = Math.max(0, _ct - _ghDay0);
-            var _supp  = _maxSupp * (1 - Math.exp(-_tOnGh / _halfTime));
-            var _shbgT = Math.max(1, _shbgBase * (1 - _supp));
-            var _vermT = _tcVermeulenFT(_ttNum, _shbgT);
-            if (!_vermT) return;
-            var _cft = calFT * (_vermT / _vermBw);
-            if (_cft > calFT_arr[_ct]) calFT_arr[_ct] = _cft;
-          }
-          var _nowOnGh = Math.max(0, _nowDayGh - _ghDay0);
-          var _nowSupp = _maxSupp * (1 - Math.exp(-_nowOnGh / _halfTime));
-          if (_nowSupp > _maxSuppNow) _maxSuppNow = _nowSupp;
+          _ghParams.push({
+            ghDay0:   Math.round((_ghStart - firstDate) / 86400000),
+            maxSupp:  gh.interactions.shbg.maxSuppression,
+            halfTime: gh.interactions.shbg.halfTimeDays
+          });
         });
-        if (_maxSuppNow > 0.01) _ghAnnot = 'GH: SHBG −' + Math.round(_maxSuppNow * 100) + '%';
+        if (_ghParams.length > 0) {
+          // Back-calculate single shared SHBG baseline from combined suppression at bloodwork date.
+          // SHBG_bw = SHBG_base × ∏_i (1 − supp_i(t_bw))  →  SHBG_base = SHBG_bw / product
+          var _shbgBase = _shbgBw;
+          var _bwDate = _tcBwEntries && _tcBwEntries[0] ? _tcBwEntries[0].date : null;
+          if (_bwDate) {
+            var _bwDay = Math.round((new Date(_bwDate + 'T12:00:00') - firstDate) / 86400000);
+            var _prodBw = 1;
+            _ghParams.forEach(function(gp) {
+              var _tBw = Math.max(0, _bwDay - gp.ghDay0);
+              if (_tBw > 0) _prodBw *= (1 - gp.maxSupp * (1 - Math.exp(-_tBw / gp.halfTime)));
+            });
+            if (_prodBw > 0.05) _shbgBase = _shbgBw / _prodBw;
+          }
+
+          // Build per-day calFT: combined multiplicative SHBG(t) → Vermeulen → scale ratio
+          calFT_arr = new Float64Array(totalDays + 1);
+          var _nowDay = Math.round((Date.now() - firstDate.getTime()) / 86400000);
+          for (var _ct = 0; _ct <= totalDays; _ct++) {
+            var _prod = 1;
+            _ghParams.forEach(function(gp) {
+              var _tOn = Math.max(0, _ct - gp.ghDay0);
+              _prod *= (1 - gp.maxSupp * (1 - Math.exp(-_tOn / gp.halfTime)));
+            });
+            var _shbgT = Math.max(1, _shbgBase * _prod);
+            var _vermT = _tcVermeulenFT(_ttNum, _shbgT);
+            calFT_arr[_ct] = _vermT ? calFT * (_vermT / _vermBw) : calFT;
+          }
+
+          // Combined suppression at "now" for chart annotation
+          var _prodNow = 1;
+          _ghParams.forEach(function(gp) {
+            var _tNow = Math.max(0, _nowDay - gp.ghDay0);
+            _prodNow *= (1 - gp.maxSupp * (1 - Math.exp(-_tNow / gp.halfTime)));
+          });
+          var _combSuppNow = 1 - _prodNow;
+          if (_combSuppNow > 0.01) _ghAnnot = 'SHBG −' + Math.round(_combSuppNow * 100) + '%';
+        }
       }
     }
   }
