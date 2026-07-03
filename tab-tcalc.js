@@ -1182,8 +1182,34 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
           if (_p2Pk > 0) {
             if (_p2Tr === Infinity) _p2Tr = _p2Pk;
             _p2Baseline = (_p2Pk + _p2Tr) / 2 || _p2Pk;
+          } else {
+            // BW on day 0: total[0] = 0 for every injection (tcPkConc(dt=0)=0), so
+            // the pre-BW scan finds nothing.  Compute the stable baseline from the
+            // BW-date injections' OWN settled PK — post-BW injections are excluded so
+            // adding them later cannot change this value or shift total[anchorDay].
+            var _bwDateStr2 = _tcBwEntries[0].date;
+            var _bwDayArr = new Float64Array(totalDays + 1);
+            sorted.forEach(function(e) {
+              if (e.date !== _bwDateStr2) return;
+              var _bwcd = _tcCompInfo(e.compId);
+              var _bwke = Math.LN2 / (_bwcd.halfLifeDays || 1);
+              var _bwka = _tcKa(_bwcd.halfLifeDays || 1);
+              var _bwabs = parseFloat(e.doseMg) * (_bwcd.bioavailability || 1);
+              for (var _bwt = 0; _bwt <= totalDays; _bwt++) {
+                _bwDayArr[_bwt] += _tcPkConc(_bwabs, _bwka, _bwke, _bwt);
+              }
+            });
+            var _bwDayPk = 0, _bwDayTr = Infinity;
+            for (var _bwst = _midLog; _bwst <= _logDays; _bwst++) {
+              if (_bwDayArr[_bwst] > _bwDayPk) _bwDayPk = _bwDayArr[_bwst];
+              if (_bwDayArr[_bwst] < _bwDayTr) _bwDayTr = _bwDayArr[_bwst];
+            }
+            if (_bwDayPk > 0) {
+              if (_bwDayTr === Infinity) _bwDayTr = _bwDayPk;
+              _p2Baseline = (_bwDayPk + _bwDayTr) / 2 || _bwDayPk;
+            }
+            // If still 0 (no BW-date injection data), _logMean fallback stands.
           }
-          // If _p2Pk === 0 the BW was on day 0; no pre-BW curve exists — fall through.
         }
       }
       for (var _blt = 0; _blt <= totalDays; _blt++) {
