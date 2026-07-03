@@ -3591,6 +3591,86 @@ if (typeof G._tcDrawManualChart === 'function') {
   G.document.getElementById = _cf3SavedGetEl;
 }
 
+// Regression: NO bloodwork entry — appending future injections must not lower the peak.
+// Root cause (reported by Henrik): with measuredFT set but no _tcBwEntries entry, calFT
+// fell back to _mftNum / _logMean over a window that grew as injections were appended, so
+// adding injections shrank calFT and pulled the whole curve — including the peak — DOWN.
+// Fix: anchor calFT at "today" when there is no bloodwork draw date, mirroring the
+// bloodwork-anchored path so calFT is immune to injections added after the anchor.
+console.log('\n── no-bloodwork anchor: appending future injections must not lower peak (Henrik report) ──');
+if (typeof G._tcDrawManualChart === 'function') {
+  var _nbSavedFT   = G._tcp.measuredFT;
+  var _nbSavedDose = G._tcp.currentDoseMgWk;
+  var _nbSavedBwE  = G._tcBwEntries;
+  var _nbSavedGh   = G._tcGhStack;
+  var _nbSavedGetEl = G.document.getElementById;
+
+  G._tcp.measuredFT      = '223';
+  G._tcp.currentDoseMgWk = '';     // path 2 (curDose === 0)
+  G._tcBwEntries = null;           // the buggy scenario: measured FT but NO bloodwork entry
+  G._tcGhStack   = [];
+
+  var _nbCalFT = null, _nbFillNums = [];
+  var _nbMockCtx = {
+    scale:noop, beginPath:noop, arc:noop, fill:noop, stroke:noop,
+    fillText:function(t){ if(/^\d+$/.test(String(t))) _nbFillNums.push(Number(t)); },
+    closePath:noop, save:noop, restore:noop, fillRect:noop,
+    setLineDash:noop, strokeRect:noop, translate:noop, rotate:noop, moveTo:noop, lineTo:noop,
+    measureText:function(){ return {width:0}; },
+    createLinearGradient:function(){ return {addColorStop:noop}; }
+  };
+  G.document.getElementById = function(id) {
+    if (id === 'tc-manual-chart') return {
+      style:{}, classList:{add:noop,remove:noop,contains:function(){return false;}},
+      offsetWidth:350, offsetHeight:250,
+      _testCalFTHook: function(v){ _nbCalFT = v; },
+      getContext: function(){ return _nbMockCtx; }
+    };
+    return _nbSavedGetEl(id);
+  };
+
+  // Dates anchored to the real "today" so the implicit anchor (today) lands mid-schedule
+  // in both logs and captures the same pre-anchor injections regardless of run date.
+  var _nbBase = new Date(); _nbBase.setHours(12,0,0,0);
+  function _nbDate(off){ var d=new Date(_nbBase.getTime()+off*86400000); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function _nbSeries(offsets){ return offsets.map(function(o){ return {compId:'nebido', doseMg:'102', date:_nbDate(o)}; }); }
+
+  // Short: 12 injections (starting 6 days before today). Extended: +10 more into the future.
+  var _nbOff1 = [-6,-4,-2,0,2,4,6,8,10,12,14,16];
+  var _nbOff2 = _nbOff1.concat([18,20,22,24,26,28,30,32,34,36]);
+
+  function _nbRun(offsets){ _nbCalFT = null; _nbFillNums = []; G._tcDrawManualChart('tc-manual-chart', _nbSeries(offsets)); return {calFT:_nbCalFT, peak:Math.max.apply(null, _nbFillNums.concat([0]))}; }
+
+  var _nbThrew = false, _nbR1 = null, _nbR2 = null;
+  try {
+    _nbR1 = _nbRun(_nbOff1);
+    _nbR2 = _nbRun(_nbOff2);
+  } catch(e) {
+    _nbThrew = true;
+    console.error('  no-bloodwork anchor test threw:', e.message);
+  }
+  check('no-bloodwork anchor: no crash', !_nbThrew);
+  check('no-bloodwork anchor: calFT captured (short & extended)', !_nbThrew && _nbR1 && _nbR2 && _nbR1.calFT != null && _nbR2.calFT != null);
+  if (!_nbThrew && _nbR1 && _nbR2 && _nbR1.calFT != null && _nbR2.calFT != null) {
+    check(
+      'no-bloodwork anchor: calFT must not change when future injections are appended',
+      Math.abs(_nbR2.calFT - _nbR1.calFT) < 1e-9,
+      'short calFT='+_nbR1.calFT.toFixed(8)+' extended calFT='+_nbR2.calFT.toFixed(8)
+    );
+    check(
+      'no-bloodwork anchor: peak must not drop when future injections are appended',
+      _nbR2.peak >= _nbR1.peak,
+      'short peak='+_nbR1.peak+' extended peak='+_nbR2.peak
+    );
+  }
+
+  G._tcp.measuredFT         = _nbSavedFT;
+  G._tcp.currentDoseMgWk    = _nbSavedDose;
+  G._tcBwEntries            = _nbSavedBwE;
+  G._tcGhStack              = _nbSavedGh;
+  G.document.getElementById = _nbSavedGetEl;
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);

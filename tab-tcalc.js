@@ -1120,13 +1120,33 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     }
   }
 
+  // Unified calibration anchor: the reference time at which _mftNum (the measured or
+  // estimated free T) is taken to hold.  With an explicit bloodwork entry it is the draw
+  // date; with none it is "today" — the measured level describes the user now, and any
+  // injections planned after today must not rescale the historical curve.  Clamped into
+  // the plotted range so an all-future plan anchors at the start and an all-past log at
+  // the end.  This is what makes calFT immune to appended future injections in BOTH the
+  // bloodwork and no-bloodwork cases (previously only the bloodwork case was anchored,
+  // so a no-bloodwork schedule re-scaled — and its peak dropped — as injections grew).
+  var _bwAnchorDate = _tcBwEntries && _tcBwEntries.length ? _tcBwEntries[0].date : null;
+  var _anchorDay, _anchorCutoffDate;
+  if (_bwAnchorDate) {
+    _anchorDay = Math.round((new Date(_bwAnchorDate + 'T12:00:00') - firstDate) / 86400000);
+    _anchorCutoffDate = _bwAnchorDate;
+  } else {
+    var _nowDayA = Math.round((Date.now() - firstDate.getTime()) / 86400000);
+    _anchorDay = Math.max(0, Math.min(totalDays, _nowDayA));
+    var _adD = new Date(firstDate.getTime() + _anchorDay * 86400000);
+    _anchorCutoffDate = _adD.getFullYear() + '-' + String(_adD.getMonth() + 1).padStart(2, '0') + '-' + String(_adD.getDate()).padStart(2, '0');
+  }
+
   // Warm-start: pre-fill curve so the chart starts at the user's measured free T.
   if (calFT && _mftNum > 0) {
     if (_curDose > 0) {
       // Known prior dose: model each compound's residual from a steady-state protocol.
-      // Use only injections up to the bloodwork date so that adding post-bw injections
+      // Use only injections up to the anchor date so that adding later injections
       // cannot change the compound-fraction mix and thereby shift total[anchorDay].
-      var _wsFilterDate = (_tcBwEntries && _tcBwEntries.length) ? _tcBwEntries[0].date : null;
+      var _wsFilterDate = _anchorCutoffDate;
       var _wsSorted = _wsFilterDate
         ? sorted.filter(function(e){ return e.date <= _wsFilterDate; })
         : sorted;
@@ -1166,50 +1186,48 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
       // at peak time (making the peak read too low) and post-dose (making levels appear
       // to crash faster than the compound's half-life actually dictates).
       //
-      // When a BW entry exists, derive the baseline from only the pre-BW portion of
-      // total[] so that post-BW injections cannot inflate it, shift total[anchorDay],
-      // and thereby move calFT — the same immunity applied to the _curDose > 0 path.
+      // Derive the baseline from only the pre-anchor portion of total[] so that
+      // injections after the anchor cannot inflate it, shift total[anchorDay], and
+      // thereby move calFT.  The anchor is the bloodwork draw date when one exists, or
+      // "today" otherwise — the same immunity now applies with or without bloodwork.
       var _p2Baseline = _logMean;
-      if (_tcBwEntries && _tcBwEntries.length) {
-        var _p2BwDay = Math.round((new Date(_tcBwEntries[0].date + 'T12:00:00') - firstDate) / 86400000);
-        if (_p2BwDay >= 0) {
-          var _p2MaxT = Math.min(_logDays, _p2BwDay);
-          var _p2Pk = 0, _p2Tr = Infinity;
-          for (var _p2i = 0; _p2i <= _p2MaxT; _p2i++) {
-            if (total[_p2i] > _p2Pk) _p2Pk = total[_p2i];
-            if (total[_p2i] < _p2Tr) _p2Tr = total[_p2i];
-          }
-          if (_p2Pk > 0) {
-            if (_p2Tr === Infinity) _p2Tr = _p2Pk;
-            _p2Baseline = (_p2Pk + _p2Tr) / 2 || _p2Pk;
-          } else {
-            // BW on day 0: total[0] = 0 for every injection (tcPkConc(dt=0)=0), so
-            // the pre-BW scan finds nothing.  Compute the stable baseline from the
-            // BW-date injections' OWN settled PK — post-BW injections are excluded so
-            // adding them later cannot change this value or shift total[anchorDay].
-            var _bwDateStr2 = _tcBwEntries[0].date;
-            var _bwDayArr = new Float64Array(totalDays + 1);
-            sorted.forEach(function(e) {
-              if (e.date !== _bwDateStr2) return;
-              var _bwcd = _tcCompInfo(e.compId);
-              var _bwke = Math.LN2 / (_bwcd.halfLifeDays || 1);
-              var _bwka = _tcKa(_bwcd.halfLifeDays || 1);
-              var _bwabs = parseFloat(e.doseMg) * (_bwcd.bioavailability || 1);
-              for (var _bwt = 0; _bwt <= totalDays; _bwt++) {
-                _bwDayArr[_bwt] += _tcPkConc(_bwabs, _bwka, _bwke, _bwt);
-              }
-            });
-            var _bwDayPk = 0, _bwDayTr = Infinity;
-            for (var _bwst = 0; _bwst <= totalDays; _bwst++) {
-              if (_bwDayArr[_bwst] > _bwDayPk) _bwDayPk = _bwDayArr[_bwst];
-              if (_bwDayArr[_bwst] < _bwDayTr) _bwDayTr = _bwDayArr[_bwst];
+      if (_anchorDay >= 0) {
+        var _p2MaxT = Math.min(_logDays, _anchorDay);
+        var _p2Pk = 0, _p2Tr = Infinity;
+        for (var _p2i = 0; _p2i <= _p2MaxT; _p2i++) {
+          if (total[_p2i] > _p2Pk) _p2Pk = total[_p2i];
+          if (total[_p2i] < _p2Tr) _p2Tr = total[_p2i];
+        }
+        if (_p2Pk > 0) {
+          if (_p2Tr === Infinity) _p2Tr = _p2Pk;
+          _p2Baseline = (_p2Pk + _p2Tr) / 2 || _p2Pk;
+        } else {
+          // Anchor on day 0: total[0] = 0 for every injection (tcPkConc(dt=0)=0), so
+          // the pre-anchor scan finds nothing.  Compute the stable baseline from the
+          // anchor-date injections' OWN settled PK — later injections are excluded so
+          // adding them cannot change this value or shift total[anchorDay].
+          var _bwDateStr2 = _anchorCutoffDate;
+          var _bwDayArr = new Float64Array(totalDays + 1);
+          sorted.forEach(function(e) {
+            if (e.date !== _bwDateStr2) return;
+            var _bwcd = _tcCompInfo(e.compId);
+            var _bwke = Math.LN2 / (_bwcd.halfLifeDays || 1);
+            var _bwka = _tcKa(_bwcd.halfLifeDays || 1);
+            var _bwabs = parseFloat(e.doseMg) * (_bwcd.bioavailability || 1);
+            for (var _bwt = 0; _bwt <= totalDays; _bwt++) {
+              _bwDayArr[_bwt] += _tcPkConc(_bwabs, _bwka, _bwke, _bwt);
             }
-            if (_bwDayPk > 0) {
-              if (_bwDayTr === Infinity) _bwDayTr = _bwDayPk;
-              _p2Baseline = (_bwDayPk + _bwDayTr) / 2 || _bwDayPk;
-            }
-            // If still 0 (no BW-date injection data), _logMean fallback stands.
+          });
+          var _bwDayPk = 0, _bwDayTr = Infinity;
+          for (var _bwst = 0; _bwst <= totalDays; _bwst++) {
+            if (_bwDayArr[_bwst] > _bwDayPk) _bwDayPk = _bwDayArr[_bwst];
+            if (_bwDayArr[_bwst] < _bwDayTr) _bwDayTr = _bwDayArr[_bwst];
           }
+          if (_bwDayPk > 0) {
+            if (_bwDayTr === Infinity) _bwDayTr = _bwDayPk;
+            _p2Baseline = (_bwDayPk + _bwDayTr) / 2 || _bwDayPk;
+          }
+          // If still 0 (no anchor-date injection data), _logMean fallback stands.
         }
       }
       for (var _blt = 0; _blt <= totalDays; _blt++) {
@@ -1218,18 +1236,16 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     }
   }
 
-  // Anchor calFT at the bloodwork date so that adding future injections cannot
-  // re-scale the pre-bw portion of the curve.  total[] now includes any warm-start
-  // residual, so total[anchorDay] reflects exactly what the model predicts at the
-  // moment of the blood draw — and calFT is chosen to make that equal _mftNum.
-  // Injections after anchorDay contribute 0 at anchorDay (PkConc(dt<0)=0), so
-  // calFT is immune to log extensions beyond the bloodwork date.
-  var _bwAnchorDate = _tcBwEntries && _tcBwEntries.length ? _tcBwEntries[0].date : null;
-  if (calFT && _bwAnchorDate && _mftNum > 0) {
-    var _anchorDay = Math.round((new Date(_bwAnchorDate + 'T12:00:00') - firstDate) / 86400000);
-    if (_anchorDay >= 0 && _anchorDay <= totalDays && total[_anchorDay] > 0) {
-      calFT = _mftNum / total[_anchorDay];
-    }
+  // Anchor calFT at the unified anchor day (the bloodwork draw date, or today when no
+  // bloodwork entry exists) so that adding future injections cannot re-scale the curve.
+  // total[] now includes any warm-start residual, so total[anchorDay] reflects exactly
+  // what the model predicts at the anchor — and calFT is chosen to make that equal
+  // _mftNum.  Injections after anchorDay contribute 0 at anchorDay (PkConc(dt<0)=0), so
+  // calFT is immune to log extensions beyond the anchor.  Without this, a no-bloodwork
+  // schedule fell back to calFT = _mftNum / _logMean over a window that grew with the
+  // schedule, so appending injections lowered calFT and dragged the peak down.
+  if (calFT && _mftNum > 0 && _anchorDay >= 0 && _anchorDay <= totalDays && total[_anchorDay] > 0) {
+    calFT = _mftNum / total[_anchorDay];
   }
   if (canvas._testCalFTHook) canvas._testCalFTHook(calFT);
 
