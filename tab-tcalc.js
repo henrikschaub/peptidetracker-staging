@@ -1133,22 +1133,27 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   var _bwAnchorDay = _bwAnchorDate
     ? Math.round((new Date(_bwAnchorDate + 'T12:00:00') - firstDate) / 86400000)
     : null;
-  if (_bwAnchorDay !== null && _bwAnchorDay >= 0 && _bwAnchorDay <= totalDays) {
-    // Bloodwork drawn on/after the first injection — anchor exactly at the draw date.  A
-    // real draw is always in the past and planned injections are in the future (after the
-    // draw), so total[drawDay] stays invariant to them and the peak cannot drop.
-    _anchorDay = _bwAnchorDay;
-    _anchorCutoffDate = _bwAnchorDate;
+  if (_bwAnchorDay !== null) {
+    // Bloodwork exists — anchor at the draw day, clamped into the plotted range.
+    //  • Draw dated BEFORE the first injection (a pre-cycle baseline — the normal case)
+    //    clamps to day 0, so the curve STARTS at the measured baseline free T and rises as
+    //    injections accumulate.  (Pinning it at "today" instead made the curve begin well
+    //    below baseline and only cross it days later — the reported "not plotted from 217".)
+    //  • Draw dated during/after the cycle anchors at its actual day.
+    // total[anchorDay] is immune to injections added after it (PkConc(dt<0)=0), so calFT
+    // stays fixed and the peak can only rise as injections are added.
+    _anchorDay = Math.max(0, Math.min(totalDays, _bwAnchorDay));
+    if (_anchorDay === _bwAnchorDay) {
+      _anchorCutoffDate = _bwAnchorDate;
+    } else {
+      var _adB = new Date(firstDate.getTime() + _anchorDay * 86400000);
+      _anchorCutoffDate = _adB.getFullYear() + '-' + String(_adB.getMonth() + 1).padStart(2, '0') + '-' + String(_adB.getDate()).padStart(2, '0');
+    }
   } else {
-    // Either no bloodwork, or bloodwork drawn OUTSIDE the injection span — before the cycle
-    // (a pre-cycle baseline draw, the normal case) or after it washed out.  In all of these
-    // the measured level is a baseline/reference, not a mid-cycle waypoint, so anchor at a
-    // stable in-span day: "today" when it falls within the span, otherwise day 0.  total[0]
-    // is immune to every later injection (PkConc(dt=0)=0), so calFT cannot move and the peak
-    // can only rise as injections are added.  A pre-cycle bloodwork made _anchorDay negative,
-    // which skipped the anchor entirely and fell back to calFT = _mftNum / _logMean over a
-    // window that grew with the schedule — that was the reported peak drop.  Anchoring in the
-    // washout tail is likewise avoided: its value climbs with the accumulating depot.
+    // No bloodwork at all — anchor at "today" when it falls within the injection span
+    // (the measured/estimated level describes the user now), otherwise day 0 (an all-future
+    // plan) or, for a fully washed-out all-past log, day 0 as well.  total[0] is immune to
+    // every later injection, so calFT cannot move and the peak can only rise.
     var _nowDayA = Math.round((Date.now() - firstDate.getTime()) / 86400000);
     _anchorDay = (_nowDayA >= 0 && _nowDayA <= _logDays) ? _nowDayA : 0;
     var _adD = new Date(firstDate.getTime() + _anchorDay * 86400000);
@@ -1213,14 +1218,26 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
           if (total[_p2i] > _p2Pk) _p2Pk = total[_p2i];
           if (total[_p2i] < _p2Tr) _p2Tr = total[_p2i];
         }
-        if (_p2Pk > 0) {
+        // Baseline case (curve anchored at day 0 — a pre-cycle baseline draw, or none):
+        // the measured free T is the user's PRE-cycle baseline, so the curve must start
+        // there and rise.  Scale the injected accumulation so its value at "today" equals
+        // one baseline unit: the floor becomes total[today] (the accumulation so far).  With
+        // calFT anchored at total[0] = this floor, displayed[0] = _mftNum (the curve starts
+        // at baseline) AND the peak is physiological.  total[today] is invariant to injections
+        // planned after today, so the peak cannot drop as future injections are added.
+        // (Anchoring the floor at the tiny day-0 residual instead made calFT enormous — the
+        // curve started at baseline but the peak was absurdly high.)
+        var _slopeDay0 = Math.round((Date.now() - firstDate.getTime()) / 86400000);
+        if (_anchorDay === 0 && _slopeDay0 >= 1 && _slopeDay0 <= _logDays && total[_slopeDay0] > 0) {
+          _p2Baseline = total[_slopeDay0];
+        } else if (_p2Pk > 0) {
           if (_p2Tr === Infinity) _p2Tr = _p2Pk;
           _p2Baseline = (_p2Pk + _p2Tr) / 2 || _p2Pk;
         } else {
-          // Anchor on day 0: total[0] = 0 for every injection (tcPkConc(dt=0)=0), so
-          // the pre-anchor scan finds nothing.  Compute the stable baseline from the
-          // anchor-date injections' OWN settled PK — later injections are excluded so
-          // adding them cannot change this value or shift total[anchorDay].
+          // Anchor on day 0 with no "today" accumulation (all-future plan or all-past log):
+          // total[0] = 0 for every injection (tcPkConc(dt=0)=0), so the pre-anchor scan finds
+          // nothing.  Compute the stable baseline from the anchor-date injections' OWN settled
+          // PK — later injections are excluded so adding them cannot shift total[anchorDay].
           var _bwDateStr2 = _anchorCutoffDate;
           var _bwDayArr = new Float64Array(totalDays + 1);
           sorted.forEach(function(e) {
@@ -1332,6 +1349,11 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
       }
     }
   }
+
+  // Test hook: the displayed free-T value at the first plotted day (day 0).  With a
+  // pre-cycle baseline anchor this must equal the measured baseline, i.e. the curve
+  // starts at the baseline and rises — not below it.
+  if (canvas._testStartHook) canvas._testStartHook(total[0] * (calFT_arr ? calFT_arr[0] : scale));
 
   var dpr  = window.devicePixelRatio || 1;
   var cssW = canvas.offsetWidth || 300;
