@@ -187,13 +187,35 @@ function _tcComputeGhStack() {
   idxs.forEach(function(idx) {
     var stack = (_tcActiveStacks.stacks || [])[idx];
     if (!stack) return;
+    var cycleStart = stack.cycle_start || '';
+    // Peptides — each entry has its own start_date
     (stack.peptides || []).forEach(function(pep) {
       var pepId = pep.id;
       if (!pepId || !_tcSysInter[pepId]) return;
       var inter = _tcSysInter[pepId];
       if (!inter.shbg || inter.shbg.direction !== 'suppress') return;
-      _tcGhStack.push({pepId: pepId, startDateStr: pep.start_date || '', interactions: inter});
+      _tcGhStack.push({pepId: pepId, startDateStr: pep.start_date || cycleStart, interactions: inter});
     });
+    // Enhanced compounds — no per-compound start_date, fall back to cycle_start
+    if (stack.enhanced && stack.enhanced.compounds) {
+      (stack.enhanced.compounds || []).forEach(function(c) {
+        var cId = c.id;
+        if (!cId || !_tcSysInter[cId]) return;
+        var inter = _tcSysInter[cId];
+        if (!inter.shbg || inter.shbg.direction !== 'suppress') return;
+        _tcGhStack.push({pepId: cId, startDateStr: c.start_date || cycleStart, interactions: inter});
+      });
+    }
+    // TRT compounds — same fallback
+    if (stack.trt && stack.trt.compounds) {
+      (stack.trt.compounds || []).forEach(function(c) {
+        var cId = c.id;
+        if (!cId || !_tcSysInter[cId]) return;
+        var inter = _tcSysInter[cId];
+        if (!inter.shbg || inter.shbg.direction !== 'suppress') return;
+        _tcGhStack.push({pepId: cId, startDateStr: c.start_date || cycleStart, interactions: inter});
+      });
+    }
   });
 }
 
@@ -1321,6 +1343,24 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     ctx.strokeStyle = dot + '99'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(ix, PAD.top + cH); ctx.lineTo(ix, PAD.top + cH + 5); ctx.stroke();
   });
+
+  // Bloodwork dots — one per entry that has a free_t value, plotted at their calendar date
+  if (_tcBwEntries && calFT) {
+    _tcBwEntries.forEach(function(bwE) {
+      if (bwE.free_t == null) return;
+      var bwDay = Math.round((new Date(bwE.date + 'T12:00:00') - firstDate) / 86400000);
+      if (bwDay < xStart || bwDay > xEnd) return;
+      var bwX = xOf(bwDay);
+      var bwY = yOf(bwE.free_t);
+      ctx.beginPath();
+      ctx.arc(bwX, bwY, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#e8a020cc';
+      ctx.fill();
+      ctx.strokeStyle = '#e8a020';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+  }
 
   ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'center';
   var labelEvery = winDays <= 7 ? 1 : winDays <= 30 ? 5 : xDays <= 28 ? 7 : xDays <= 84 ? 14 : 28;
