@@ -29,6 +29,7 @@ var _tcBwEntries      = null; // null = not loaded; [] = loaded & empty; [...] =
 var _tcBwLoading      = false;
 var _tcBwAddExtras    = [];   // custom extra-test rows while add sheet is open
 var _tcEditSeriesId = null;   // seriesId currently open in the Edit Series sheet
+var _tcChartZoom   = 'whole'; // active zoom level: 'today' | 'week' | 'month' | 'whole'
 
 // ── Blood test catalogue ───────────────────────────────────────────────────────
 var _TC_BW_TESTS = [
@@ -696,6 +697,19 @@ function _tcShowSeriesDetail(sid) {
   document.body.appendChild(ol);
 }
 
+function _tcSetChartZoom(z) {
+  _tcChartZoom = z;
+  var validLog = (_tcp && _tcp.manualLog) ? _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; }) : [];
+  _tcDrawManualChart('tc-main-chart', validLog, z);
+  ['today','week','month','whole'].forEach(function(zz) {
+    var btn = document.getElementById('tc-zoom-' + zz);
+    if (!btn) return;
+    btn.style.background   = zz === z ? 'rgba(102,136,204,0.25)' : 'none';
+    btn.style.color        = zz === z ? '#6688cc' : 'var(--muted2)';
+    btn.style.borderColor  = zz === z ? '#6688cc66' : 'var(--border)';
+  });
+}
+
 function _tcSaveEditSeries() {
   var sid = _tcEditSeriesId;
   if (!sid || !_tcp || !_tcp.manualLog) return;
@@ -750,7 +764,7 @@ function _tcSetManualField(idx, field, val) {
   } else {
     var validLog = _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; });
     if (validLog.length > 0 && document.getElementById('tc-main-chart')) {
-      _tcDrawManualChart('tc-main-chart', validLog);
+      _tcDrawManualChart('tc-main-chart', validLog, _tcChartZoom);
     } else {
       buildTCalc();
     }
@@ -939,7 +953,7 @@ function _tcDefaultFT(birthYear) {
   return 180;
 }
 
-function _tcDrawManualChart(canvasId, log) {
+function _tcDrawManualChart(canvasId, log, zoom3) {
   var canvas = document.getElementById(canvasId);
   if (!canvas || !log || log.length === 0) return;
 
@@ -1070,19 +1084,29 @@ function _tcDrawManualChart(canvasId, log) {
     }
   }
 
+  // Zoom window
+  var _zoom = zoom3 || _tcChartZoom || 'whole';
+  var nowDay = Math.round((Date.now() - firstDate.getTime()) / 86400000);
+  var xStart = 0, xEnd = xDays;
+  if (_zoom === 'today')       { xStart = Math.max(0, nowDay - 2); xEnd = Math.min(xDays, nowDay + 2); }
+  else if (_zoom === 'week')   { xStart = Math.max(0, nowDay - 3); xEnd = Math.min(xDays, nowDay + 4); }
+  else if (_zoom === 'month')  { xStart = Math.max(0, nowDay - 15); xEnd = Math.min(xDays, nowDay + 15); }
+  if (xEnd <= xStart) xEnd = Math.min(xDays, xStart + 7);
+
   // Find peak within visible window
   var peakV = 0, peakT = 0;
-  for (var _pi = 0; _pi <= xDays; _pi++) {
+  for (var _pi = xStart; _pi <= xEnd; _pi++) {
     var _pv = total[_pi] * scale;
     if (_pv > peakV) { peakV = _pv; peakT = _pi; }
   }
 
-  function xOf(t){ return PAD.left + (t / xDays) * cW; }
+  function xOf(t){ return PAD.left + ((t - xStart) / (xEnd - xStart)) * cW; }
   function yOf(v){ return PAD.top  + cH - (v / vMax) * cH; }
 
-  var gridStep = xDays <= 28 ? 7 : xDays <= 84 ? 14 : 28;
+  var winDays = xEnd - xStart;
+  var gridStep = winDays <= 7 ? 1 : winDays <= 30 ? 5 : xDays <= 28 ? 7 : xDays <= 84 ? 14 : 28;
   ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
-  for (var dg = 0; dg <= xDays; dg += gridStep) {
+  for (var dg = xStart; dg <= xEnd; dg += gridStep) {
     var gx = xOf(dg);
     ctx.beginPath(); ctx.moveTo(gx, PAD.top); ctx.lineTo(gx, PAD.top + cH); ctx.stroke();
   }
@@ -1123,17 +1147,25 @@ function _tcDrawManualChart(canvasId, log) {
 
   var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
   grad.addColorStop(0, lineColor + '55'); grad.addColorStop(1, lineColor + '00');
-  ctx.beginPath(); ctx.moveTo(xOf(0), PAD.top + cH);
-  for (var t2 = 0; t2 <= xDays; t2++) ctx.lineTo(xOf(t2), yOf(total[t2] * scale || 0));
-  ctx.lineTo(xOf(xDays), PAD.top + cH);
+  ctx.beginPath(); ctx.moveTo(xOf(xStart), PAD.top + cH);
+  for (var t2 = xStart; t2 <= xEnd; t2++) ctx.lineTo(xOf(t2), yOf(total[t2] * scale || 0));
+  ctx.lineTo(xOf(xEnd), PAD.top + cH);
   ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
-  ctx.beginPath(); ctx.moveTo(xOf(0), yOf(total[0] * scale || 0));
-  for (var t3 = 1; t3 <= xDays; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] * scale || 0));
+  ctx.beginPath(); ctx.moveTo(xOf(xStart), yOf(total[xStart] * scale || 0));
+  for (var t3 = xStart + 1; t3 <= xEnd; t3++) ctx.lineTo(xOf(t3), yOf(total[t3] * scale || 0));
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+
+  // "Now" vertical line for zoomed views
+  if (_zoom !== 'whole' && nowDay >= xStart && nowDay <= xEnd) {
+    var nowX = xOf(nowDay);
+    ctx.strokeStyle = '#ffffff22'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(nowX, PAD.top); ctx.lineTo(nowX, PAD.top + cH); ctx.stroke();
+  }
 
   sorted.forEach(function(e) {
     var injectDay = Math.round((new Date(e.date) - firstDate) / 86400000);
+    if (injectDay < xStart || injectDay > xEnd) return;
     var dot = _tcCompInfo(e.compId).dot || lineColor;
     var ix = xOf(injectDay);
     ctx.strokeStyle = dot + '99'; ctx.lineWidth = 1;
@@ -1141,10 +1173,9 @@ function _tcDrawManualChart(canvasId, log) {
   });
 
   ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'center';
-  var labelEvery = xDays <= 28 ? 7 : xDays <= 84 ? 14 : 28;
-  for (var dl = 0; dl <= xDays; dl += labelEvery) {
+  var labelEvery = winDays <= 7 ? 1 : winDays <= 30 ? 5 : xDays <= 28 ? 7 : xDays <= 84 ? 14 : 28;
+  for (var dl = xStart; dl <= xEnd; dl += labelEvery) {
     var lx = xOf(dl);
-    if (lx > PAD.left + cW + 8) break;
     var labelDate = new Date(firstDate.getTime() + dl * 86400000);
     var _MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     var lbl = labelDate.getDate() + ' ' + _MONTHS[labelDate.getMonth()];
@@ -1663,7 +1694,15 @@ function buildTCalc() {
   html += '<span style="font-size:11px;color:var(--muted2)">' + (mftNum > 0 ? 'calibrated · pmol/L' : 'add bloodwork to calibrate') + '</span>';
   html += '</div>';
   if (validLog.length > 0) {
-    html += '<div style="padding:2px 16px 10px"><canvas id="tc-main-chart" style="width:100%;display:block;"></canvas></div>';
+    html += '<div style="padding:2px 16px 10px">';
+    html += '<div style="display:flex;gap:4px;margin-bottom:8px">';
+    ['today','week','month','whole'].forEach(function(z) {
+      var isA = _tcChartZoom === z;
+      html += '<button id="tc-zoom-' + z + '" onclick="_tcSetChartZoom(\'' + z + '\')" style="flex:1;background:' + (isA ? 'rgba(102,136,204,0.25)' : 'none') + ';border:1px solid ' + (isA ? '#6688cc66' : 'var(--border)') + ';border-radius:6px;color:' + (isA ? '#6688cc' : 'var(--muted2)') + ';font-size:9px;font-weight:700;letter-spacing:0.8px;cursor:pointer;padding:5px 2px;font-family:inherit">' + z.toUpperCase() + '</button>';
+    });
+    html += '</div>';
+    html += '<canvas id="tc-main-chart" style="width:100%;display:block;"></canvas>';
+    html += '</div>';
   } else {
     html += '<div style="padding:28px 16px;text-align:center;color:var(--muted2);font-size:13px">';
     html += 'No injections logged yet.<br><span style="font-size:12px;opacity:0.6">Add injections below to plot your plasma curve.</span>';
@@ -1896,6 +1935,6 @@ function buildTCalc() {
   el.innerHTML = html;
 
   if (validLog.length > 0) {
-    requestAnimationFrame(function() { _tcDrawManualChart('tc-main-chart', validLog); });
+    requestAnimationFrame(function() { _tcDrawManualChart('tc-main-chart', validLog, _tcChartZoom); });
   }
 }
