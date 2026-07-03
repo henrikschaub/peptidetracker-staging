@@ -66,7 +66,7 @@ const sandbox = vm.createContext({
 vm.runInContext(patchedScript, sandbox);
 // Load tab files so their functions/vars are available in the same sandbox
 const tabFiles = ['tab-cycles.js','tab-macros.js','tab-stack.js','tab-today.js',
-                  'tab-schedule.js','tab-timeline.js','tab-body.js','tab-recon.js','tab-blood.js','tab-tcalc.js'];
+                  'tab-schedule.js','tab-timeline.js','tab-body.js','tab-recon.js','tab-blood.js','tab-tcalc.js','tab-supplements.js'];
 const dir = path.dirname(path.resolve(htmlPath));
 tabFiles.forEach(f => {
   const tabPath = path.join(dir, f);
@@ -3791,6 +3791,68 @@ if (typeof G._tcDrawManualChart === 'function') {
   G._tcBwEntries            = _pbSavedBwE;
   G._tcGhStack              = _pbSavedGh;
   G.document.getElementById = _pbSavedGetEl;
+}
+
+// ── Supplements feature ──────────────────────────────────────────────────────
+console.log('\n── Supplements: catalogue, cadence logic, and rendering ──');
+if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
+  check('SUPPLEMENT_CAT is a non-empty array', Array.isArray(G.SUPPLEMENT_CAT) && G.SUPPLEMENT_CAT.length >= 10);
+  check('every catalogue entry has id, name and a dose list',
+    G.SUPPLEMENT_CAT.every(function(c){ return c.id && c.name && Array.isArray(c.doses) && c.doses.length; }));
+  check('catalogue ids are unique',
+    new Set(G.SUPPLEMENT_CAT.map(function(c){return c.id;})).size === G.SUPPLEMENT_CAT.length);
+
+  // cadence: daily always active
+  check('daily supplement active on any day',
+    G._suppActiveOn({freq:'daily'}, new Date('2026-07-03')) === true);
+
+  // every other day: active on start day and +2, not +1
+  var _eod = {freq:'eod', start_date:'2026-07-01'};
+  check('eod active on start day',      G._suppActiveOn(_eod, new Date('2026-07-01T09:00:00')) === true);
+  check('eod inactive on day+1',        G._suppActiveOn(_eod, new Date('2026-07-02T09:00:00')) === false);
+  check('eod active on day+2',          G._suppActiveOn(_eod, new Date('2026-07-03T09:00:00')) === true);
+  check('eod inactive before start',    G._suppActiveOn(_eod, new Date('2026-06-30T09:00:00')) === false);
+
+  // weekly: same weekday only (2026-07-01 is a Wednesday)
+  var _wk = {freq:'weekly', start_date:'2026-07-01'};
+  check('weekly active on same weekday (+7)', G._suppActiveOn(_wk, new Date('2026-07-08T09:00:00')) === true);
+  check('weekly inactive on other weekday',   G._suppActiveOn(_wk, new Date('2026-07-09T09:00:00')) === false);
+
+  // _supplementsForDay filters by activity
+  G._supplements = [
+    {id:'a', supp_id:'vitd3', name:'Vitamin D3', dose:'5000 IU', freq:'daily',  timing:'AM'},
+    {id:'b', supp_id:'omega3', name:'Omega-3',   dose:'2000 mg', freq:'weekly', timing:'PM', start_date:'2026-07-01'}
+  ];
+  var _wed = G._supplementsForDay(new Date('2026-07-01T09:00:00'));
+  var _thu = G._supplementsForDay(new Date('2026-07-02T09:00:00'));
+  check('_supplementsForDay includes daily + matching weekly', _wed.length === 2);
+  check('_supplementsForDay drops non-matching weekly',        _thu.length === 1 && _thu[0].name === 'Vitamin D3');
+
+  // renderTodaySupplements writes a section when supplements are active
+  if (typeof G.renderTodaySupplements === 'function') {
+    var _rtsHTML = null;
+    var _savedGE = G.document.getElementById;
+    var _capEl = { set innerHTML(v){ _rtsHTML = v; }, get innerHTML(){ return _rtsHTML; } };
+    G.document.getElementById = function(id){ return id==='today-supplements' ? _capEl : _savedGE(id); };
+    var _rtsThrew = false;
+    try { G.renderTodaySupplements(new Date('2026-07-01T09:00:00')); } catch(e){ _rtsThrew=true; console.error('  renderTodaySupplements threw:', e.message); }
+    check('renderTodaySupplements: no crash', !_rtsThrew);
+    check('renderTodaySupplements: shows a SUPPLEMENTS section', typeof _rtsHTML==='string' && /SUPPLEMENTS/.test(_rtsHTML));
+    check('renderTodaySupplements: lists the active supplement name', typeof _rtsHTML==='string' && /Vitamin D3/.test(_rtsHTML));
+    // empty when nothing active
+    G._supplements = [];
+    G.renderTodaySupplements(new Date('2026-07-01T09:00:00'));
+    check('renderTodaySupplements: empty when no supplements active', _rtsHTML === '');
+    G.document.getElementById = _savedGE;
+    G._supplements = [];
+  }
+
+  check('buildSupplements is defined', typeof G.buildSupplements === 'function');
+  check('syncSupplementsFromAgent is defined', typeof G.syncSupplementsFromAgent === 'function');
+  check('pushSupplementToAgent / deleteSupplementFromAgent defined',
+    typeof G.pushSupplementToAgent === 'function' && typeof G.deleteSupplementFromAgent === 'function');
+} else {
+  check('SUPPLEMENT_CAT defined (tab-supplements.js loaded)', false);
 }
 
 console.log('\n───────────────────────────────────────────────────────────');
