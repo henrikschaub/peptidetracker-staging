@@ -37,12 +37,49 @@ var _tcActiveStacks = null;   // raw response from /protocol/stacks
 
 // Testosterone → SHBG dose-response model. Exogenous androgens suppress hepatic
 // SHBG dose-dependently (SHBG ∝ T^(−β)); this is the dominant driver of free-T
-// drift away from a single bloodwork calibration. β default 0.25, with a 0.15–0.40
-// band to reflect the large inter-individual spread. Refine β with serial SHBG labs.
+// drift away from a single bloodwork calibration. β is fitted PER USER from their
+// own blood tests at runtime (see _tcFitBeta) — the values below are only the
+// POPULATION FALLBACK used until a user has ≥2 SHBG labs at different T levels.
+// Not tailored to any individual.
 var TCALC_TSHBG_BETA    = 0.25;
 var TCALC_TSHBG_BETA_LO = 0.15;
 var TCALC_TSHBG_BETA_HI = 0.40;
 var TCALC_TSHBG_LAG_DAYS = 25;   // SHBG responds over weeks — lag the T level by this τ
+
+// Fit the user's personal SHBG→T dose-response exponent β from their own bloodwork.
+// Model: SHBG ∝ totalT^(−β)  ⇒  ln(SHBG) = a − β·ln(totalT). β is the negated slope of a
+// least-squares line through the user's (total T, SHBG) blood-test points. The band comes
+// from the fit's own scatter (standard error), so it tightens as more labs are logged.
+// Returns null when there isn't enough spread/data — the caller then uses the population
+// fallback above. This keeps calibration inside the app and adapts to ANY user; nothing
+// is hardcoded to a specific person.
+function _tcFitBeta(entries) {
+  if (!entries || !entries.length) return null;
+  var pts = [];
+  entries.forEach(function(e) {
+    var tt = parseFloat(e && e.total_t), sh = parseFloat(e && e.shbg);
+    if (tt > 0 && sh > 0) pts.push({ x: Math.log(tt), y: Math.log(sh) });
+  });
+  if (pts.length < 2) return null;
+  var xs = pts.map(function(p){ return p.x; });
+  if (Math.max.apply(null, xs) - Math.min.apply(null, xs) < 0.05) return null; // T levels too similar
+  var n = pts.length, sx = 0, sy = 0, sxx = 0, sxy = 0;
+  pts.forEach(function(p){ sx += p.x; sy += p.y; sxx += p.x * p.x; sxy += p.x * p.y; });
+  var denom = n * sxx - sx * sx;
+  if (Math.abs(denom) < 1e-9) return null;
+  var slope = (n * sxy - sx * sy) / denom;
+  var beta = Math.max(0.05, Math.min(0.60, -slope));   // clamp to a physiological range
+  var half;
+  if (n >= 3) {
+    var intercept = (sy - slope * sx) / n, ssr = 0;
+    pts.forEach(function(p){ var pred = intercept + slope * p.x; ssr += (p.y - pred) * (p.y - pred); });
+    var seSlope = Math.sqrt((ssr / (n - 2)) / (sxx - sx * sx / n));
+    half = Math.max(0.04, Math.min(0.25, seSlope));    // ~1 SE band, clamped
+  } else {
+    half = 0.10;                                        // two points: no scatter estimate yet
+  }
+  return { beta: beta, lo: Math.max(0.02, beta - half), hi: Math.min(0.70, beta + half), n: n };
+}
 
 // ── Blood test catalogue ───────────────────────────────────────────────────────
 var _TC_BW_TESTS = [
@@ -1316,6 +1353,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   //      to zero width at the draw (calibrated there) and widens away from it.
   var calFT_arr = null, _calFTlo = null, _calFThi = null;
   var _ghAnnot  = '';
+  var _betaAnnot = '';
   var _ttNum  = parseFloat(_tcp.totalT) || 0;
   var _shbgBw = parseFloat(_tcp.shbg)   || 0;
   if (calFT && _ttNum > 0 && _shbgBw > 0) {
@@ -1370,14 +1408,22 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
         }
         return arr;
       };
-      calFT_arr = _mkArr(TCALC_TSHBG_BETA);
-      _calFTlo  = _mkArr(TCALC_TSHBG_BETA_LO);
-      _calFThi  = _mkArr(TCALC_TSHBG_BETA_HI);
-      if (canvas._testShbgHook) canvas._testShbgHook({ calFT: calFT, arr: calFT_arr, lo: _calFTlo, hi: _calFThi, refDay: _shbgRefDay, total: total });
+      // Personalise β from the user's own blood tests; fall back to the population default.
+      var _betaFit = _tcFitBeta(_tcBwEntries);
+      var _betaC  = _betaFit ? _betaFit.beta : TCALC_TSHBG_BETA;
+      var _betaLo = _betaFit ? _betaFit.lo   : TCALC_TSHBG_BETA_LO;
+      var _betaHi = _betaFit ? _betaFit.hi   : TCALC_TSHBG_BETA_HI;
+      _betaAnnot = _betaFit ? ('β ' + _betaC.toFixed(2) + ' · ' + _betaFit.n + ' labs')
+                            : ('β ' + TCALC_TSHBG_BETA.toFixed(2) + ' · population');
+
+      calFT_arr = _mkArr(_betaC);
+      _calFTlo  = _mkArr(_betaLo);
+      _calFThi  = _mkArr(_betaHi);
+      if (canvas._testShbgHook) canvas._testShbgHook({ calFT: calFT, arr: calFT_arr, lo: _calFTlo, hi: _calFThi, refDay: _shbgRefDay, total: total, beta: _betaC, personalized: !!_betaFit });
 
       // Modelled SHBG change at "now" vs the bloodwork value, for the chart annotation.
       var _nowDay = Math.max(0, Math.min(totalDays, Math.round((Date.now() - firstDate.getTime()) / 86400000)));
-      var _shbgNow = _shbgBase * _ghProd(_nowDay) * _tFactor(_nowDay, TCALC_TSHBG_BETA);
+      var _shbgNow = _shbgBase * _ghProd(_nowDay) * _tFactor(_nowDay, _betaC);
       var _shbgDelta = _shbgBw > 0 ? (_shbgNow / _shbgBw - 1) : 0;
       if (Math.abs(_shbgDelta) > 0.01) _ghAnnot = 'SHBG ' + (_shbgDelta < 0 ? '−' : '+') + Math.round(Math.abs(_shbgDelta) * 100) + '%';
     }
@@ -1468,11 +1514,16 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   ctx.textAlign = 'center'; ctx.fillStyle = '#444'; ctx.font = '8px DM Sans,sans-serif';
   ctx.fillText(unitLabel, 0, 0); ctx.restore();
 
-  // GH SHBG suppression annotation (top-right of chart)
+  // SHBG suppression + β-source annotation (top-right of chart)
   if (_ghAnnot) {
     ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'right';
     ctx.fillStyle = '#3cffa077';
     ctx.fillText(_ghAnnot, PAD.left + cW, PAD.top + 9);
+  }
+  if (_betaAnnot) {
+    ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'right';
+    ctx.fillStyle = '#8891a5aa';   // muted: shows whether β is personalised or population default
+    ctx.fillText(_betaAnnot, PAD.left + cW, PAD.top + (_ghAnnot ? 19 : 9));
   }
 
   var lineColor = _tcCompInfo(sorted[0].compId).dot || '#e8a020';
