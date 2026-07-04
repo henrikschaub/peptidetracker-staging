@@ -3899,6 +3899,71 @@ if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
   check('SUPPLEMENT_CAT defined (tab-supplements.js loaded)', false);
 }
 
+// ── Testosterone → SHBG dose-dependent free-T model (+ uncertainty band) ──
+console.log('\n── T-calc: testosterone→SHBG dose-dependent model + β band ──');
+if (typeof G._tcDrawManualChart === 'function') {
+  var _shSavedTp   = G._tcp;
+  var _shSavedBw   = G._tcBwEntries;
+  var _shSavedGh   = G._tcGhStack;
+  var _shSavedGE   = G.document.getElementById;
+
+  var _shCap = null;
+  var _shCtx = {
+    scale:noop, beginPath:noop, arc:noop, fill:noop, stroke:noop, fillText:noop,
+    closePath:noop, save:noop, restore:noop, fillRect:noop, setLineDash:noop,
+    strokeRect:noop, translate:noop, rotate:noop, moveTo:noop, lineTo:noop,
+    measureText:function(){ return {width:0}; }, createLinearGradient:function(){ return {addColorStop:noop}; }
+  };
+  G.document.getElementById = function(id){
+    if (id==='tc-manual-chart') return {
+      style:{}, classList:{add:noop,remove:noop,contains:function(){return false;}},
+      offsetWidth:350, offsetHeight:250,
+      _testShbgHook: function(v){ _shCap = v; },
+      getContext: function(){ return _shCtx; }
+    };
+    return _shSavedGE(id);
+  };
+
+  // Testosterone-ester schedule, bloodwork with total T + SHBG (activates the model).
+  var _shLog = [
+    {compId:'testoviron', doseMg:'100', date:'2026-06-27'},
+    {compId:'testoviron', doseMg:'150', date:'2026-06-28'}
+  ];
+  for (var _shi=0; _shi<10; _shi++){ var _shd=new Date(new Date('2026-06-29').getTime()+_shi*2*86400000); _shLog.push({compId:'nebido', doseMg:'102', date:_shd.getFullYear()+'-'+String(_shd.getMonth()+1).padStart(2,'0')+'-'+String(_shd.getDate()).padStart(2,'0')}); }
+
+  G._tcp = {measuredFT:'217', currentDoseMgWk:'0', totalT:'16.2', shbg:'45', birthYear:'1980', manualLog:_shLog};
+  G._tcBwEntries = [{date:'2026-06-27', free_t:217, total_t:16.2, shbg:45}];
+  G._tcGhStack = [];  // no compound suppressors — testosterone alone must drive the model
+
+  var _shThrew = false;
+  try { _shCap = null; G._tcDrawManualChart('tc-manual-chart', _shLog); }
+  catch(e){ _shThrew = true; console.error('  T→SHBG test threw:', e.message); }
+  check('T→SHBG: no crash', !_shThrew);
+  check('T→SHBG: model activates from total T + SHBG alone (no GH/Boron needed)', !_shThrew && _shCap !== null);
+
+  if (_shCap) {
+    var _arr=_shCap.arr, _lo=_shCap.lo, _hi=_shCap.hi, _cal=_shCap.calFT, _ref=_shCap.refDay, _tot=_shCap.total;
+    // peak index by central curve
+    var _pk=0,_pv=0; for (var _t=0; _t<_tot.length; _t++){ var _v=_tot[_t]*_arr[_t]; if(_v>_pv){_pv=_v;_pk=_t;} }
+    check('T→SHBG: curve stays anchored at the draw (factor = 1 there)',
+      Math.abs(_arr[_ref]/_cal - 1) < 1e-6, 'arr[ref]/calFT='+(_arr[_ref]/_cal).toFixed(8));
+    check('T→SHBG: band pinches to zero width at the draw',
+      Math.abs(_lo[_ref]-_hi[_ref]) < 1e-6);
+    check('T→SHBG: free-T fraction rises above the draw dose (SHBG suppressed)',
+      _arr[_pk] > _cal * 1.02, 'arr[peak]/calFT='+(_arr[_pk]/_cal).toFixed(4));
+    check('T→SHBG: β band brackets the central curve at the peak',
+      _lo[_pk] <= _arr[_pk] + 1e-9 && _arr[_pk] <= _hi[_pk] + 1e-9);
+    check('T→SHBG: band has real width away from the draw (hi > lo at peak)',
+      _hi[_pk] > _lo[_pk] * 1.01);
+    // model raises the peak vs a flat (linear) calibration
+    check('T→SHBG: modelled peak exceeds the naive linear peak',
+      _tot[_pk]*_arr[_pk] > _tot[_pk]*_cal * 1.02);
+  }
+
+  G._tcp = _shSavedTp; G._tcBwEntries = _shSavedBw; G._tcGhStack = _shSavedGh;
+  G.document.getElementById = _shSavedGE;
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
