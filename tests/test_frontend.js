@@ -1093,6 +1093,21 @@ const rowMcgSmall = G.reconDoseRow('AM','200','mcg',5,2,'mg');
 check('reconDoseRow mcg<1mg: shows 8 IU',      rowMcgSmall.includes('8 IU'),  `snippet: ${rowMcgSmall.slice(0,150)}`);
 check('reconDoseRow mcg<1mg: no mcg text',     !rowMcgSmall.includes('mcg'), `snippet: ${rowMcgSmall.slice(0,150)}`);
 
+// ── µg unit display: never show incorrect "mcg" to the user ──────────────────
+// Internal unit key stays 'mcg' (calc logic unchanged); only the DISPLAYED label is µg.
+console.log('\n── µg unit display (mcg → µg) ──────────────────────────────');
+// _doseLabel: mcg-unit dose renders as µg, never mcg
+const dlMcg = G._doseLabel('ipamorelin','200','mcg');
+check('_doseLabel mcg: displays µg',           dlMcg.includes('µg'),  `got: ${dlMcg}`);
+check('_doseLabel mcg: never shows mcg',        !dlMcg.includes('mcg'), `got: ${dlMcg}`);
+check('_doseLabel mg: unchanged (no µg)',      !G._doseLabel('ipamorelin','2','mg').includes('µg'), 'mg dose leaked µg');
+// reconDoseRow: mcg input ≥1mg shows the dose with µg label, not mcg
+const rowMcgBig = G.reconDoseRow('AM','2000','mcg',5,2,'mg');
+check('reconDoseRow mcg≥1mg: shows µg',        rowMcgBig.includes('2000 µg'), `snippet: ${rowMcgBig.slice(0,150)}`);
+check('reconDoseRow mcg≥1mg: never shows mcg',  !rowMcgBig.includes('mcg'),    `snippet: ${rowMcgBig.slice(0,150)}`);
+// UNIT_LABELS drives the Today/day views' raw-unit rendering
+check('UNIT_LABELS maps mcg→µg',               G.UNIT_LABELS && G.UNIT_LABELS.mcg==='µg', `got: ${G.UNIT_LABELS&&G.UNIT_LABELS.mcg}`);
+
 // ── buildReconCard HTML rendering ─────────────────────────────────────────────
 console.log('\n── buildReconCard HTML rendering ───────────────────────────');
 G._reconStackIdx=0; G._reconState={};
