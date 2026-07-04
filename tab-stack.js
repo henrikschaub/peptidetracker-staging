@@ -860,12 +860,58 @@ function _renderEnhancedUpgradeCTA(){
     +'<button onclick="document.getElementById(\'tab-btn-settings\').click()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:11px 24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Enable in Settings</button>'
     +'</div>';
 }
+// Testosterone can be planned two ways: as a configured TRT compound on the
+// stack, OR in the T-Calc planner (which pushes dated injections to the schedule
+// with cycle_id 'tcalc'). Summarise any T-Calc-planned testosterone so the TRT
+// tab can surface it even when no TRT compound is configured on the stack.
+function _tcalcTrtSummary(){
+  if(typeof _injectionsCache==='undefined'||!_injectionsCache) return null;
+  var today=(typeof dateKey==='function')?dateKey(NOW):'';
+  var byComp={};
+  Object.keys(_injectionsCache).forEach(function(dk){
+    (_injectionsCache[dk]||[]).forEach(function(e){
+      if(!e||e.cycle_id!=='tcalc') return;
+      if(e.tier&&e.tier!=='trt') return;
+      var cid=e.compound_id||e.compound_name||'testosterone';
+      var c=byComp[cid]||(byComp[cid]={name:e.compound_name||cid,dot:e.dot||'#e8a020',unit:e.unit||'mg',count:0,next:null,nextDose:''});
+      c.count++;
+      if(e.date>=today&&(!c.next||e.date<c.next)){ c.next=e.date; c.nextDose=e.dose; }
+    });
+  });
+  var comps=Object.keys(byComp).map(function(k){return byComp[k];});
+  return comps.length?comps:null;
+}
+// Info card for the TRT tab that mirrors the T-Calc-planned testosterone and
+// deep-links to the T-Calc tab. Returns '' when nothing is planned there.
+function _renderTcalcTrtCard(){
+  var comps=(typeof _tcalcTrtSummary==='function')?_tcalcTrtSummary():null;
+  if(!comps) return '';
+  var rows=comps.map(function(c){
+    var nextTxt=c.next?('Next '+fmtDate(new Date(c.next.replace(/-/g,'/')))):'No upcoming doses';
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+      +'<div style="width:8px;height:8px;border-radius:50%;background:'+(c.dot||'#e8a020')+';flex-shrink:0"></div>'
+      +'<div style="font-size:13px;font-weight:600;color:var(--text)">'+_esc(c.name)+'</div>'
+      +(c.nextDose?'<div style="font-size:12px;color:var(--muted2)">'+_esc(c.nextDose)+' '+_esc(c.unit||'mg')+'</div>':'')
+      +'<div style="font-size:11px;color:var(--muted2);margin-left:auto">'+_esc(nextTxt)+'</div>'
+      +'</div>';
+  }).join('');
+  return '<div onclick="var b=document.getElementById(\'tab-btn-tcalc\');if(b)b.click();" style="cursor:pointer;background:var(--surface2);border:1px solid #6688cc44;border-left:3px solid #6688cc;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+      +'<div style="font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:#6688cc">Planned in T-Calc</div>'
+      +'<div style="font-size:11px;color:#6688cc">Open →</div>'
+    +'</div>'
+    +rows
+    +'<div style="font-size:10px;color:var(--muted2);margin-top:6px">Testosterone is scheduled from the T-Calc planner (not configured as a TRT compound here). Tap to view or adjust the dose.</div>'
+  +'</div>';
+}
 // TRT tab content for stack view (read-only): compounds + injection log
 function _renderTRTViewTab(st){
   var compounds=_trtCompounds(st.trt);
   var html='';
+  var _tcCard=(typeof _renderTcalcTrtCard==='function')?_renderTcalcTrtCard():'';
+  if(_tcCard) html+=_tcCard;
   if(!compounds.length){
-    html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">No TRT configured for this stack.</div>';
+    if(!_tcCard) html+='<div style="color:var(--muted2);font-size:13px;padding:8px 0;">No TRT configured for this stack.</div>';
   }else{
     html+='<div class="wiz-section" style="margin-bottom:10px;">Protocol</div>';
     compounds.forEach(function(c){
