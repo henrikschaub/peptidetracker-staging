@@ -229,6 +229,39 @@ if(typeof G._nextStackName==='function'){
   G._userStacks=_nsSaved;
 }
 
+// ── TRT tab: surface T-Calc-planned testosterone (the "two ways to plan TRT") ──
+if(typeof G._tcalcTrtSummary==='function'){
+  var _ttSaved=G._injectionsCache;
+  // no tcalc injections → no summary, no card
+  G._injectionsCache={};
+  check('_tcalcTrtSummary: null when no tcalc injections', G._tcalcTrtSummary()===null);
+  check('_renderTcalcTrtCard: empty when nothing planned', G._renderTcalcTrtCard()==='');
+  // seed a tcalc TRT injection + an unrelated stack injection
+  G._injectionsCache={
+    '2026-07-10':[{cycle_id:'tcalc',tier:'trt',compound_id:'test-e',compound_name:'Testosterone Enanthate',dose:'50',unit:'mg',dot:'#e8a020',date:'2026-07-10',source:'tcalc'}],
+    '2026-07-13':[{cycle_id:'tcalc',tier:'trt',compound_id:'test-e',compound_name:'Testosterone Enanthate',dose:'50',unit:'mg',dot:'#e8a020',date:'2026-07-13',source:'tcalc'},
+                  {cycle_id:'stack_x',tier:'peptide',compound_id:'ipamorelin',compound_name:'Ipamorelin',date:'2026-07-13'}]
+  };
+  var _ttSum=G._tcalcTrtSummary();
+  check('_tcalcTrtSummary: finds the tcalc testosterone compound', !!_ttSum && _ttSum.length===1 && _ttSum[0].name==='Testosterone Enanthate');
+  check('_tcalcTrtSummary: counts only tcalc entries (ignores stack peptide)', _ttSum[0].count===2);
+  var _ttCard=G._renderTcalcTrtCard();
+  check('_renderTcalcTrtCard: labels it Planned in T-Calc', /Planned in T-Calc/.test(_ttCard));
+  check('_renderTcalcTrtCard: names the compound', /Testosterone Enanthate/.test(_ttCard));
+  check('_renderTcalcTrtCard: deep-links to the T-Calc tab', /tab-btn-tcalc/.test(_ttCard));
+  // _renderTRTViewTab shows the card and suppresses "No TRT configured"
+  if(typeof G._renderTRTViewTab==='function'){
+    var _ttView=G._renderTRTViewTab({trt:{enabled:false,compounds:[]}});
+    check('_renderTRTViewTab: shows T-Calc card when planned there', /Planned in T-Calc/.test(_ttView));
+    check('_renderTRTViewTab: suppresses "No TRT configured" when T-Calc card shows', !/No TRT configured/.test(_ttView));
+    // with no tcalc plan, the empty message returns
+    G._injectionsCache={};
+    var _ttViewEmpty=G._renderTRTViewTab({trt:{enabled:false,compounds:[]}});
+    check('_renderTRTViewTab: "No TRT configured" when nothing planned', /No TRT configured/.test(_ttViewEmpty));
+  }
+  G._injectionsCache=_ttSaved;
+}
+
 if(typeof G.createNewStack==='function') G.createNewStack();
 check('createNewStack: editMode=false',    G._wiz.editMode===false);
 check('createNewStack: step=0',            G._wiz.step===0);
