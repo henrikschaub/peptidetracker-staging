@@ -214,6 +214,21 @@ check('initWizard: cycle_length set',      G._wiz.cycle_length>0,               
 check('initWizard: stackIndex=-1',         G._wiz.stackIndex===-1);
 check('initWizard: stackName is string',   typeof G._wiz.stackName==='string'&&G._wiz.stackName.length>0);
 
+// ── _nextStackName: new stacks bump Cycle N (not always "Cycle 1") ──
+if(typeof G._nextStackName==='function'){
+  var _nsSaved=G._userStacks;
+  G._userStacks=[];                       check('_nextStackName: first stack = Cycle 1', G._nextStackName()==='Cycle 1');
+  G._userStacks=[{name:'Cycle 1'}];       check('_nextStackName: after Cycle 1 = Cycle 2', G._nextStackName()==='Cycle 2');
+  G._userStacks=[{name:'Cycle 1'},{name:'Cycle 2'},{name:'Cycle 3'}]; check('_nextStackName: bumps to Cycle 4', G._nextStackName()==='Cycle 4');
+  G._userStacks=[{name:'Cycle 1'},{name:'Cycle 3'}]; check('_nextStackName: past highest Cycle N (no collision)', G._nextStackName()==='Cycle 4');
+  G._userStacks=[{name:'Cutting Stack'},{name:'Bulking'}]; check('_nextStackName: non-cycle names → next slot', G._nextStackName()==='Cycle 3');
+  G._userStacks=_nsSaved;
+  // initWizard uses it for a fresh (non-edit) stack
+  G._userStacks=[{name:'Cycle 1'}]; G.initWizard();
+  check('initWizard: default name bumps (Cycle 2)', G._wiz.stackName==='Cycle 2');
+  G._userStacks=_nsSaved;
+}
+
 if(typeof G.createNewStack==='function') G.createNewStack();
 check('createNewStack: editMode=false',    G._wiz.editMode===false);
 check('createNewStack: step=0',            G._wiz.step===0);

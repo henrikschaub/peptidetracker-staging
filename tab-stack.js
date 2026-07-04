@@ -1,8 +1,17 @@
 // ── Cycle length suggestions ───────────────────────────────────────────────
 var CYCLE_WEEKS=(function(){var a=[];for(var i=4;i<=240;i+=4)a.push(i);return a;})();
 // ── Updated wizard init with cycle_length ──────────────────────────────────
+// Default name for a new stack: the next "Cycle N" — one past the highest
+// existing "Cycle N" (or the stack count), so new stacks bump 1 → 2 → 3 → 4
+// instead of all defaulting to "Cycle 1".
+function _nextStackName(){
+  var stacks=(typeof _userStacks!=='undefined'&&_userStacks)?_userStacks:[];
+  var maxN=0;
+  stacks.forEach(function(s){var m=/^Cycle (\d+)$/.exec((s&&s.name)||'');if(m){var n=parseInt(m[1],10);if(n>maxN)maxN=n;}});
+  return 'Cycle '+(Math.max(maxN,stacks.length)+1);
+}
 function initWizard(){
-  _wiz={step:0,goals:[],peptides:[],trt:{enabled:false,compounds:[]},enhanced:{enabled:false,compounds:[]},editMode:false,stackIndex:-1,stackName:'Cycle 1',cycle_length:12};
+  _wiz={step:0,goals:[],peptides:[],trt:{enabled:false,compounds:[]},enhanced:{enabled:false,compounds:[]},editMode:false,stackIndex:-1,stackName:_nextStackName(),cycle_length:12};
 }
 function editStackWithCycle(idx){
   if(idx<0||idx>=_userStacks.length)return;
