@@ -3964,6 +3964,50 @@ if (typeof G._tcDrawManualChart === 'function') {
   G.document.getElementById = _shSavedGE;
 }
 
+// ── Per-user β calibration (SHBG ∝ totalT^−β fitted from the user's own labs) ──
+console.log('\n── T-calc: β personalised from the user\'s own bloodwork (no hardcoding) ──');
+if (typeof G._tcFitBeta === 'function') {
+  function _synth(tt, b){ return {total_t: tt, shbg: 60 * Math.pow(tt, -b)}; }
+  // clean data generated with a known exponent must be recovered
+  var _fit2 = G._tcFitBeta([_synth(15,0.30), _synth(45,0.30)]);
+  check('β fit: recovers exponent from 2 clean labs', _fit2 && Math.abs(_fit2.beta - 0.30) < 0.02, _fit2 && ('β='+_fit2.beta.toFixed(4)));
+  var _fit4 = G._tcFitBeta([_synth(15,0.30), _synth(25,0.30), _synth(40,0.30), _synth(60,0.30)]);
+  check('β fit: recovers exponent from 4 clean labs', _fit4 && Math.abs(_fit4.beta - 0.30) < 0.02);
+  check('β fit: 4 labs report n and a band', _fit4 && _fit4.n === 4 && _fit4.hi > _fit4.lo && _fit4.lo < _fit4.beta && _fit4.beta < _fit4.hi);
+  check('β fit: more consistent labs → tighter band than the 2-lab default (±0.10)',
+    _fit4 && (_fit4.hi - _fit4.lo) < 0.20);
+  // not enough / unusable data → null (caller uses population fallback)
+  check('β fit: null with a single lab', G._tcFitBeta([_synth(20,0.3)]) === null);
+  check('β fit: null when all labs are at the same T level', G._tcFitBeta([{total_t:20,shbg:40},{total_t:20,shbg:42}]) === null);
+  check('β fit: null when SHBG is missing', G._tcFitBeta([{total_t:15},{total_t:45}]) === null);
+  check('β fit: null on empty/undefined', G._tcFitBeta([]) === null && G._tcFitBeta(null) === null);
+  // physiological clamp — a nonsense steep drop is capped
+  var _fitSteep = G._tcFitBeta([{total_t:15,shbg:200},{total_t:60,shbg:1}]);
+  check('β fit: clamps β to a physiological ceiling (≤0.60)', _fitSteep && _fitSteep.beta <= 0.60 + 1e-9);
+
+  // integration: with ≥2 labs at different T, the SHBG model reports personalised β
+  if (typeof G._tcDrawManualChart === 'function') {
+    var _pbSaveTp = G._tcp, _pbSaveBw = G._tcBwEntries, _pbSaveGh = G._tcGhStack, _pbSaveGE = G.document.getElementById;
+    var _pbCap = null;
+    var _pbCtx = { scale:noop,beginPath:noop,arc:noop,fill:noop,stroke:noop,fillText:noop,closePath:noop,save:noop,restore:noop,fillRect:noop,setLineDash:noop,strokeRect:noop,translate:noop,rotate:noop,moveTo:noop,lineTo:noop,measureText:function(){return{width:0};},createLinearGradient:function(){return{addColorStop:noop};} };
+    G.document.getElementById = function(id){ return id==='tc-manual-chart' ? { style:{},classList:{add:noop,remove:noop,contains:function(){return false;}},offsetWidth:350,offsetHeight:250,_testShbgHook:function(v){_pbCap=v;},getContext:function(){return _pbCtx;} } : _pbSaveGE(id); };
+    var _pbLog = [{compId:'testoviron',doseMg:'100',date:'2026-06-27'}];
+    for (var _pi2=0;_pi2<10;_pi2++){ var _pd3=new Date(new Date('2026-06-29').getTime()+_pi2*3*86400000); _pbLog.push({compId:'nebido',doseMg:'100',date:_pd3.getFullYear()+'-'+String(_pd3.getMonth()+1).padStart(2,'0')+'-'+String(_pd3.getDate()).padStart(2,'0')}); }
+    G._tcp = {measuredFT:'400', currentDoseMgWk:'0', totalT:'30', shbg:'30', birthYear:'1980', manualLog:_pbLog};
+    // two blood tests at different T levels → personalised fit
+    G._tcBwEntries = [{date:'2026-06-27', total_t:30, shbg:30, free_t:400},{date:'2026-06-20', total_t:15, shbg:45, free_t:220}];
+    G._tcGhStack = [];
+    _pbCap = null; var _pbThrew=false;
+    try { G._tcDrawManualChart('tc-manual-chart', _pbLog); } catch(e){ _pbThrew=true; }
+    check('β fit integration: SHBG model runs with multi-lab data', !_pbThrew && _pbCap !== null);
+    check('β fit integration: model reports personalised β (not the population default)',
+      _pbCap && _pbCap.personalized === true);
+    G._tcp = _pbSaveTp; G._tcBwEntries = _pbSaveBw; G._tcGhStack = _pbSaveGh; G.document.getElementById = _pbSaveGE;
+  }
+} else {
+  check('_tcFitBeta defined', false);
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
