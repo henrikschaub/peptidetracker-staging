@@ -58,6 +58,28 @@ var _suppViewDate = null;// date currently shown in the Today section (for re-re
 
 function _suppEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _suppCat(id){ return SUPPLEMENT_CAT.find(function(c){return c.id===id;}); }
+
+// Display-only formatting of a stored dose string. Supplements saved before the metric/µg
+// change keep their old dose text (e.g. "5000 IU", "100 mcg") — the stored value is left
+// untouched, but for display we (1) write micrograms as "µg" not "mcg", and (2) upgrade an
+// IU-only or bare dose to the catalogue's metric-primary label when it corresponds to a known
+// dose for that supplement (so "5000 IU" Vitamin D3 shows as "125 µg (5000 IU)").
+function _suppFmtDose(suppId, dose){
+  if(dose == null || dose === '') return dose;
+  var d = String(dose).replace(/mcg/g, 'µg');
+  var cat = _suppCat(suppId);
+  if(cat && cat.doses){
+    for(var i=0;i<cat.doses.length;i++){ if(cat.doses[i] === d) return cat.doses[i]; }
+    var m = d.match(/(\d[\d.]*)\s*IU\b/);   // stored as IU only → match catalogue by its IU value
+    if(m){
+      for(var j=0;j<cat.doses.length;j++){
+        var cm = cat.doses[j].match(/\(\s*(\d[\d.]*)\s*IU\s*\)/);
+        if(cm && cm[1] === m[1]) return cat.doses[j];
+      }
+    }
+  }
+  return d;
+}
 function _suppDateKey(d){ var x=new Date(d); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
 function _suppToday(){ return _suppDateKey(new Date()); }
 // Dose slots per timing: AM & PM is two doses/day, each checked independently.
@@ -196,7 +218,7 @@ function renderTodaySupplements(date){
     return '<div class="check-item'+(taken?' checked-item':'')+'" onclick="toggleSupplementDose(\''+_suppEsc(r.s.supp_id)+'\',\''+dstr+'\',\''+r.slot+'\')">' +
       '<div class="check-box'+(taken?' checked':'')+'"><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5l3.5 3.5L11 1" stroke="#0a0a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
       '<div class="check-main"><div class="check-name" style="color:var(--text)">' + _suppEsc(r.s.name) + '</div>' +
-      (r.s.dose ? '<div class="check-detail">' + _suppEsc(r.s.dose) + '</div>' : '') + '</div>' +
+      (r.s.dose ? '<div class="check-detail">' + _suppEsc(_suppFmtDose(r.s.supp_id, r.s.dose)) + '</div>' : '') + '</div>' +
       '<div class="check-time">' + r.slot + '</div></div>';
   }).join('');
   wrap.innerHTML =
@@ -227,7 +249,7 @@ function buildSupplements(){
         '<div style="width:9px;height:9px;border-radius:50%;background:var(--accent3,#7bd88f);flex-shrink:0"></div>' +
         '<div style="flex:1;min-width:0">' +
           '<div style="font-size:15px;font-weight:600;color:var(--text)">' + _suppEsc(s.name) + '</div>' +
-          '<div style="font-size:12px;color:var(--muted2);margin-top:3px">' + _suppEsc(s.dose||'') + (s.dose?' · ':'') + meta + '</div>' +
+          '<div style="font-size:12px;color:var(--muted2);margin-top:3px">' + _suppEsc(_suppFmtDose(s.supp_id, s.dose)||'') + (s.dose?' · ':'') + meta + '</div>' +
         '</div>' +
         '<button onclick="_suppOpenAddSheet(\'' + _suppEsc(s.id) + '\')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Edit</button>' +
         '<button onclick="_suppDelete(\'' + _suppEsc(s.id) + '\')" aria-label="Delete" style="background:none;border:none;color:var(--muted2);font-size:20px;cursor:pointer;line-height:1;padding:2px 4px">×</button>' +
@@ -270,7 +292,7 @@ function _suppOpenAddSheet(editId){
     '<button onclick="_suppConfirmAdd(' + (editing?('\''+_suppEsc(editId)+'\''):'') + ')" style="width:100%;background:var(--accent);color:#000;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">' + (editing?'Save':'Add supplement') + '</button>' +
     '</div>';
   document.body.appendChild(ol);
-  _suppFillDoses(editing ? editing.dose : null);
+  _suppFillDoses(editing ? _suppFmtDose(editing.supp_id, editing.dose) : null);
 }
 
 function _suppCloseAddSheet(){ var ol=document.getElementById('supp-add-overlay'); if(ol) ol.remove(); }

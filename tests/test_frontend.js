@@ -3820,6 +3820,21 @@ if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
       !!c && c.doses.every(function(d){ return /(µg|mg)\b/.test(d) && /\(\s*[\d.]+\s*IU\s*\)/.test(d); }));
   });
 
+  // Display formatter: supplements saved before the µg change keep their old stored dose,
+  // but must render correctly — the reported "Vitamin D3 shows 5000 IU only" bug.
+  if (typeof G._suppFmtDose === 'function') {
+    check('display: legacy Vitamin D3 "5000 IU" renders as metric + IU',
+      G._suppFmtDose('vitd3','5000 IU') === '125 µg (5000 IU)', G._suppFmtDose('vitd3','5000 IU'));
+    check('display: legacy "100 mcg" renders as "100 µg"',
+      G._suppFmtDose('vitk2','100 mcg') === '100 µg');
+    check('display: mg doses are untouched',
+      G._suppFmtDose('boron','10 mg') === '10 mg');
+    check('display: already-metric dose passes through unchanged',
+      G._suppFmtDose('vitd3','125 µg (5000 IU)') === '125 µg (5000 IU)');
+    check('display: never shows "mcg" after formatting',
+      ['100 mcg','250 mcg','5000 IU'].every(function(x){ return G._suppFmtDose('selenium',x).indexOf('mcg') === -1; }));
+  }
+
   // cadence: daily always active
   check('daily supplement active on any day',
     G._suppActiveOn({freq:'daily'}, new Date('2026-07-03')) === true);
