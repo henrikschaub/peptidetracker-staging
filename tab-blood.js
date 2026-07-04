@@ -76,9 +76,9 @@ var _SUPP_HALFLIFE = {
   // Minerals & electrolytes
   magnesium:0.19,  // acute plasma clearance ~4–5 h
   zinc:0.125,      // ~3 h
-  boron:0.9,       // ~21 h (not in supplied table; literature)
-  selenium:1,      // not in supplied table
-  iodine:0.5,      // not in supplied table
+  boron:0.875,     // ~21 h (boric acid/citrate, renal clearance)
+  selenium:10.5,   // selenomethionine ~252 h (incorporated into body proteins)
+  iodine:0.073,    // plasma iodide clearance ~1.5–2 h (thyroid pool far longer)
   potassium:0.5,   // not in supplied table
   // Amino acids & ergogenic aids
   creatine:0.1,    // ~2–3 h
@@ -91,10 +91,18 @@ var _SUPP_HALFLIFE = {
   melatonin:0.028, // ~30–50 min (heavy first-pass metabolism)
   omega3:2.5,      // EPA/DHA plasma lipids ~2–3 days
   coq10:1.375,     // ~33 h
-  // Other supplements (not in supplied table — reasonable defaults)
-  ashwagandha:0.5, nac:0.25, tudca:0.4, milkthistle:0.3, bergamot:0.5,
-  berberine:0.5, hawthorn:0.4, nattokinase:0.3, curcumin:0.3,
-  psyllium:0.3, electrolytes:0.2, probiotics:0.5, whey:0.1, collagen:0.2
+  // Herbals & adaptogens
+  ashwagandha:0.156,// withanolides ~2.5–5 h (hepatic metabolism)
+  rhodiola:0.031,  // salidroside ~45 min
+  ginseng:0.68,    // ginsenoside Rb1 ~14–19 h (protein-bound; Rg1 clears faster)
+  ginkgo:0.15,     // ginkgolides A/B ~3–4 h
+  bacopa:0.125,    // bacosides ~2–4 h
+  tongkat:0.052,   // eurycomanone ~1–1.5 h
+  curcumin:0.271,  // ~6–7 h (rapid glucuronidation)
+  milkthistle:0.25,// silybin ~6 h (enterohepatic recirculation)
+  // Other supplements (not in supplied tables — reasonable defaults)
+  nac:0.25, tudca:0.4, bergamot:0.5, berberine:0.5, hawthorn:0.4,
+  nattokinase:0.3, psyllium:0.3, electrolytes:0.2, probiotics:0.5, whey:0.1, collagen:0.2
 };
 function _blSuppHalfLife(id){ return _SUPP_HALFLIFE[id] || 0.5; }
 // Distinct palette for supplement lines (compounds carry their own dot colours).

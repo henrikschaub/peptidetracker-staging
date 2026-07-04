@@ -4197,7 +4197,22 @@ if (typeof G._blBuildLines === 'function') {
   check('_blSuppHalfLife: omega3 ~2.5d',          G._blSuppHalfLife('omega3') === 2.5);
   check('_blSuppHalfLife: b6 long terminal 17.5d',G._blSuppHalfLife('b6') === 17.5);
   check('_blSuppHalfLife: coq10 ~33h (1.375d)',   G._blSuppHalfLife('coq10') === 1.375);
+  // trace minerals + adaptogens (evidence-based)
+  check('_blSuppHalfLife: boron ~21h (0.875d)',        G._blSuppHalfLife('boron') === 0.875);
+  check('_blSuppHalfLife: selenium selenomethionine 10.5d', G._blSuppHalfLife('selenium') === 10.5);
+  check('_blSuppHalfLife: iodine plasma clearance ~2h', G._blSuppHalfLife('iodine') === 0.073);
+  check('_blSuppHalfLife: rhodiola ~45min',            G._blSuppHalfLife('rhodiola') === 0.031);
+  check('_blSuppHalfLife: ginseng Rb1 ~16h (0.68d)',   G._blSuppHalfLife('ginseng') === 0.68);
+  check('_blSuppHalfLife: tongkat ~1h (0.052d)',       G._blSuppHalfLife('tongkat') === 0.052);
+  check('_blSuppHalfLife: ashwagandha ~3.75h (0.156d)',G._blSuppHalfLife('ashwagandha') === 0.156);
+  check('_blSuppHalfLife: curcumin ~6.5h (0.271d)',    G._blSuppHalfLife('curcumin') === 0.271);
   check('_blSuppHalfLife: unknown falls back to 0.5d', G._blSuppHalfLife('nope') === 0.5);
+  // new adaptogens are in the catalogue
+  if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
+    ['rhodiola','ginseng','ginkgo','bacopa','tongkat'].forEach(function(id){
+      check('SUPPLEMENT_CAT includes '+id, G.SUPPLEMENT_CAT.some(function(s){ return s.id===id && s.doses && s.doses.length; }));
+    });
+  }
   // every catalogued supplement has an explicit half-life (no silent fallback)
   if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
     var _blMissing = G.SUPPLEMENT_CAT.filter(function(s){ return G._SUPP_HALFLIFE[s.id] === undefined; }).map(function(s){ return s.id; });
