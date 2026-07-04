@@ -965,6 +965,8 @@ async function _tcFetchBwEntries() {
   }
   _tcBwLoading = false;
   buildTCalc();
+  // Vitamin D recommendation in the Supplements tab reads from bloodwork too.
+  if (typeof buildSupplements === 'function' && typeof _currentTab !== 'undefined' && _currentTab === 'supplements') buildSupplements();
 }
 
 function _tcBwOpenAddSheet() {

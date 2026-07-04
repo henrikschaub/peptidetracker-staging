@@ -3895,6 +3895,35 @@ if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
     G._supplements = [];
   }
 
+  // ── Vitamin D (25-OH-D) → D3 dose recommendation ──
+  if (typeof G._vitDRecommendation === 'function') {
+    // unit conversion: ng/mL → nmol/L (× 2.496)
+    check('_vitDToNmol: ng/mL converts (20 → ~49.9)', Math.abs(G._vitDToNmol(20,'ng/mL') - 49.92) < 0.1);
+    check('_vitDToNmol: nmol/L passes through',        G._vitDToNmol(60,'nmol/L') === 60);
+    check('_vitDToNmol: rejects non-positive',         G._vitDToNmol(0,'nmol/L') === null);
+    // classification bands
+    check('_vitDRec: <50 = Deficient',        G._vitDRecommendation(40).status === 'Deficient');
+    check('_vitDRec: Deficient has loading',   /5000 IU/.test(G._vitDRecommendation(40).loading||''));
+    check('_vitDRec: 50–75 = Insufficient',    G._vitDRecommendation(60).status === 'Insufficient');
+    check('_vitDRec: 75–125 = Sufficient',     /Sufficient/.test(G._vitDRecommendation(90).status));
+    check('_vitDRec: 125–250 = Above target',  G._vitDRecommendation(150).status === 'Above target');
+    check('_vitDRec: >250 = Excess',           G._vitDRecommendation(300).status === 'Excess');
+    // weight-based loading total (van Groningen): 40×(75−40)×90 = 126000 IU
+    check('_vitDRec: weight-based loading total', /126,000 IU/.test(G._vitDRecommendation(40,90).totalNote||''));
+    check('_vitDRec: no weight → no total note',   !G._vitDRecommendation(40,0).totalNote);
+    // marker lookup from bloodwork extras (newest-first)
+    var _savedBw = G._tcBwEntries;
+    G._tcBwEntries = [{date:'2026-07-01', extra:[{name:'Vitamin D', value:42, unit:'nmol/L'}]}];
+    var _mk = G._suppLatestBwMarker('Vitamin D');
+    check('_suppLatestBwMarker: finds Vitamin D in extras', _mk && Number(_mk.value) === 42 && _mk.unit === 'nmol/L');
+    check('_suppLatestBwMarker: null for missing marker',   G._suppLatestBwMarker('IGF-1') === null);
+    check('_renderVitDCard: renders card when level present',
+      typeof G._renderVitDCard()==='string' && /Deficient/.test(G._renderVitDCard()) && /nmol\/L/.test(G._renderVitDCard()));
+    G._tcBwEntries = null;
+    check('_renderVitDCard: empty when no bloodwork', G._renderVitDCard() === '');
+    G._tcBwEntries = _savedBw;
+  }
+
   check('buildSupplements is defined', typeof G.buildSupplements === 'function');
   check('syncSupplementsFromAgent is defined', typeof G.syncSupplementsFromAgent === 'function');
   check('pushSupplementToAgent / deleteSupplementFromAgent defined',
