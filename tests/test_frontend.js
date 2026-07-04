@@ -3802,6 +3802,21 @@ if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
   check('catalogue ids are unique',
     new Set(G.SUPPLEMENT_CAT.map(function(c){return c.id;})).size === G.SUPPLEMENT_CAT.length);
 
+  // Units: metric (mcg/mg/g) is the default — no dose may lead with IU (EU never uses IU).
+  var _allDoses = [];
+  G.SUPPLEMENT_CAT.forEach(function(c){ c.doses.forEach(function(d){ _allDoses.push({id:c.id, d:d}); }); });
+  check('units: every dose leads with a metric unit (mcg/mg/g), never a bare IU',
+    _allDoses.every(function(x){ return /^\s*[\d.]+\s*(mcg|mg|g)\b/.test(x.d) || /^\s*[\d.]+\s*(capsule|scoop|serving|FU)\b/.test(x.d); }),
+    _allDoses.filter(function(x){ return !/^\s*[\d.]+\s*(mcg|mg|g|capsule|scoop|serving|FU)\b/.test(x.d); }).map(function(x){return x.id+':'+x.d;}).join(', '));
+  check('units: no dose starts with an IU value',
+    _allDoses.every(function(x){ return !/^\s*[\d.]+\s*IU\b/.test(x.d); }));
+  // IU-dosed fat-soluble vitamins show BOTH units (metric + IU in parentheses)
+  ['vitd3','vita','vite'].forEach(function(id){
+    var c = G.SUPPLEMENT_CAT.find(function(e){ return e.id===id; });
+    check('units: '+id+' present and shows metric + IU',
+      !!c && c.doses.every(function(d){ return /(mcg|mg)\b/.test(d) && /\(\s*[\d.]+\s*IU\s*\)/.test(d); }));
+  });
+
   // cadence: daily always active
   check('daily supplement active on any day',
     G._suppActiveOn({freq:'daily'}, new Date('2026-07-03')) === true);
