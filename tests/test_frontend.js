@@ -259,6 +259,20 @@ if(typeof G._tcalcTrtSummary==='function'){
     var _ttViewEmpty=G._renderTRTViewTab({trt:{enabled:false,compounds:[]}});
     check('_renderTRTViewTab: "No TRT configured" when nothing planned', /No TRT configured/.test(_ttViewEmpty));
   }
+  // edit view (_renderEditTRT) shows the card above the compound list, regardless of toggle
+  if(typeof G._renderEditTRT==='function'){
+    G._injectionsCache={
+      '2026-07-10':[{cycle_id:'tcalc',tier:'trt',compound_id:'test-e',compound_name:'Testosterone Enanthate',dose:'50',unit:'mg',dot:'#e8a020',date:'2026-07-10',source:'tcalc'}]
+    };
+    var _ttEditOff=G._renderEditTRT({enabled:false,compounds:[]});
+    check('_renderEditTRT: shows T-Calc card when toggle OFF', /Planned in T-Calc/.test(_ttEditOff));
+    var _ttEditOn=G._renderEditTRT({enabled:true,compounds:[]});
+    var _cardIdx=_ttEditOn.indexOf('Planned in T-Calc');
+    var _protoIdx=_ttEditOn.indexOf('TRT Protocol');
+    check('_renderEditTRT: card sits above the compound list', _cardIdx>-1 && _cardIdx>_protoIdx);
+    G._injectionsCache={};
+    check('_renderEditTRT: no card when nothing planned', !/Planned in T-Calc/.test(G._renderEditTRT({enabled:true,compounds:[]})));
+  }
   G._injectionsCache=_ttSaved;
 }
 
