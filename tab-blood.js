@@ -58,17 +58,43 @@ var _blHidden = null;      // {lineId:true} hidden lines (lazy-loaded cache)
 var _blLines = [];         // built line objects for the current render
 var _blTimeline = null;    // {firstDate, totalDays, nowDay}
 
-// Per-class default plasma half-life (days) for supplements. Supplements are
-// commodity OTC products (not proprietary compound data) — these are rough
-// values used only for a RELATIVE overlay curve, never for dosing decisions.
+// Plasma elimination half-life (days) per supplement, used for the RELATIVE
+// overlay curve only — never for dosing decisions. Supplements are commodity OTC
+// products (not proprietary compound data). Values are evidence-based plasma
+// half-lives; where a nutrient's meaningful blood level is its biomarker/stored
+// form rather than the parent molecule, the biomarker is used (noted inline).
 var _SUPP_HALFLIFE = {
-  vitd3:15, vita:60, vite:5, vitk2:3,                 // fat-soluble vitamins (long)
-  vitc:0.25, bcomplex:0.3, b6:0.25,                   // water-soluble vitamins (short)
-  magnesium:1, zinc:1, boron:0.5, selenium:1, iodine:1, potassium:0.5, // minerals
-  omega3:2, coq10:1.4, creatine:1.5, citrulline:0.1, taurine:0.1, betaalanine:0.1,
-  ashwagandha:0.5, nac:0.25, tudca:0.4, milkthistle:0.3, bergamot:0.5, berberine:0.5,
-  hawthorn:0.4, nattokinase:0.3, curcumin:0.3, glycine:0.1, ltheanine:0.15,
-  melatonin:0.04, probiotics:0.5, whey:0.1, collagen:0.2, electrolytes:0.2, psyllium:0.3
+  // Fat-soluble vitamins
+  vitd3:15,        // 25(OH)D biomarker (parent D3 clears to fat in ~15–25 h)
+  vita:0.15,       // retinol / chylomicron plasma clearance ~3–4 h
+  vite:2,          // α-tocopherol ~44–48 h
+  vitk2:2.5,       // MK-7 ~48–72 h
+  // Water-soluble vitamins
+  vitc:0.02,       // ~30 min at saturating oral doses (dose-dependent)
+  bcomplex:0.1,    // mixed B vitamins, mostly cleared within ~1–2 h
+  b6:17.5,         // PLP terminal phase ~15–20 days (albumin/muscle-bound)
+  // Minerals & electrolytes
+  magnesium:0.19,  // acute plasma clearance ~4–5 h
+  zinc:0.125,      // ~3 h
+  boron:0.9,       // ~21 h (not in supplied table; literature)
+  selenium:1,      // not in supplied table
+  iodine:0.5,      // not in supplied table
+  potassium:0.5,   // not in supplied table
+  // Amino acids & ergogenic aids
+  creatine:0.1,    // ~2–3 h
+  citrulline:0.042,// ~1 h
+  taurine:0.05,    // ~1 h (not in supplied table)
+  betaalanine:0.015,// ~20–25 min
+  ltheanine:0.04,  // ~50–70 min
+  glycine:0.04,    // ~0.5–1 h (not in supplied table)
+  // Hormones & lipids
+  melatonin:0.028, // ~30–50 min (heavy first-pass metabolism)
+  omega3:2.5,      // EPA/DHA plasma lipids ~2–3 days
+  coq10:1.375,     // ~33 h
+  // Other supplements (not in supplied table — reasonable defaults)
+  ashwagandha:0.5, nac:0.25, tudca:0.4, milkthistle:0.3, bergamot:0.5,
+  berberine:0.5, hawthorn:0.4, nattokinase:0.3, curcumin:0.3,
+  psyllium:0.3, electrolytes:0.2, probiotics:0.5, whey:0.1, collagen:0.2
 };
 function _blSuppHalfLife(id){ return _SUPP_HALFLIFE[id] || 0.5; }
 // Distinct palette for supplement lines (compounds carry their own dot colours).

@@ -4189,9 +4189,21 @@ if (typeof G._blBuildLines === 'function') {
   check('_blValueAt: null before a line starts', G._blValueAt(_blTrt, _blTrt.offset - 1) === null);
   check('_blValueAt: null after a line ends',    G._blValueAt(_blTrt, _blTrt.offset + _blTrt.curve.length) === null);
 
-  // supplement half-life map
-  check('_blSuppHalfLife: known supplement (vitd3=15d)', G._blSuppHalfLife('vitd3') === 15);
-  check('_blSuppHalfLife: unknown falls back to 0.5d',   G._blSuppHalfLife('nope') === 0.5);
+  // supplement half-life map (evidence-based plasma half-lives, in days)
+  check('_blSuppHalfLife: vitd3 = 15d (25-OH-D biomarker)', G._blSuppHalfLife('vitd3') === 15);
+  check('_blSuppHalfLife: vitc ~30min (0.02d)',   G._blSuppHalfLife('vitc') === 0.02);
+  check('_blSuppHalfLife: creatine ~2-3h (0.1d)', G._blSuppHalfLife('creatine') === 0.1);
+  check('_blSuppHalfLife: betaalanine ~20min',    G._blSuppHalfLife('betaalanine') === 0.015);
+  check('_blSuppHalfLife: omega3 ~2.5d',          G._blSuppHalfLife('omega3') === 2.5);
+  check('_blSuppHalfLife: b6 long terminal 17.5d',G._blSuppHalfLife('b6') === 17.5);
+  check('_blSuppHalfLife: coq10 ~33h (1.375d)',   G._blSuppHalfLife('coq10') === 1.375);
+  check('_blSuppHalfLife: unknown falls back to 0.5d', G._blSuppHalfLife('nope') === 0.5);
+  // every catalogued supplement has an explicit half-life (no silent fallback)
+  if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
+    var _blMissing = G.SUPPLEMENT_CAT.filter(function(s){ return G._SUPP_HALFLIFE[s.id] === undefined; }).map(function(s){ return s.id; });
+    check('_SUPP_HALFLIFE: covers every catalogue supplement', _blMissing.length === 0, 'missing: '+_blMissing.join(', '));
+    check('_SUPP_HALFLIFE: all values positive', G.SUPPLEMENT_CAT.every(function(s){ var h=G._SUPP_HALFLIFE[s.id]; return h===undefined || h>0; }));
+  }
 
   // _blDrawChart must not throw with a headless canvas mock
   (function(){
