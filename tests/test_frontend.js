@@ -2845,6 +2845,32 @@ console.log('\n── _dosePersonalization: sex / age / weight modifiers ──�
     check('_dosePersonalization(epitalon): no personalization mods (epitalon has none)',
       modsEpitalon.length===0);
 
+    // ── IGF-1 → GH-axis direction ──
+    if(typeof G._igf1Recommendation==='function'){
+      setProfile('male',45,80);
+      check('_igf1ToNgml: nmol/L → ng/mL (×7.649)', Math.abs(G._igf1ToNgml(30,'nmol/L')-229.47)<1);
+      check('_igf1ToNgml: ng/mL passes through',     G._igf1ToNgml(150,'ng/mL')===150);
+      check('_igf1RefRange(45) = 90–260 ng/mL', (function(){var r=G._igf1RefRange(45);return r.lo===90&&r.hi===260;})());
+      check('_igf1Rec: below upper-third → increase', (function(){var r=G._igf1Recommendation(120,'ng/mL',45);return r.status==='Below target'&&r.direction==='increase';})());
+      check('_igf1Rec: upper-normal → hold',           (function(){var r=G._igf1Recommendation(250,'ng/mL',45);return r.status==='At target'&&r.direction==='hold';})());
+      check('_igf1Rec: above range → reduce',          (function(){var r=G._igf1Recommendation(300,'ng/mL',45);return r.status==='Above range'&&r.direction==='reduce';})());
+      check('_igf1Rec: never emits a mg number',       (function(){var r=G._igf1Recommendation(120,'ng/mL',45);return !/\bmg\b/.test(r.text);})());
+      check('_igf1Rec: lab range override used',        (function(){var r=G._igf1Recommendation(150,'ng/mL',45,100,200);return r.src==='lab'&&r.hi===200;})());
+      check('_igf1Rec: override converts with value unit',(function(){var r=G._igf1Recommendation(26,'nmol/L',45,13,34);return r.src==='lab'&&Math.abs(r.hi-260)<2;})());
+      // surfaces in _dosePersonalization for GH-axis when IGF-1 is in bloodwork
+      var _savedBw2=G._tcBwEntries;
+      G._tcBwEntries=[{date:'2026-07-01',extra:[{name:'IGF-1',value:120,unit:'ng/mL'}]}];
+      var _ghMods=G._dosePersonalization('ipamorelin',G._userProfile());
+      check('_dosePersonalization(ipamorelin): IGF-1 mod present when logged',
+        _ghMods.some(function(m){return m.text&&m.text.indexOf('IGF-1')!==-1&&m.text.indexOf('increasing')!==-1;}));
+      var _nonGh=G._dosePersonalization('retatrutide',G._userProfile());
+      check('_dosePersonalization(retatrutide): no IGF-1 mod (not GH-axis)',
+        !_nonGh.some(function(m){return m.text&&m.text.indexOf('IGF-1')!==-1;}));
+      G._tcBwEntries=null;
+      check('_latestBwMarker: null when no bloodwork', G._latestBwMarker('IGF-1')===null);
+      G._tcBwEntries=_savedBw2;
+    }
+
     clearProfile();
   }
 }

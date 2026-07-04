@@ -1055,6 +1055,14 @@ function _tcBwRenderExtras() {
           '<input placeholder="Value" type="number" value="'+_esc(row.value||'')+'" oninput="_tcBwAddExtras['+i+'].value=this.value" style="'+iSty+'">' +
           '<select onchange="_tcBwAddExtras['+i+'].unit=this.value" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;flex-shrink:0"'+(curTest?'':' disabled')+'>'+unitOpts+'</select>' +
         '</div>' +
+        (row.name==='IGF-1'
+          ? '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">' +
+              '<input placeholder="Lab ref low" type="number" value="'+_esc(row.ref_lo||'')+'" oninput="_tcBwAddExtras['+i+'].ref_lo=this.value" style="'+iSty+'">' +
+              '<span style="color:var(--muted2);font-size:12px;flex-shrink:0">–</span>' +
+              '<input placeholder="Lab ref high" type="number" value="'+_esc(row.ref_hi||'')+'" oninput="_tcBwAddExtras['+i+'].ref_hi=this.value" style="'+iSty+'">' +
+            '</div>' +
+            '<div style="font-size:10px;color:var(--muted2);margin-top:4px">Optional: your lab’s IGF-1 reference range (same unit as above) for a personalised GH-axis target.</div>'
+          : '') +
       '</div>';
   });
   container.innerHTML = html;

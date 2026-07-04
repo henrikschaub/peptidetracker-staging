@@ -1303,7 +1303,55 @@ function wipeLocalCache(){if(!confirm('Clear all locally cached data? The app wi
 async function syncPepSettingsFromAgent(){try{const r=await fetch(AGENT_URL+'/user-settings',{headers:authHeaders()});if(!r.ok){_logHttp('syncPepSettings',r.status,'/user-settings');return;}const s=await r.json();if(!s)return;if(s['proto-tab-vis']){_tabVis=Object.assign({},TAB_DEFAULTS,s['proto-tab-vis']);setData('proto-tab-vis',s['proto-tab-vis']);applyTabVis();buildTabsSettingsCard();}if(s['user_sex'])setBioSex(s['user_sex']);if(s['user_height']){localStorage.setItem('user_height',String(s['user_height']));const hi=document.getElementById('bc-height-in');if(hi)hi.value=s['user_height'];}if(s['user_weight']){localStorage.setItem('user_weight',String(s['user_weight']));const wi=document.getElementById('bc-weight-in');if(wi)wi.value=s['user_weight'];}if(s['user_age']){localStorage.setItem('user_age',String(s['user_age']));const ai=document.getElementById('bc-age-in');if(ai)ai.value=s['user_age'];}if(s['pep-theme'])applyTheme(s['pep-theme']);if(s['macros-train-time'])localStorage.setItem('macros-train-time',s['macros-train-time']);if(s['macros-train-dur'])localStorage.setItem('macros-train-dur',String(s['macros-train-dur']));}catch(e){_logErr('syncPepSettings',e);}}
 function applyTabVis(){Object.keys(TAB_LABELS).forEach(id=>{const btn=document.getElementById('tab-btn-'+id);if(btn)btn.style.display=_tabVis[id]?'':'none';});}
 function _userProfile(){return{sex:localStorage.getItem('user_sex')||'male',age:parseInt(localStorage.getItem('user_age')||'0')||0,weight_kg:parseFloat(localStorage.getItem('user_weight')||'0')||0};}
-function _dosePersonalization(pepId,profile){var mods=[];var ghAxis=['cjc-ipa','cjc-nodac','ipamorelin','sermorelin','tesamorelin','hgh'];var glp1=['retatrutide','tirzepatide','semaglutide'];if(ghAxis.indexOf(pepId)!==-1){if(profile.sex==='female')mods.push({type:'adj',text:'Women are ~50% more sensitive to GH peptides — start at the lower end of the range'});if(profile.age>=50)mods.push({type:'adj',text:'Age '+profile.age+': pituitary GH sensitivity increases with age — lower end of range is sufficient'});if(profile.age>0&&profile.age<30)mods.push({type:'ok',text:'Age '+profile.age+': standard doses well tolerated'});}if(glp1.indexOf(pepId)!==-1&&profile.weight_kg>0){if(profile.weight_kg>100)mods.push({type:'adj',text:'Weight '+profile.weight_kg+'kg: may need to reach a higher dose for full effect — ensure protein ≥'+Math.round(profile.weight_kg*2)+'g/day'});else if(profile.weight_kg<65)mods.push({type:'ok',text:'Weight '+profile.weight_kg+'kg: lighter frame — often responds well at lower maintenance doses'});}if(pepId==='hcg'&&profile.sex==='female')mods.push({type:'warn',text:'HCG is a male TRT support compound — not typically indicated for women in this context'});if(pepId==='nad'&&profile.weight_kg>0)mods.push({type:'info',text:'Weight-based target: ~'+Math.round(profile.weight_kg*1.5)+'mg SC (1.5 mg/kg) is within therapeutic range'});return mods;}
+// ── IGF-1 → GH-axis dose direction ───────────────────────────────────────────
+// GH-axis peptides/hGH are titrated to IGF-1 in the upper-normal range for age.
+// There is NO validated IGF-1→mg dose-response, so this gives a DIRECTION and a
+// target band only — never a fabricated mg. IGF-1 reference ranges are assay-
+// specific: a built-in age-banded table (ng/mL) is the default, overridden by
+// the user's own lab range when they enter it with the blood test. Re-test after
+// 6–12 weeks. Guidance to discuss with a clinician, not a prescription.
+// Most-recent value for a named blood marker from the bloodwork log
+// (_tcBwEntries, newest-first). Markers live in each entry's extra[] list.
+// Returns {value, unit, ref_lo, ref_hi, date} or null.
+function _latestBwMarker(name){
+  var entries=(typeof _tcBwEntries!=='undefined'&&Array.isArray(_tcBwEntries))?_tcBwEntries:null;
+  if(!entries)return null;
+  for(var i=0;i<entries.length;i++){var ex=entries[i]&&entries[i].extra;if(!Array.isArray(ex))continue;
+    for(var j=0;j<ex.length;j++){var e=ex[j];
+      if(e&&e.name===name&&e.value!=null&&e.value!==''){return {value:e.value,unit:e.unit||'',ref_lo:e.ref_lo,ref_hi:e.ref_hi,date:entries[i].date||''};}}}
+  return null;
+}
+// Age-banded adult IGF-1 reference range in ng/mL (approximate immunoassay adult
+// values — verify against your own lab). Sex differences within adult bands are
+// minor and overlap heavily, so a single adult table is used.
+function _igf1RefRange(age){
+  var a=age>0?age:35;
+  var t=[[29,110,330],[39,100,290],[49,90,260],[59,80,230],[69,75,210],[200,60,190]];
+  for(var i=0;i<t.length;i++){if(a<=t[i][0])return {lo:t[i][1],hi:t[i][2]};}
+  return {lo:60,hi:190};
+}
+// Normalise an IGF-1 reading to ng/mL (1 nmol/L ≈ 7.649 ng/mL).
+function _igf1ToNgml(value,unit){var v=parseFloat(value);if(!(v>0))return null;return unit==='nmol/L'?v*7.649:v;}
+// Directional GH-axis recommendation from IGF-1. refLo/refHi override the table.
+function _igf1Recommendation(value,unit,age,refLo,refHi){
+  var ngml=_igf1ToNgml(value,unit);if(ngml==null)return null;
+  var lo,hi,src;
+  // A lab-entered reference range is reported in the same unit as the value,
+  // so convert both to ng/mL for comparison against the normalised reading.
+  if(refLo>0&&refHi>refLo){lo=Math.round(_igf1ToNgml(refLo,unit));hi=Math.round(_igf1ToNgml(refHi,unit));src='lab';}
+  else{var rr=_igf1RefRange(age);lo=rr.lo;hi=rr.hi;src='table';}
+  var targetLo=Math.round(lo+(hi-lo)*2/3); // upper third = optimisation target
+  var r={ngml:Math.round(ngml),lo:lo,hi:hi,targetLo:targetLo,src:src};
+  if(ngml>hi){r.status='Above range';r.direction='reduce';r.modType='warn';
+    r.text='IGF-1 '+r.ngml+' ng/mL is above the '+(src==='lab'?'lab':'age')+' reference range ('+lo+'–'+hi+') — supraphysiological; consider reducing GH-axis dose. Re-test in 6–8 weeks.';}
+  else if(ngml>=targetLo){r.status='At target';r.direction='hold';r.modType='ok';
+    r.text='IGF-1 '+r.ngml+' ng/mL is in the upper-normal optimisation band ('+targetLo+'–'+hi+') — hold current GH-axis dose. Re-test in 8–12 weeks.';}
+  else{r.status='Below target';r.direction='increase';r.modType='adj';
+    r.text='IGF-1 '+r.ngml+' ng/mL is below the upper-normal target ('+targetLo+'–'+hi+', '+(src==='lab'?'your lab range':'age-based')+') — consider increasing GH-axis dose. Re-test in 6–8 weeks.';}
+  if(src==='table')r.text+=' Verify against your lab’s own reference range.';
+  return r;
+}
+function _dosePersonalization(pepId,profile){var mods=[];var ghAxis=['cjc-ipa','cjc-nodac','ipamorelin','sermorelin','tesamorelin','hgh'];var glp1=['retatrutide','tirzepatide','semaglutide'];if(ghAxis.indexOf(pepId)!==-1){if(profile.sex==='female')mods.push({type:'adj',text:'Women are ~50% more sensitive to GH peptides — start at the lower end of the range'});if(profile.age>=50)mods.push({type:'adj',text:'Age '+profile.age+': pituitary GH sensitivity increases with age — lower end of range is sufficient'});if(profile.age>0&&profile.age<30)mods.push({type:'ok',text:'Age '+profile.age+': standard doses well tolerated'});var _ig=(typeof _latestBwMarker==='function')?_latestBwMarker('IGF-1'):null;if(_ig){var _igr=_igf1Recommendation(_ig.value,_ig.unit,profile.age,_ig.ref_lo,_ig.ref_hi);if(_igr)mods.push({type:_igr.modType,text:_igr.text});}}if(glp1.indexOf(pepId)!==-1&&profile.weight_kg>0){if(profile.weight_kg>100)mods.push({type:'adj',text:'Weight '+profile.weight_kg+'kg: may need to reach a higher dose for full effect — ensure protein ≥'+Math.round(profile.weight_kg*2)+'g/day'});else if(profile.weight_kg<65)mods.push({type:'ok',text:'Weight '+profile.weight_kg+'kg: lighter frame — often responds well at lower maintenance doses'});}if(pepId==='hcg'&&profile.sex==='female')mods.push({type:'warn',text:'HCG is a male TRT support compound — not typically indicated for women in this context'});if(pepId==='nad'&&profile.weight_kg>0)mods.push({type:'info',text:'Weight-based target: ~'+Math.round(profile.weight_kg*1.5)+'mg SC (1.5 mg/kg) is within therapeutic range'});return mods;}
 function toggleTabVis(id){if(id==='settings')return;_tabVis[id]=!_tabVis[id];setData('proto-tab-vis',_tabVis);pushPepSettingsToAgent({'proto-tab-vis':_tabVis});if(!_tabVis[id]&&_currentTab===id){const b=document.getElementById('tab-btn-today');if(b)switchTab('today',b);}applyTabVis();buildTabsSettingsCard();}
 function buildTabsSettingsCard(){const card=document.getElementById('s-tabs-card');if(!card)return;const rows=Object.entries(TAB_LABELS).map(([id,label])=>{const on=!!_tabVis[id];return'<div style="padding:11px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--text)">'+label+'</span><button onclick="toggleTabVis(\''+id+'\')" style="background:'+(on?'var(--accent)':'var(--surface2)')+';color:'+(on?'#000':'var(--muted)')+';border:1px solid '+(on?'transparent':'var(--border)')+';border-radius:20px;padding:4px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;min-width:48px">'+(on?'ON':'OFF')+'</button></div>';}).join('');card.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">'+sSecHdr('tabs','Tabs')+sSecBody('tabs')+rows+'<div style="padding:8px 16px 10px;font-size:11px;color:var(--muted2)">Settings is always visible</div></div></div>';}
 </script>
