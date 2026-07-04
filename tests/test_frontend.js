@@ -4251,6 +4251,29 @@ if (typeof G._blBuildLines === 'function') {
   check('_blValueAt: null before a line starts', G._blValueAt(_blTrt, _blTrt.offset - 1) === null);
   check('_blValueAt: null after a line ends',    G._blValueAt(_blTrt, _blTrt.offset + _blTrt.curve.length) === null);
 
+  // mg-equivalent conversion + dual-axis scaling
+  check('_blToMg: mg passes through',      G._blToMg(50,'mg') === 50);
+  check('_blToMg: µg → mg (×0.001)',       G._blToMg(500,'µg') === 0.5);
+  check('_blToMg: mcg alias → mg',         G._blToMg(500,'mcg') === 0.5);
+  check('_blToMg: g → mg (×1000)',         G._blToMg(5,'g') === 5000);
+  check('_blToMg: IU kept on numeric scale (approx)', G._blToMg(4,'IU') === 4);
+  check('_blFmtMg: mg band',   G._blFmtMg(150) === '150 mg');
+  check('_blFmtMg: µg band',   G._blFmtMg(0.125) === '125 µg');
+  check('_blFmtMg: g band',    /g$/.test(G._blFmtMg(5000)));
+  // lines now carry unit + mg-equivalent peak
+  check('_blBuildLines: TRT line carries a unit',  !!_blTrt.unit);
+  check('_blBuildLines: TRT line has peakMg > 0',  _blTrt.peakMg > 0);
+  // _blComputeAxes: single when peaks are close, dual when far apart
+  var _axSingle = G._blComputeAxes([{id:'a',peakMg:100},{id:'b',peakMg:120}]);
+  check('_blComputeAxes: single axis when spread < 8×', _axSingle.mode==='single' && _axSingle.assign.a==='L' && _axSingle.assign.b==='L');
+  var _axDual = G._blComputeAxes([{id:'big',peakMg:150},{id:'small',peakMg:0.2}]);
+  check('_blComputeAxes: dual axis on wide spread',     _axDual.mode==='dual');
+  check('_blComputeAxes: big→left, small→right',        _axDual.assign.big==='L' && _axDual.assign.small==='R');
+  check('_blComputeAxes: axis maxes bracket the peaks', _axDual.leftMax >= 150 && _axDual.rightMax >= 0.2 && _axDual.rightMax < 150);
+  // _blRawMgAt returns real mg-equivalent (not normalised)
+  var _rawPeak = G._blRawMgAt(_blTrt, _blTrt.offset + _blArgmax);
+  check('_blRawMgAt: returns mg-equivalent at peak', Math.abs(_rawPeak - _blTrt.peakMg) < 1e-9);
+
   // supplement half-life map (evidence-based plasma half-lives, in days)
   check('_blSuppHalfLife: vitd3 = 15d (25-OH-D biomarker)', G._blSuppHalfLife('vitd3') === 15);
   check('_blSuppHalfLife: vitc ~30min (0.02d)',   G._blSuppHalfLife('vitc') === 0.02);

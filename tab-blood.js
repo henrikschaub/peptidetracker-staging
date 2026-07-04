@@ -132,7 +132,7 @@ function _blBuildLines(){
       var injDays = _pkInjectionDays(p, cycleLen, startDow);
       if(!injDays.length) return;
       lines.push({ id:'pep_'+si+'_'+p.id, name:p.name||p.id, color:(cat&&cat.dot)||p.dot||'#3cffa0',
-        kind:'peptide', startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
+        kind:'peptide', unit:(p.unit_am||p.unit_pm||'mcg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
         curve:_pkCurve(injDays, dose, hl, cycleLen) });
     });
 
@@ -145,7 +145,7 @@ function _blBuildLines(){
         var injDays = _pkInjectionDays(c, cycleLen, startDow); if(!injDays.length) return;
         var trtEntry = TRT_CAT.find(function(x){ return x.id===c.id; });
         lines.push({ id:'trt_'+si+'_'+c.id, name:c.name, color:(trtEntry&&trtEntry.dot)||'#e8a020',
-          kind:'trt', startDate:startDate, cycleLen:cycleLen, sub:stackLabel, isTestosterone:true,
+          kind:'trt', unit:(c.unit||'mg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel, isTestosterone:true,
           curve:_pkCurve(injDays, doseNum, hl, cycleLen) });
       });
     }
@@ -162,7 +162,7 @@ function _blBuildLines(){
         var injsPerWeek = injDays.filter(function(d){ return d<7; }).length || 1;
         var dpi = unit==='mg/week' ? doseNum/injsPerWeek : doseNum;
         lines.push({ id:'enh_'+si+'_'+c.id, name:c.name, color:c.dot||ec.dot||'#a855f7',
-          kind:'enhanced', startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
+          kind:'enhanced', unit:((unit||'mg/week').split('/')[0]||'mg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
           isTestosterone:(c.name||'').toLowerCase().indexOf('testosterone')!==-1,
           curve:_pkCurve(injDays, dpi, hl, cycleLen) });
       });
@@ -181,7 +181,12 @@ function _blBuildLines(){
   // Supplement lines across the whole timeline from their start date.
   supps.forEach(function(s, i){
     var hl = _blSuppHalfLife(s.supp_id);
-    var dose = parseFloat(s.dose) || 1;
+    // Upgrade legacy IU-only doses to metric first (e.g. D3 "5000 IU" → 125 µg)
+    // so the mg-equivalent magnitude is correct rather than treating IU as mg.
+    var _fmt = (typeof _suppFmtDose==='function') ? _suppFmtDose(s.supp_id, s.dose) : s.dose;
+    var _sp  = (typeof _suppParseDose==='function') ? _suppParseDose(_fmt) : null;
+    var dose = _sp ? _sp.amount : (parseFloat(s.dose) || 1);
+    var sUnit = _sp ? _sp.unit : 'mg';
     var sStart = s.start_date ? parseLocalDate(s.start_date) : firstDate;
     var offset = Math.round((sStart.getTime() - firstDate.getTime())/86400000);
     var span = totalDays - offset; if(span < 1) return;
@@ -189,21 +194,75 @@ function _blBuildLines(){
     var injDays = []; for(var d=0; d<=span; d+=stepDays) injDays.push(d);
     if(!injDays.length) return;
     lines.push({ id:'supp_'+(s.id||s.supp_id), name:s.name||s.supp_id, color:_BL_SUPP_COLORS[i%_BL_SUPP_COLORS.length],
-      kind:'supplement', startDate:sStart, cycleLen:span, sub:'supplement',
+      kind:'supplement', unit:sUnit, startDate:sStart, cycleLen:span, sub:'supplement',
       curve:_pkCurve(injDays, dose, hl, span) });
   });
 
-  // Normalise each line to its own peak; record its offset in global days.
+  // Record each line's peak, its mg-equivalent scale, and its offset in global days.
   lines.forEach(function(ln){
     var peak = 0; for(var t=0;t<ln.curve.length;t++) if(ln.curve[t] > peak) peak = ln.curve[t];
     ln.peak = peak || 1;
+    ln.mgScale = _blToMg(1, ln.unit);   // mg per dose-unit
+    ln.peakMg  = ln.peak * ln.mgScale;  // peak amount in mg-equivalent
     ln.offset = Math.round((ln.startDate.getTime() - firstDate.getTime())/86400000);
   });
   _blTimeline = { firstDate:firstDate, totalDays:totalDays, nowDay:Math.round((NOW.getTime()-firstDate.getTime())/86400000) };
   return lines;
 }
 
-// Normalised value (0..1) of a line at global day g, or null outside its span.
+// mg-equivalent of a dose amount. Mass units convert exactly; IU / ml / counts
+// have no clean mg conversion so they're kept on the same numeric scale (approx).
+function _blToMg(v, unit){
+  if(!(v>0)) return 0;
+  switch(String(unit||'').toLowerCase()){
+    case 'mg': return v;
+    case 'mcg': case 'µg': return v*0.001;
+    case 'g':  return v*1000;
+    case 'ng': return v*1e-6;
+    case 'kg': return v*1e6;
+    default:   return v;
+  }
+}
+// Format a mg value with an adaptive unit for axis ticks.
+function _blFmtMg(v){
+  if(!(v>0)) return '0';
+  if(v>=1000)  return (Math.round(v/100)/10)+' g';
+  if(v>=1)     return (Math.round(v*10)/10)+' mg';
+  if(v>=0.001) return Math.round(v*1000)+' µg';
+  return Math.round(v*1e6)+' ng';
+}
+// Assign visible lines to one or two Y-axes by mg-equivalent magnitude. Lines
+// whose peaks span < 8× share one axis; a wider spread splits at the largest
+// magnitude gap so big compounds (left) and small ones (right) each read well.
+var _blAxes = null;
+function _blComputeAxes(visible){
+  var peaks=[]; visible.forEach(function(ln){ if(ln.peakMg>0) peaks.push(ln.peakMg); });
+  var assign={};
+  if(!peaks.length){ visible.forEach(function(ln){ assign[ln.id]='L'; }); return {mode:'single',leftMax:1,rightMax:0,assign:assign}; }
+  var maxP=Math.max.apply(null,peaks), minP=Math.min.apply(null,peaks);
+  if(peaks.length<2 || maxP/minP < 8){
+    visible.forEach(function(ln){ assign[ln.id]='L'; });
+    return {mode:'single',leftMax:(maxP*1.1)||1,rightMax:0,assign:assign};
+  }
+  var sorted=peaks.slice().sort(function(a,b){ return a-b; });
+  var gi=0,gmax=0;
+  for(var i=0;i<sorted.length-1;i++){ var gg=Math.log(sorted[i+1])-Math.log(sorted[i]); if(gg>gmax){ gmax=gg; gi=i; } }
+  var threshold=Math.sqrt(sorted[gi]*sorted[gi+1]);
+  var leftMax=0,rightMax=0;
+  visible.forEach(function(ln){
+    var p=ln.peakMg||0;
+    if(p>=threshold){ assign[ln.id]='L'; if(p>leftMax)leftMax=p; }
+    else { assign[ln.id]='R'; if(p>rightMax)rightMax=p; }
+  });
+  return {mode:'dual',leftMax:(leftMax*1.1)||1,rightMax:(rightMax*1.1)||1,assign:assign};
+}
+// mg-equivalent value of a line at global day g, or null outside its span.
+function _blRawMgAt(ln, g){
+  var t = g - ln.offset;
+  if(t < 0 || t >= ln.curve.length) return null;
+  return ln.curve[t] * (ln.mgScale||1);
+}
+// Kept for back-compat: normalised value (0..1) of a line at day g.
 function _blValueAt(ln, g){
   var t = g - ln.offset;
   if(t < 0 || t >= ln.curve.length) return null;
@@ -217,7 +276,12 @@ function _blDrawChart(canvas){
   canvas.width = cssW*dpr; canvas.height = cssH*dpr;
   canvas.style.width = cssW+'px'; canvas.style.height = cssH+'px';
   var ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
-  var PAD = {top:10, right:12, bottom:22, left:36};
+
+  _blLoadHidden();
+  var visible = _blLines.filter(function(ln){ return !_blHidden[ln.id]; });
+  var axes = _blComputeAxes(visible); _blAxes = axes;
+
+  var PAD = {top:10, right:(axes.mode==='dual'?46:14), bottom:22, left:44};
   var cW = cssW-PAD.left-PAD.right, cH = cssH-PAD.top-PAD.bottom;
   var totalDays = _blTimeline.totalDays, nowDay = _blTimeline.nowDay;
   var pan = _blZoom!=='whole' ? Math.round(_blPanOffset||0) : 0;
@@ -228,15 +292,19 @@ function _blDrawChart(canvas){
   if(xEnd <= xStart) xEnd = Math.min(totalDays, xStart+7);
   canvas._blWin = {xStart:xStart, xEnd:xEnd, cW:cW};
   function xOf(g){ return PAD.left + ((g-xStart)/((xEnd-xStart)||1))*cW; }
-  function yOf(v){ return PAD.top + cH - v*cH; }
+  function yOfL(v){ return PAD.top + cH - (v/axes.leftMax)*cH; }
+  function yOfR(v){ return PAD.top + cH - (v/(axes.rightMax||1))*cH; }
 
-  // Horizontal grid + % labels
+  // Horizontal grid + left-axis (and optional right-axis) value labels
   ctx.font = '9px DM Sans,sans-serif';
-  [0,0.5,1].forEach(function(v){
-    var y = yOf(v);
+  [0,0.5,1].forEach(function(f){
+    var y = PAD.top + cH - f*cH;
     ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
     ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left+cW, y); ctx.stroke();
-    ctx.fillStyle = '#555'; ctx.textAlign = 'right'; ctx.fillText(Math.round(v*100)+'%', PAD.left-4, y+3);
+    ctx.fillStyle = '#666'; ctx.textAlign = 'right'; ctx.fillText(_blFmtMg(axes.leftMax*f), PAD.left-4, y+3);
+    if(axes.mode==='dual'){
+      ctx.fillStyle = '#8a8a8a'; ctx.textAlign = 'left'; ctx.fillText(_blFmtMg(axes.rightMax*f), PAD.left+cW+4, y+3);
+    }
   });
 
   // Vertical date grid + labels
@@ -258,22 +326,22 @@ function _blDrawChart(canvas){
     ctx.beginPath(); ctx.moveTo(nx, PAD.top); ctx.lineTo(nx, PAD.top+cH); ctx.stroke(); ctx.setLineDash([]);
   }
 
-  // Lines (visible only)
-  _blLoadHidden();
-  var anyVisible = false;
-  _blLines.forEach(function(ln){
-    if(_blHidden[ln.id]) return;
-    anyVisible = true;
+  // Lines — right-axis lines are dashed so the axis they use is obvious
+  visible.forEach(function(ln){
+    var side = axes.assign[ln.id]||'L';
+    var yFn = side==='R' ? yOfR : yOfL;
     ctx.beginPath(); var started = false;
     for(var g=Math.floor(xStart); g<=Math.ceil(xEnd); g++){
-      var v = _blValueAt(ln, g);
+      var v = _blRawMgAt(ln, g);
       if(v===null){ started = false; continue; }
-      var X = xOf(g), Y = yOf(v);
+      var X = xOf(g), Y = yFn(v);
       if(!started){ ctx.moveTo(X, Y); started = true; } else ctx.lineTo(X, Y);
     }
-    ctx.strokeStyle = ln.color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.strokeStyle = ln.color; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    if(axes.mode==='dual' && side==='R') ctx.setLineDash([4,2]);
+    ctx.stroke(); ctx.setLineDash([]);
   });
-  if(!anyVisible){
+  if(!visible.length){
     ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('All lines hidden — tap a chip below', PAD.left+cW/2, PAD.top+cH/2);
   }
@@ -294,13 +362,18 @@ function _blRenderZoomBar(){
 function _blRenderLegend(){
   var leg = document.getElementById('bl-legend'); if(!leg) return;
   _blLoadHidden();
+  var dual = _blAxes && _blAxes.mode==='dual';
   leg.innerHTML = _blLines.map(function(ln){
     var off = !!_blHidden[ln.id];
+    var side = (dual && _blAxes.assign[ln.id]) ? _blAxes.assign[ln.id] : '';
+    var tag = side ? '<span style="font-size:8px;font-weight:800;color:var(--muted2);border:1px solid var(--border);border-radius:4px;padding:0 3px;margin-left:1px">'+side+'</span>' : '';
+    var unitTxt = ln.unit ? '<span style="font-size:9px;color:var(--muted2);margin-left:1px">'+_esc(ln.unit)+'</span>' : '';
     return '<button onclick="_blToggleLine(\''+_esc(ln.id)+'\')" style="display:flex;align-items:center;gap:6px;'+
       'background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:5px 11px;cursor:pointer;'+
       'font-family:inherit;opacity:'+(off?'0.4':'1')+'">'+
       '<span style="width:9px;height:9px;border-radius:50%;background:'+ln.color+';flex-shrink:0'+(off?';filter:grayscale(1)':'')+'"></span>'+
       '<span style="font-size:11px;font-weight:600;color:var(--text)'+(off?';text-decoration:line-through':'')+'">'+_esc(ln.name)+'</span>'+
+      unitTxt + tag +
       '</button>';
   }).join('');
 }
@@ -365,18 +438,18 @@ function buildBloodLevels(){
     return;
   }
   var html = '<div style="padding:12px 16px 6px;font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px">'+
-    'Relative plasma levels · each line = % of its own peak</div>';
+    'Estimated plasma levels · real amounts (mg-eq.), auto-scaled</div>';
   html += '<div style="padding:0 16px 16px">';
   html += '<div id="bl-zoom-bar" style="display:flex;gap:4px;margin-bottom:8px"></div>';
   html += '<canvas id="bl-chart" style="width:100%;display:block"></canvas>';
   html += '<div id="bl-legend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px"></div>';
-  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5">Tap a chip to hide/show a line. Zoom to today/week/month, then drag to pan. Supplement curves use approximate half-lives and are a rough guide only.</div>';
+  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5">Amounts are mg-equivalent (relative amount in body, not a lab concentration). When magnitudes differ a lot, lines split across two Y-scales — right-axis lines are dashed and tagged <b>R</b>. Tap a chip to hide/show; zoom then drag to pan. Supplement curves use approximate half-lives.</div>';
   html += '</div>';
   el.innerHTML = html;
   _blRenderZoomBar();
-  _blRenderLegend();
   requestAnimationFrame(function(){
     var c = document.getElementById('bl-chart');
     if(c){ _blDrawChart(c); _blAttachPan(c); }
+    _blRenderLegend();
   });
 }
