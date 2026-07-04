@@ -4162,6 +4162,56 @@ if (typeof G._tcFitBeta === 'function') {
   check('_tcFitBeta defined', false);
 }
 
+// ── Blood Levels: combined multi-line chart (compounds + supplements) ─────────
+console.log('\n── Blood Levels: combined chart (compounds + supplements) ──');
+if (typeof G._blBuildLines === 'function') {
+  var _blSaveStacks = G._userStacks, _blSaveIdx = G._activeStackIndices, _blSaveSupp = G._supplements, _blSaveLines = G._blLines;
+  G._userStacks = [{
+    name:'Test', cycle_length:12, cycle_start:'2026-06-01',
+    peptides:[{id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0,3],times:['AM'],dose_am:'3',unit_am:'mg',active:true}],
+    trt:{enabled:true, compounds:[{id:'testoviron',name:'Testoviron',dose:'250',unit:'mg',days:[0,3]}]},
+    enhanced:{enabled:false, compounds:[]}
+  }];
+  G._activeStackIndices = [0];
+  G._supplements = [{id:'s1',supp_id:'vitd3',name:'Vitamin D3',dose:'5000 IU',freq:'daily',timing:'AM',start_date:'2026-06-01'}];
+
+  var _blLines = G._blBuildLines();
+  G._blLines = _blLines;
+  check('_blBuildLines: includes a peptide line',    _blLines.some(function(l){return l.kind==='peptide';}));
+  check('_blBuildLines: includes a TRT line',        _blLines.some(function(l){return l.kind==='trt';}));
+  check('_blBuildLines: includes a supplement line', _blLines.some(function(l){return l.kind==='supplement';}));
+  check('_blBuildLines: sets a timeline',            G._blTimeline && G._blTimeline.totalDays > 0);
+
+  // normalisation: each line's peak maps to exactly 1.0
+  var _blTrt = _blLines.filter(function(l){return l.kind==='trt';})[0];
+  var _blArgmax = 0; for (var _bi=1;_bi<_blTrt.curve.length;_bi++) if (_blTrt.curve[_bi] > _blTrt.curve[_blArgmax]) _blArgmax = _bi;
+  check('_blValueAt: peak normalises to 1.0', G._blValueAt(_blTrt, _blTrt.offset + _blArgmax) === 1);
+  check('_blValueAt: null before a line starts', G._blValueAt(_blTrt, _blTrt.offset - 1) === null);
+  check('_blValueAt: null after a line ends',    G._blValueAt(_blTrt, _blTrt.offset + _blTrt.curve.length) === null);
+
+  // supplement half-life map
+  check('_blSuppHalfLife: known supplement (vitd3=15d)', G._blSuppHalfLife('vitd3') === 15);
+  check('_blSuppHalfLife: unknown falls back to 0.5d',   G._blSuppHalfLife('nope') === 0.5);
+
+  // _blDrawChart must not throw with a headless canvas mock
+  (function(){
+    var n=function(){};
+    var fctx={scale:n,beginPath:n,moveTo:n,lineTo:n,stroke:n,fill:n,fillText:n,closePath:n,save:n,restore:n,
+      setLineDash:n,translate:n,rotate:n,fillRect:n,createLinearGradient:function(){return{addColorStop:n};},measureText:function(){return{width:0};}};
+    var fcanvas={offsetWidth:320,width:0,height:0,style:{},getContext:function(){return fctx;}};
+    var _blThrew=false;
+    try { G._blZoom='whole'; G._blDrawChart(fcanvas);
+          G._blZoom='week';  G._blDrawChart(fcanvas); } catch(e){ _blThrew=true; console.error('  _blDrawChart threw:', e.message); }
+    check('_blDrawChart: no throw (whole + week zoom)', !_blThrew);
+    check('_blDrawChart: records a pan window', fcanvas._blWin && fcanvas._blWin.xEnd > fcanvas._blWin.xStart);
+    G._blZoom='whole';
+  })();
+
+  G._userStacks = _blSaveStacks; G._activeStackIndices = _blSaveIdx; G._supplements = _blSaveSupp; G._blLines = _blSaveLines;
+} else {
+  check('_blBuildLines defined', false);
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
