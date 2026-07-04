@@ -379,17 +379,11 @@ function _suppOpenAddSheet(editId){
       '<select id="supp-as-comp" onchange="_suppFillDoses()" style="'+iSty+'">'+compOpts+'</select></div>' +
     '<div style="margin-bottom:14px"><label style="'+lSty+'">Dose</label>' +
       '<select id="supp-as-dose" onchange="_suppDoseSel()" style="'+iSty+';margin-bottom:8px"></select>' +
-      '<div id="supp-as-dose-sliders" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">' +
-          '<span style="font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--muted,#888);text-transform:uppercase">Amount</span>' +
-          '<span id="supp-as-slider-preview" style="font-size:16px;font-weight:800;color:var(--accent)"></span>' +
-        '</div>' +
-        '<input id="supp-as-dose-slider" type="range" oninput="_suppSliderInput()" style="width:100%;margin-bottom:14px;accent-color:var(--accent)">' +
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">' +
-          '<span style="font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--muted,#888);text-transform:uppercase">Unit</span>' +
-          '<span id="supp-as-unit-preview" style="font-size:14px;font-weight:800;color:var(--text)"></span>' +
-        '</div>' +
-        '<input id="supp-as-unit-slider" type="range" min="0" step="1" oninput="_suppUnitSliderInput()" style="width:100%;accent-color:var(--accent)">' +
+      '<div id="supp-as-dose-custom" style="display:none;grid-template-columns:1fr 1fr;gap:12px">' +
+        '<div style="min-width:0"><label style="'+lSty+'">Amount</label>' +
+          '<select id="supp-as-amount" style="'+iSty+'"></select></div>' +
+        '<div style="min-width:0"><label style="'+lSty+'">Unit</label>' +
+          '<select id="supp-as-unit" onchange="_suppUnitSel()" style="'+iSty+'"></select></div>' +
       '</div></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px">' +
       '<div style="min-width:0"><label style="'+lSty+'">Cadence</label><select id="supp-as-freq" style="'+iSty+'">'+freqOpts+'</select></div>' +
@@ -403,22 +397,24 @@ function _suppOpenAddSheet(editId){
 
 function _suppCloseAddSheet(){ var ol=document.getElementById('supp-add-overlay'); if(ol) ol.remove(); }
 
-// ── Custom dose via sliders (no free text) ───────────────────────────────────
-// Custom doses are entered with a numeric amount slider + a discrete unit slider
-// so the stored value is always a clean "<amount> <unit>" — users can no longer
-// type arbitrary text.
+// ── Custom dose via two dropdowns (no free text) ─────────────────────────────
+// Custom doses are entered with an amount dropdown + a unit dropdown so the
+// stored value is always a clean "<amount> <unit>" — users can no longer type
+// arbitrary text. The amount options adapt to the selected unit.
 var _SUPP_UNITS = ['µg','mg','g','IU'];
-// Slider bounds per unit (min, max, step, default amount).
-function _suppUnitRange(unit){
+// Discrete amount options offered per unit.
+function _suppAmountOptions(unit){
   switch(unit){
-    case 'µg': return {min:5,   max:1000,  step:5,   def:50};
-    case 'g':  return {min:0.5, max:30,    step:0.5, def:5};
-    case 'IU': return {min:100, max:10000, step:100, def:1000};
-    default:   return {min:5,   max:2000,  step:5,   def:100}; // mg
+    case 'µg': return [5,10,25,50,100,150,200,250,500,750,1000];
+    case 'g':  return [0.5,1,1.5,2,3,5,8,10,15,20,30];
+    case 'IU': return [100,250,500,1000,2000,4000,5000,10000];
+    default:   return [5,10,25,50,75,100,150,200,250,300,400,500,600,750,1000,1500,2000]; // mg
   }
 }
-// Parse a stored dose string into {amount, unit} for the sliders, or null when it
-// has no slider-compatible unit (e.g. "1 capsule"). "mcg" is treated as "µg".
+// Sensible default amount to pre-select for a unit when none is supplied.
+function _suppDefaultAmount(unit){ return ({'µg':50,'g':5,'IU':1000})[unit] || 100; }
+// Parse a stored dose string into {amount, unit}, or null when it has no
+// dropdown-compatible unit (e.g. "1 capsule"). "mcg" is treated as "µg".
 function _suppParseDose(str){
   if(!str) return null;
   var m = String(str).replace(/mcg/g,'µg').match(/(\d[\d.]*)\s*(µg|mg|g|IU)\b/);
@@ -431,48 +427,40 @@ function _suppDefaultUnit(){
   var p = (cat && cat.doses && cat.doses.length) ? _suppParseDose(cat.doses[0]) : null;
   return p ? p.unit : 'mg';
 }
-// Configure the amount slider's bounds for the currently selected unit, clamping
-// (and step-snapping) the amount into range.
-function _suppApplyUnitRange(amount){
-  var uEl = document.getElementById('supp-as-unit-slider');
-  var dEl = document.getElementById('supp-as-dose-slider');
-  if(!uEl || !dEl) return;
-  var unit = _SUPP_UNITS[parseInt(uEl.value,10)] || 'mg';
-  var r = _suppUnitRange(unit);
-  dEl.min = String(r.min); dEl.max = String(r.max); dEl.step = String(r.step);
-  var v = (amount!=null && !isNaN(amount)) ? amount : r.def;
-  v = Math.min(r.max, Math.max(r.min, v));
-  v = Math.round(v / r.step) * r.step;
-  dEl.value = String(v);
-}
-function _suppInitSliders(amount, unit){
-  var uEl = document.getElementById('supp-as-unit-slider');
+// Populate the unit dropdown, selecting `unit`.
+function _suppFillUnitOptions(unit){
+  var uEl = document.getElementById('supp-as-unit');
   if(!uEl) return;
-  uEl.max = String(_SUPP_UNITS.length - 1);
-  var ui = _SUPP_UNITS.indexOf(unit);
-  uEl.value = String(ui < 0 ? 1 : ui); // default mg
-  _suppApplyUnitRange(amount);
-  _suppUpdateSliderPreview();
+  var u = (_SUPP_UNITS.indexOf(unit) >= 0) ? unit : 'mg';
+  uEl.innerHTML = _SUPP_UNITS.map(function(x){ return '<option value="'+x+'"'+(x===u?' selected':'')+'>'+x+'</option>'; }).join('');
 }
-function _suppUpdateSliderPreview(){
-  var dEl = document.getElementById('supp-as-dose-slider');
-  var uEl = document.getElementById('supp-as-unit-slider');
-  if(!dEl || !uEl) return;
-  var unit = _SUPP_UNITS[parseInt(uEl.value,10)] || 'mg';
-  var dp = document.getElementById('supp-as-slider-preview');
-  var up = document.getElementById('supp-as-unit-preview');
-  if(dp) dp.textContent = dEl.value + ' ' + unit;
-  if(up) up.textContent = unit;
+// Populate the amount dropdown for the current unit, selecting `amount`
+// (added to the list if it isn't a standard option, so edits are preserved).
+function _suppFillAmountOptions(amount){
+  var uEl = document.getElementById('supp-as-unit');
+  var aEl = document.getElementById('supp-as-amount');
+  if(!uEl || !aEl) return;
+  var unit = uEl.value || 'mg';
+  var opts = _suppAmountOptions(unit).slice();
+  var amt  = (amount!=null && !isNaN(amount)) ? Number(amount) : null;
+  if(amt!=null && opts.indexOf(amt) === -1) opts.push(amt);
+  opts.sort(function(a,b){ return a-b; });
+  var sel = (amt!=null) ? amt : _suppDefaultAmount(unit);
+  aEl.innerHTML = opts.map(function(v){ return '<option value="'+v+'"'+(v===sel?' selected':'')+'>'+v+'</option>'; }).join('');
 }
-function _suppSliderInput(){ _suppUpdateSliderPreview(); }
-function _suppUnitSliderInput(){ _suppApplyUnitRange(null); _suppUpdateSliderPreview(); }
-// Current custom dose string from the sliders, e.g. "500 mg".
-function _suppCurrentSliderDose(){
-  var dEl = document.getElementById('supp-as-dose-slider');
-  var uEl = document.getElementById('supp-as-unit-slider');
-  if(!dEl || !uEl) return '';
-  var unit = _SUPP_UNITS[parseInt(uEl.value,10)] || 'mg';
-  return dEl.value + ' ' + unit;
+// Initialise both dropdowns for an (amount, unit) pair.
+function _suppInitDoseControls(amount, unit){
+  _suppFillUnitOptions(unit);
+  _suppFillAmountOptions(amount);
+}
+// Unit changed → repopulate amounts with that unit's default selection.
+function _suppUnitSel(){ _suppFillAmountOptions(null); }
+// Current custom dose string from the two dropdowns, e.g. "500 mg".
+function _suppCurrentDropdownDose(){
+  var aEl = document.getElementById('supp-as-amount');
+  var uEl = document.getElementById('supp-as-unit');
+  if(!aEl || !uEl) return '';
+  return aEl.value + ' ' + uEl.value;
 }
 
 // Populate the dose dropdown from the selected supplement's presets (+ Custom).
@@ -485,36 +473,35 @@ function _suppFillDoses(preset){
   var opts = doses.map(function(d){ return '<option value="'+_suppEsc(d)+'">'+_suppEsc(d)+'</option>'; }).join('');
   opts += '<option value="__custom__">Custom…</option>';
   doseEl.innerHTML = opts;
-  var sliders = document.getElementById('supp-as-dose-sliders');
-  if(sliders) sliders.removeAttribute('data-init');
+  var custom = document.getElementById('supp-as-dose-custom');
+  if(custom) custom.removeAttribute('data-init');
   if(preset && doses.indexOf(preset) === -1){
     // preset dose not in the list (a custom value from an edited entry)
     doseEl.value = '__custom__';
-    if(sliders){
-      sliders.style.display='block';
+    if(custom){
+      custom.style.display='grid';
       var parsed = _suppParseDose(preset) || {amount:null, unit:_suppDefaultUnit()};
-      _suppInitSliders(parsed.amount, parsed.unit);
-      sliders.setAttribute('data-init','1');
+      _suppInitDoseControls(parsed.amount, parsed.unit);
+      custom.setAttribute('data-init','1');
     }
   } else {
     if(preset) doseEl.value = preset;
-    if(sliders) sliders.style.display='none';
+    if(custom) custom.style.display='none';
   }
 }
 
 function _suppDoseSel(){
   var doseEl = document.getElementById('supp-as-dose');
-  var sliders = document.getElementById('supp-as-dose-sliders');
-  if(!doseEl || !sliders) return;
+  var custom = document.getElementById('supp-as-dose-custom');
+  if(!doseEl || !custom) return;
   if(doseEl.value === '__custom__'){
-    sliders.style.display='block';
-    if(sliders.getAttribute('data-init')!=='1'){
-      _suppInitSliders(null, _suppDefaultUnit());
-      sliders.setAttribute('data-init','1');
+    custom.style.display='grid';
+    if(custom.getAttribute('data-init')!=='1'){
+      _suppInitDoseControls(null, _suppDefaultUnit());
+      custom.setAttribute('data-init','1');
     }
-    _suppUpdateSliderPreview();
   } else {
-    sliders.style.display='none';
+    custom.style.display='none';
   }
 }
 
@@ -526,7 +513,7 @@ async function _suppConfirmAdd(editId){
   if(!compEl) return;
   var cat = _suppCat(compEl.value);
   if(!cat) return;
-  var dose = (doseEl && doseEl.value === '__custom__') ? _suppCurrentSliderDose() : (doseEl ? doseEl.value : '');
+  var dose = (doseEl && doseEl.value === '__custom__') ? _suppCurrentDropdownDose() : (doseEl ? doseEl.value : '');
   var existing = editId ? (_supplements||[]).find(function(s){return s.id===editId;}) : null;
   var entry = {
     id:         editId || undefined,

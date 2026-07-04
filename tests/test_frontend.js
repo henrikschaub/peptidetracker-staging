@@ -3950,7 +3950,7 @@ if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
     G._tcBwEntries = _savedBw;
   }
 
-  // ── custom dose via sliders (no free text) ──
+  // ── custom dose via two dropdowns (no free text) ──
   if (typeof G._suppParseDose === 'function') {
     check('_suppParseDose: "125 µg (5000 IU)" → 125 µg',
       (function(){var p=G._suppParseDose('125 µg (5000 IU)');return p&&p.amount===125&&p.unit==='µg';})());
@@ -3960,39 +3960,43 @@ if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
       (function(){var p=G._suppParseDose('100 mcg');return p&&p.amount===100&&p.unit==='µg';})());
     check('_suppParseDose: "2000 mg" → 2000 mg',
       (function(){var p=G._suppParseDose('2000 mg');return p&&p.amount===2000&&p.unit==='mg';})());
-    check('_suppParseDose: count-based "1 capsule" → null (no slider unit)',
+    check('_suppParseDose: count-based "1 capsule" → null (no dropdown unit)',
       G._suppParseDose('1 capsule') === null);
     check('_suppParseDose: empty → null', G._suppParseDose('') === null);
-    // unit slider maps to a fixed unit set; ranges are per-unit
+    // unit dropdown maps to a fixed unit set; amount options are per-unit
     check('_SUPP_UNITS is [µg,mg,g,IU]', JSON.stringify(G._SUPP_UNITS) === JSON.stringify(['µg','mg','g','IU']));
-    check('_suppUnitRange(µg): max 1000 step 5', (function(){var r=G._suppUnitRange('µg');return r.max===1000&&r.step===5;})());
-    check('_suppUnitRange(g): fractional step 0.5', (function(){var r=G._suppUnitRange('g');return r.step===0.5&&r.max===30;})());
-    check('_suppUnitRange(IU): step 100 max 10000', (function(){var r=G._suppUnitRange('IU');return r.step===100&&r.max===10000;})());
-    check('_suppUnitRange(mg default): max 2000', G._suppUnitRange('mg').max === 2000);
+    check('_suppAmountOptions(µg): starts 5, ends 1000', (function(){var o=G._suppAmountOptions('µg');return o[0]===5&&o[o.length-1]===1000;})());
+    check('_suppAmountOptions(g): includes fractional 0.5', G._suppAmountOptions('g').indexOf(0.5)!==-1);
+    check('_suppAmountOptions(IU): ends 10000', (function(){var o=G._suppAmountOptions('IU');return o[o.length-1]===10000;})());
+    check('_suppAmountOptions(mg default): ends 2000', (function(){var o=G._suppAmountOptions('mg');return o[o.length-1]===2000;})());
+    check('_suppDefaultAmount: µg=50, mg=100, g=5, IU=1000',
+      G._suppDefaultAmount('µg')===50 && G._suppDefaultAmount('mg')===100 && G._suppDefaultAmount('g')===5 && G._suppDefaultAmount('IU')===1000);
 
-    // DOM wiring: drive the slider flow end-to-end with a minimal element mock
+    // DOM wiring: drive the two-dropdown flow end-to-end with select mocks that
+    // mimic a browser <select> (setting innerHTML with a `selected` option updates value).
     (function(){
-      function mkEl(){ var a={}; return {
-        value:'', min:'', max:'', step:'', textContent:'', style:{display:''},
-        getAttribute:function(k){return a[k]==null?null:a[k];},
-        setAttribute:function(k,v){a[k]=String(v);},
-        removeAttribute:function(k){delete a[k];} }; }
-      var els={'supp-as-comp':mkEl(),'supp-as-dose':mkEl(),'supp-as-dose-sliders':mkEl(),
-        'supp-as-dose-slider':mkEl(),'supp-as-unit-slider':mkEl(),
-        'supp-as-slider-preview':mkEl(),'supp-as-unit-preview':mkEl()};
+      function mkSel(){ var _html='',_val='';
+        return {
+          set innerHTML(h){ _html=h; var m=/value="([^"]*)"\s+selected/.exec(h); _val = m ? m[1] : ((/value="([^"]*)"/.exec(h)||[])[1]||''); },
+          get innerHTML(){ return _html; },
+          get value(){ return _val; }, set value(v){ _val=String(v); },
+          style:{display:''}, getAttribute:function(){return null;}, setAttribute:function(){}, removeAttribute:function(){} }; }
+      var els={'supp-as-comp':mkSel(),'supp-as-dose':mkSel(),'supp-as-dose-custom':mkSel(),
+        'supp-as-amount':mkSel(),'supp-as-unit':mkSel()};
       els['supp-as-comp'].value='vitd3';
       var savedGE=G.document.getElementById;
       G.document.getElementById=function(id){ return els[id]||savedGE(id); };
       try {
-        G._suppInitSliders(500,'mg');
-        check('slider wiring: unit slider selects mg (idx 1)', els['supp-as-unit-slider'].value==='1');
-        check('slider wiring: amount slider holds 500',        els['supp-as-dose-slider'].value==='500');
-        check('slider wiring: _suppCurrentSliderDose = "500 mg"', G._suppCurrentSliderDose()==='500 mg');
-        check('slider wiring: preview text = "500 mg"',        els['supp-as-slider-preview'].textContent==='500 mg');
-        els['supp-as-unit-slider'].value='0'; // switch to µg
-        G._suppUnitSliderInput();
-        check('slider wiring: unit switch re-ranges amount (max 1000)', els['supp-as-dose-slider'].max==='1000');
-        check('slider wiring: dose after µg switch = "50 µg"',  G._suppCurrentSliderDose()==='50 µg');
+        G._suppInitDoseControls(500,'mg');
+        check('dropdown wiring: unit select = mg',            els['supp-as-unit'].value==='mg');
+        check('dropdown wiring: amount select = 500',         els['supp-as-amount'].value==='500');
+        check('dropdown wiring: _suppCurrentDropdownDose = "500 mg"', G._suppCurrentDropdownDose()==='500 mg');
+        els['supp-as-unit'].value='µg'; // user changes unit
+        G._suppUnitSel();
+        check('dropdown wiring: unit switch resets amount to default (50 µg)', G._suppCurrentDropdownDose()==='50 µg');
+        // editing preserves a non-standard amount by injecting it as an option
+        G._suppInitDoseControls(437,'mg');
+        check('dropdown wiring: non-standard amount preserved (437 mg)', G._suppCurrentDropdownDose()==='437 mg');
       } finally { G.document.getElementById=savedGE; }
     })();
   }
