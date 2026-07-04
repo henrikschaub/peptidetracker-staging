@@ -9,7 +9,11 @@
 // hematocrit / prolactin support relevant to enhanced users). Commodity OTC
 // products — not proprietary compound data. Each has a prefilled dose list.
 var SUPPLEMENT_CAT = [
-  {id:'vitd3',      name:'Vitamin D3',            doses:['1000 IU','2000 IU','5000 IU','10000 IU']},
+  // Fat-soluble vitamins are often labelled in IU internationally, but metric (mcg/mg) is
+  // the default here (Europe never uses IU) — the IU equivalent is shown in parentheses.
+  {id:'vitd3',      name:'Vitamin D3',            doses:['25 mcg (1000 IU)','50 mcg (2000 IU)','100 mcg (4000 IU)','125 mcg (5000 IU)','250 mcg (10000 IU)']},
+  {id:'vita',       name:'Vitamin A (retinol)',   doses:['750 mcg (2500 IU)','1500 mcg (5000 IU)','3000 mcg (10000 IU)']},
+  {id:'vite',       name:'Vitamin E',             doses:['67 mg (100 IU)','134 mg (200 IU)','268 mg (400 IU)']},
   {id:'vitk2',      name:'Vitamin K2 (MK-7)',     doses:['100 mcg','200 mcg']},
   {id:'omega3',     name:'Omega-3 (Fish Oil)',    doses:['1000 mg','2000 mg','3000 mg','4000 mg']},
   {id:'magnesium',  name:'Magnesium (Glycinate)', doses:['200 mg','300 mg','400 mg','600 mg']},
@@ -258,7 +262,7 @@ function _suppOpenAddSheet(editId){
       '<select id="supp-as-comp" onchange="_suppFillDoses()" style="'+iSty+'">'+compOpts+'</select></div>' +
     '<div style="margin-bottom:14px"><label style="'+lSty+'">Dose</label>' +
       '<select id="supp-as-dose" onchange="_suppDoseSel()" style="'+iSty+';margin-bottom:8px"></select>' +
-      '<input id="supp-as-dose-custom" type="text" placeholder="Custom dose (e.g. 2500 IU)" style="'+iSty+';display:none"></div>' +
+      '<input id="supp-as-dose-custom" type="text" placeholder="Custom dose (e.g. 500 mg)" style="'+iSty+';display:none"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px">' +
       '<div style="min-width:0"><label style="'+lSty+'">Cadence</label><select id="supp-as-freq" style="'+iSty+'">'+freqOpts+'</select></div>' +
       '<div style="min-width:0"><label style="'+lSty+'">Timing</label><select id="supp-as-timing" style="'+iSty+'">'+timeOpts+'</select></div>' +
