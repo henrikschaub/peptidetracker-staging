@@ -9,12 +9,12 @@
 // hematocrit / prolactin support relevant to enhanced users). Commodity OTC
 // products — not proprietary compound data. Each has a prefilled dose list.
 var SUPPLEMENT_CAT = [
-  // Fat-soluble vitamins are often labelled in IU internationally, but metric (mcg/mg) is
+  // Fat-soluble vitamins are often labelled in IU internationally, but metric (µg/mg) is
   // the default here (Europe never uses IU) — the IU equivalent is shown in parentheses.
-  {id:'vitd3',      name:'Vitamin D3',            doses:['25 mcg (1000 IU)','50 mcg (2000 IU)','100 mcg (4000 IU)','125 mcg (5000 IU)','250 mcg (10000 IU)']},
-  {id:'vita',       name:'Vitamin A (retinol)',   doses:['750 mcg (2500 IU)','1500 mcg (5000 IU)','3000 mcg (10000 IU)']},
+  {id:'vitd3',      name:'Vitamin D3',            doses:['25 µg (1000 IU)','50 µg (2000 IU)','100 µg (4000 IU)','125 µg (5000 IU)','250 µg (10000 IU)']},
+  {id:'vita',       name:'Vitamin A (retinol)',   doses:['750 µg (2500 IU)','1500 µg (5000 IU)','3000 µg (10000 IU)']},
   {id:'vite',       name:'Vitamin E',             doses:['67 mg (100 IU)','134 mg (200 IU)','268 mg (400 IU)']},
-  {id:'vitk2',      name:'Vitamin K2 (MK-7)',     doses:['100 mcg','200 mcg']},
+  {id:'vitk2',      name:'Vitamin K2 (MK-7)',     doses:['100 µg','200 µg']},
   {id:'omega3',     name:'Omega-3 (Fish Oil)',    doses:['1000 mg','2000 mg','3000 mg','4000 mg']},
   {id:'magnesium',  name:'Magnesium (Glycinate)', doses:['200 mg','300 mg','400 mg','600 mg']},
   {id:'zinc',       name:'Zinc',                  doses:['15 mg','25 mg','50 mg']},
@@ -36,8 +36,8 @@ var SUPPLEMENT_CAT = [
   {id:'hawthorn',   name:'Hawthorn Extract',      doses:['300 mg','600 mg']},
   {id:'nattokinase',name:'Nattokinase',           doses:['2000 FU','4000 FU']},
   {id:'curcumin',   name:'Curcumin / Turmeric',   doses:['500 mg','1000 mg']},
-  {id:'selenium',   name:'Selenium',              doses:['100 mcg','200 mcg']},
-  {id:'iodine',     name:'Iodine',                doses:['150 mcg']},
+  {id:'selenium',   name:'Selenium',              doses:['100 µg','200 µg']},
+  {id:'iodine',     name:'Iodine',                doses:['150 µg']},
   {id:'psyllium',   name:'Psyllium / Fiber',      doses:['5 g','10 g']},
   {id:'electrolytes',name:'Electrolytes',         doses:['1 serving']},
   {id:'potassium',  name:'Potassium',             doses:['99 mg','200 mg']},
