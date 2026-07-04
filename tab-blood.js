@@ -46,228 +46,303 @@ function _pkCurve(injDays, dosePerInj, halfLifeDays, cycleDays) {
   return curve;
 }
 
-function _drawPkChart(canvas, curve, color, unit, cycleLen) {
+
+// ── Combined blood-levels chart (all active compounds + supplements) ─────────
+// One normalised multi-line overlay: each line is drawn as a % of its own peak
+// so compounds in different units (mg / µg / IU) are comparable. Lines can be
+// toggled on/off, and the today/week/month/whole zoom + drag-pan mirrors the
+// T-Calc free-T chart.
+var _blZoom = 'whole';
+var _blPanOffset = 0;      // days
+var _blHidden = null;      // {lineId:true} hidden lines (lazy-loaded cache)
+var _blLines = [];         // built line objects for the current render
+var _blTimeline = null;    // {firstDate, totalDays, nowDay}
+
+// Per-class default plasma half-life (days) for supplements. Supplements are
+// commodity OTC products (not proprietary compound data) — these are rough
+// values used only for a RELATIVE overlay curve, never for dosing decisions.
+var _SUPP_HALFLIFE = {
+  vitd3:15, vita:60, vite:5, vitk2:3,                 // fat-soluble vitamins (long)
+  vitc:0.25, bcomplex:0.3, b6:0.25,                   // water-soluble vitamins (short)
+  magnesium:1, zinc:1, boron:0.5, selenium:1, iodine:1, potassium:0.5, // minerals
+  omega3:2, coq10:1.4, creatine:1.5, citrulline:0.1, taurine:0.1, betaalanine:0.1,
+  ashwagandha:0.5, nac:0.25, tudca:0.4, milkthistle:0.3, bergamot:0.5, berberine:0.5,
+  hawthorn:0.4, nattokinase:0.3, curcumin:0.3, glycine:0.1, ltheanine:0.15,
+  melatonin:0.04, probiotics:0.5, whey:0.1, collagen:0.2, electrolytes:0.2, psyllium:0.3
+};
+function _blSuppHalfLife(id){ return _SUPP_HALFLIFE[id] || 0.5; }
+// Distinct palette for supplement lines (compounds carry their own dot colours).
+var _BL_SUPP_COLORS = ['#7bd88f','#5ec8d8','#c084fc','#f0a860','#e879b0','#8ab4f8','#d8c85e','#84d8b0'];
+
+function _blLoadHidden(){ if(_blHidden===null) _blHidden = getData('proto-blood-hidden', {}) || {}; return _blHidden; }
+
+// Build the line objects from every active stack's compounds + tracked supplements.
+function _blBuildLines(){
+  var lines = [], starts = [], compoundEnds = [];
+  (_userStacks||[]).forEach(function(st, si){
+    if(!_isActiveStack(si)) return;
+    var cycleLen = (st.cycle_length || 12) * 7;
+    var startDate = st.cycle_start ? parseLocalDate(st.cycle_start) : new Date(NOW);
+    var startDow  = startDate.getDay();
+    var stackLabel = st.name || ('Stack ' + (si + 1));
+    starts.push(startDate); compoundEnds.push(startDate.getTime() + cycleLen*86400000);
+
+    // Peptides
+    (st.peptides||[]).forEach(function(p){
+      if(p.active === false) return;
+      var cat = (typeof PEPTIDE_CAT!=='undefined') ? PEPTIDE_CAT.find(function(x){ return x.id===p.id; }) : null;
+      var hl = _parseHalfLifeDays(cat ? cat.halfLife : (p.halfLife||''));
+      if(!hl) return;
+      var dose = (parseFloat(p.dose_am)||0) + (parseFloat(p.dose_pm)||0);
+      if(!dose) return;
+      var injDays = _pkInjectionDays(p, cycleLen, startDow);
+      if(!injDays.length) return;
+      lines.push({ id:'pep_'+si+'_'+p.id, name:p.name||p.id, color:(cat&&cat.dot)||p.dot||'#3cffa0',
+        kind:'peptide', startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
+        curve:_pkCurve(injDays, dose, hl, cycleLen) });
+    });
+
+    // TRT (testosterone esters)
+    if(st.trt && st.trt.enabled){
+      (st.trt.compounds||[]).forEach(function(c){
+        var guide = TRT_GUIDE[c.id]; if(!guide) return;
+        var hl = _parseHalfLifeDays(guide.halfLife); if(!hl) return;
+        var doseNum = parseFloat(c.dose)||0; if(!doseNum) return;
+        var injDays = _pkInjectionDays(c, cycleLen, startDow); if(!injDays.length) return;
+        var trtEntry = TRT_CAT.find(function(x){ return x.id===c.id; });
+        lines.push({ id:'trt_'+si+'_'+c.id, name:c.name, color:(trtEntry&&trtEntry.dot)||'#e8a020',
+          kind:'trt', startDate:startDate, cycleLen:cycleLen, sub:stackLabel, isTestosterone:true,
+          curve:_pkCurve(injDays, doseNum, hl, cycleLen) });
+      });
+    }
+
+    // Enhanced
+    if(st.enhanced && st.enhanced.enabled){
+      (st.enhanced.compounds||[]).forEach(function(c){
+        var ec = ENHANCEMENT_COMPOUNDS.find(function(x){ return x.id===c.id; });
+        if(!ec || !ec.cadence) return;
+        var hl = ec.id==='hgh' ? 1 : _parseHalfLifeDays(ec.cadence.halfLife); if(!hl) return;
+        var doseNum = parseFloat(c.dose)||0; if(!doseNum) return;
+        var unit = c.unit || ec.unit || 'mg/week';
+        var injDays = _pkInjectionDays(c, cycleLen, startDow); if(!injDays.length) return;
+        var injsPerWeek = injDays.filter(function(d){ return d<7; }).length || 1;
+        var dpi = unit==='mg/week' ? doseNum/injsPerWeek : doseNum;
+        lines.push({ id:'enh_'+si+'_'+c.id, name:c.name, color:c.dot||ec.dot||'#a855f7',
+          kind:'enhanced', startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
+          isTestosterone:(c.name||'').toLowerCase().indexOf('testosterone')!==-1,
+          curve:_pkCurve(injDays, dpi, hl, cycleLen) });
+      });
+    }
+  });
+
+  // Global timeline: span from the earliest start to the latest compound end,
+  // extended to ~6 weeks past today so ongoing supplements have somewhere to live.
+  var supps = (typeof _supplements!=='undefined' && _supplements) ? _supplements.filter(function(s){ return s && s.supp_id; }) : [];
+  var firstDate = starts.length ? new Date(Math.min.apply(null, starts.map(function(d){ return d.getTime(); }))) : new Date(NOW);
+  supps.forEach(function(s){ if(s.start_date){ var d=parseLocalDate(s.start_date); if(d<firstDate) firstDate=d; } });
+  var maxCompoundEnd = compoundEnds.length ? Math.max.apply(null, compoundEnds) : 0;
+  var lastMs = Math.max(maxCompoundEnd, supps.length ? (NOW.getTime()+42*86400000) : 0, firstDate.getTime()+7*86400000);
+  var totalDays = Math.max(1, Math.round((lastMs - firstDate.getTime())/86400000));
+
+  // Supplement lines across the whole timeline from their start date.
+  supps.forEach(function(s, i){
+    var hl = _blSuppHalfLife(s.supp_id);
+    var dose = parseFloat(s.dose) || 1;
+    var sStart = s.start_date ? parseLocalDate(s.start_date) : firstDate;
+    var offset = Math.round((sStart.getTime() - firstDate.getTime())/86400000);
+    var span = totalDays - offset; if(span < 1) return;
+    var stepDays = s.freq==='weekly' ? 7 : (s.freq==='eod' ? 2 : 1);
+    var injDays = []; for(var d=0; d<=span; d+=stepDays) injDays.push(d);
+    if(!injDays.length) return;
+    lines.push({ id:'supp_'+(s.id||s.supp_id), name:s.name||s.supp_id, color:_BL_SUPP_COLORS[i%_BL_SUPP_COLORS.length],
+      kind:'supplement', startDate:sStart, cycleLen:span, sub:'supplement',
+      curve:_pkCurve(injDays, dose, hl, span) });
+  });
+
+  // Normalise each line to its own peak; record its offset in global days.
+  lines.forEach(function(ln){
+    var peak = 0; for(var t=0;t<ln.curve.length;t++) if(ln.curve[t] > peak) peak = ln.curve[t];
+    ln.peak = peak || 1;
+    ln.offset = Math.round((ln.startDate.getTime() - firstDate.getTime())/86400000);
+  });
+  _blTimeline = { firstDate:firstDate, totalDays:totalDays, nowDay:Math.round((NOW.getTime()-firstDate.getTime())/86400000) };
+  return lines;
+}
+
+// Normalised value (0..1) of a line at global day g, or null outside its span.
+function _blValueAt(ln, g){
+  var t = g - ln.offset;
+  if(t < 0 || t >= ln.curve.length) return null;
+  return ln.curve[t] / ln.peak;
+}
+
+function _blDrawChart(canvas){
+  if(!canvas || !_blTimeline) return;
   var dpr = window.devicePixelRatio || 1;
-  var cssW = canvas.offsetWidth || 300;
-  var cssH = 110;
-  canvas.width = cssW * dpr;
-  canvas.height = cssH * dpr;
-  canvas.style.width = cssW + 'px';
-  canvas.style.height = cssH + 'px';
-  var ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
+  var cssW = canvas.offsetWidth || 320, cssH = 220;
+  canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+  canvas.style.width = cssW+'px'; canvas.style.height = cssH+'px';
+  var ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+  var PAD = {top:10, right:12, bottom:22, left:36};
+  var cW = cssW-PAD.left-PAD.right, cH = cssH-PAD.top-PAD.bottom;
+  var totalDays = _blTimeline.totalDays, nowDay = _blTimeline.nowDay;
+  var pan = _blZoom!=='whole' ? Math.round(_blPanOffset||0) : 0;
+  var xStart = 0, xEnd = totalDays;
+  if(_blZoom==='today')      { xStart=Math.max(0,nowDay-2+pan); xEnd=Math.min(totalDays,nowDay+2+pan); }
+  else if(_blZoom==='week')  { xStart=Math.max(0,nowDay-3+pan); xEnd=Math.min(totalDays,nowDay+4+pan); }
+  else if(_blZoom==='month') { xStart=Math.max(0,nowDay-15+pan); xEnd=Math.min(totalDays,nowDay+15+pan); }
+  if(xEnd <= xStart) xEnd = Math.min(totalDays, xStart+7);
+  canvas._blWin = {xStart:xStart, xEnd:xEnd, cW:cW};
+  function xOf(g){ return PAD.left + ((g-xStart)/((xEnd-xStart)||1))*cW; }
+  function yOf(v){ return PAD.top + cH - v*cH; }
 
-  var PAD = {top: 12, right: 14, bottom: 26, left: 50};
-  var cW = cssW - PAD.left - PAD.right;
-  var cH = cssH - PAD.top - PAD.bottom;
-
-  var maxV = 0;
-  for (var i = 0; i <= cycleLen; i++) if (curve[i] > maxV) maxV = curve[i];
-  if (!maxV) {
-    ctx.fillStyle = '#555';
-    ctx.font = '11px DM Sans,sans-serif';
-    ctx.fillText('No data', 10, 40);
-    return;
-  }
-
-  var vMax = maxV * 1.1;
-  function xOf(t) { return PAD.left + (t / cycleLen) * cW; }
-  function yOf(v) { return PAD.top + cH - (v / vMax) * cH; }
-
-  // Vertical week grid
-  ctx.strokeStyle = '#2a2a2a';
-  ctx.lineWidth = 0.5;
-  var totalWeeks = Math.ceil(cycleLen / 7);
-  for (var w = 0; w <= totalWeeks; w++) {
-    var gx = xOf(w * 7);
-    if (gx > PAD.left + cW + 1) break;
-    ctx.beginPath();
-    ctx.moveTo(gx, PAD.top);
-    ctx.lineTo(gx, PAD.top + cH);
-    ctx.stroke();
-  }
-
-  // Horizontal grid + Y labels
-  var nTicks = 3;
-  ctx.fillStyle = '#555';
+  // Horizontal grid + % labels
   ctx.font = '9px DM Sans,sans-serif';
-  ctx.textAlign = 'right';
-  for (var ti = 0; ti <= nTicks; ti++) {
-    var ty = PAD.top + (cH / nTicks) * ti;
-    ctx.strokeStyle = '#2a2a2a';
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(PAD.left, ty);
-    ctx.lineTo(PAD.left + cW, ty);
-    ctx.stroke();
-    var tv = maxV * (1 - ti / nTicks);
-    var lbl = tv >= 100 ? Math.round(tv) : tv >= 10 ? tv.toFixed(1) : tv.toFixed(2);
-    ctx.fillText(lbl, PAD.left - 4, ty + 3);
-  }
+  [0,0.5,1].forEach(function(v){
+    var y = yOf(v);
+    ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left+cW, y); ctx.stroke();
+    ctx.fillStyle = '#555'; ctx.textAlign = 'right'; ctx.fillText(Math.round(v*100)+'%', PAD.left-4, y+3);
+  });
 
-  // Y-axis unit label (rotated)
-  ctx.save();
-  ctx.translate(10, PAD.top + cH / 2);
-  ctx.rotate(-Math.PI / 2);
+  // Vertical date grid + labels
+  var winDays = xEnd - xStart;
+  var step = winDays<=7 ? 1 : winDays<=31 ? 5 : winDays<=84 ? 14 : 28;
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#444';
-  ctx.font = '8px DM Sans,sans-serif';
-  ctx.fillText(unit, 0, 0);
-  ctx.restore();
-
-  // Area fill
-  var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
-  grad.addColorStop(0, color + '55');
-  grad.addColorStop(1, color + '00');
-  ctx.beginPath();
-  ctx.moveTo(xOf(0), PAD.top + cH);
-  for (var t = 0; t <= cycleLen; t++) {
-    ctx.lineTo(xOf(t), yOf(curve[t] || 0));
+  for(var g=Math.ceil(xStart); g<=xEnd; g+=step){
+    var gx = xOf(g);
+    ctx.strokeStyle = '#232323'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(gx, PAD.top); ctx.lineTo(gx, PAD.top+cH); ctx.stroke();
+    var dt = new Date(_blTimeline.firstDate.getTime() + g*86400000);
+    ctx.fillStyle = '#555'; ctx.fillText((dt.getMonth()+1)+'/'+dt.getDate(), gx, PAD.top+cH+14);
   }
-  ctx.lineTo(xOf(cycleLen), PAD.top + cH);
-  ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
 
-  // Line
-  ctx.beginPath();
-  ctx.moveTo(xOf(0), yOf(curve[0] || 0));
-  for (var t = 1; t <= cycleLen; t++) {
-    ctx.lineTo(xOf(t), yOf(curve[t] || 0));
+  // "Now" marker
+  if(nowDay>=xStart && nowDay<=xEnd){
+    var nx = xOf(nowDay);
+    ctx.strokeStyle = '#e8a02099'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(nx, PAD.top); ctx.lineTo(nx, PAD.top+cH); ctx.stroke(); ctx.setLineDash([]);
   }
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.stroke();
 
-  // X week labels
-  ctx.fillStyle = '#555';
-  ctx.font = '9px DM Sans,sans-serif';
-  ctx.textAlign = 'center';
-  var labelEvery = totalWeeks <= 8 ? 1 : totalWeeks <= 16 ? 2 : 4;
-  for (var w = 0; w <= totalWeeks; w += labelEvery) {
-    var lx = xOf(w * 7);
-    if (lx > PAD.left + cW + 8) break;
-    ctx.fillText('W' + w, lx, PAD.top + cH + 18);
+  // Lines (visible only)
+  _blLoadHidden();
+  var anyVisible = false;
+  _blLines.forEach(function(ln){
+    if(_blHidden[ln.id]) return;
+    anyVisible = true;
+    ctx.beginPath(); var started = false;
+    for(var g=Math.floor(xStart); g<=Math.ceil(xEnd); g++){
+      var v = _blValueAt(ln, g);
+      if(v===null){ started = false; continue; }
+      var X = xOf(g), Y = yOf(v);
+      if(!started){ ctx.moveTo(X, Y); started = true; } else ctx.lineTo(X, Y);
+    }
+    ctx.strokeStyle = ln.color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+  });
+  if(!anyVisible){
+    ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('All lines hidden — tap a chip below', PAD.left+cW/2, PAD.top+cH/2);
   }
 }
 
-function buildBloodLevels() {
-  var el = document.getElementById('blood-body');
-  if (!el) return;
+function _blRenderChart(){ var c = document.getElementById('bl-chart'); if(c) _blDrawChart(c); }
 
-  var items = [];
-  _userStacks.forEach(function(st, si) {
-    if (!_isActiveStack(si)) return;
-    var cycleLen = (st.cycle_length || 12) * 7;
-    var cycleStartDow = st.cycle_start ? parseLocalDate(st.cycle_start).getDay() : 1;
-    var stackLabel = st.name || ('Stack ' + (si + 1));
+function _blRenderZoomBar(){
+  var bar = document.getElementById('bl-zoom-bar'); if(!bar) return;
+  bar.innerHTML = ['today','week','month','whole'].map(function(z){
+    var a = _blZoom===z;
+    return '<button onclick="_blSetZoom(\''+z+'\')" style="flex:1;background:'+(a?'rgba(102,136,204,0.25)':'none')+
+      ';border:1px solid '+(a?'#6688cc66':'var(--border)')+';border-radius:6px;color:'+(a?'#6688cc':'var(--muted2)')+
+      ';font-size:9px;font-weight:700;letter-spacing:0.8px;cursor:pointer;padding:5px 2px;font-family:inherit">'+z.toUpperCase()+'</button>';
+  }).join('');
+}
 
-    // TRT compounds — all TRT compounds are testosterone esters
-    if (st.trt && st.trt.enabled) {
-      (st.trt.compounds || []).forEach(function(c) {
-        var guide = TRT_GUIDE[c.id];
-        if (!guide) return;
-        var halfLife = _parseHalfLifeDays(guide.halfLife);
-        if (!halfLife) return;
-        var doseNum = parseFloat(c.dose) || 0;
-        if (!doseNum) return;
-        var injDays = _pkInjectionDays(c, cycleLen, cycleStartDow);
-        if (!injDays.length) return;
-        var curve = _pkCurve(injDays, doseNum, halfLife, cycleLen);
-        var trtEntry = TRT_CAT.find(function(x) { return x.id === c.id; });
-        items.push({
-          name: c.name,
-          unit: c.unit || 'mg',
-          dot: trtEntry ? trtEntry.dot : '#e8a020',
-          curve: curve,
-          cycleLen: cycleLen,
-          stackLabel: stackLabel,
-          halfLifeStr: guide.halfLife,
-          isTestosterone: true
-        });
-      });
-    }
+function _blRenderLegend(){
+  var leg = document.getElementById('bl-legend'); if(!leg) return;
+  _blLoadHidden();
+  leg.innerHTML = _blLines.map(function(ln){
+    var off = !!_blHidden[ln.id];
+    return '<button onclick="_blToggleLine(\''+_esc(ln.id)+'\')" style="display:flex;align-items:center;gap:6px;'+
+      'background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:5px 11px;cursor:pointer;'+
+      'font-family:inherit;opacity:'+(off?'0.4':'1')+'">'+
+      '<span style="width:9px;height:9px;border-radius:50%;background:'+ln.color+';flex-shrink:0'+(off?';filter:grayscale(1)':'')+'"></span>'+
+      '<span style="font-size:11px;font-weight:600;color:var(--text)'+(off?';text-decoration:line-through':'')+'">'+_esc(ln.name)+'</span>'+
+      '</button>';
+  }).join('');
+}
 
-    // Enhanced compounds
-    if (st.enhanced && st.enhanced.enabled) {
-      (st.enhanced.compounds || []).forEach(function(c) {
-        var ec = ENHANCEMENT_COMPOUNDS.find(function(x) { return x.id === c.id; });
-        if (!ec || !ec.cadence) return;
-        var halfLifeStr = ec.cadence.halfLife;
-        // HGH active half-life is ~20 min (pulse); use IGF-1 proxy of 1 day for meaningful plot
-        var halfLife = ec.id === 'hgh' ? 1 : _parseHalfLifeDays(halfLifeStr);
-        if (!halfLife) return;
-        var doseNum = parseFloat(c.dose) || 0;
-        if (!doseNum) return;
-        var unit = c.unit || ec.unit || 'mg/week';
-        var injDays = _pkInjectionDays(c, cycleLen, cycleStartDow);
-        if (!injDays.length) return;
-        // Compute per-injection dose from weekly/daily unit
-        var injsPerWeek = injDays.filter(function(d) { return d < 7; }).length || 1;
-        var dosePerInj;
-        if (unit === 'mg/week') dosePerInj = doseNum / injsPerWeek;
-        else dosePerInj = doseNum; // mg/day, mg/EOD, IU/day: already per-injection
-        var curve = _pkCurve(injDays, dosePerInj, halfLife, cycleLen);
-        items.push({
-          name: c.name,
-          unit: unit,
-          dot: c.dot || ec.dot || '#a855f7',
-          curve: curve,
-          cycleLen: cycleLen,
-          stackLabel: stackLabel,
-          halfLifeStr: ec.id === 'hgh' ? '~24h IGF-1 effect' : halfLifeStr,
-          isTestosterone: (c.name || '').toLowerCase().includes('testosterone')
-        });
-      });
-    }
-  });
+function _blToggleLine(id){
+  _blLoadHidden();
+  if(_blHidden[id]) delete _blHidden[id]; else _blHidden[id] = true;
+  setData('proto-blood-hidden', _blHidden);
+  if(typeof pushPepSettingsToAgent==='function') pushPepSettingsToAgent({'proto-blood-hidden': _blHidden});
+  _blRenderChart(); _blRenderLegend();
+}
 
-  // If 2+ testosterone compounds are present, prepend a combined total curve
-  var testItems = items.filter(function(it) { return it.isTestosterone; });
-  if (testItems.length > 1) {
-    var maxCycleLen = testItems.reduce(function(m, it) { return Math.max(m, it.cycleLen); }, 0);
-    var combined = new Float64Array(maxCycleLen + 1);
-    testItems.forEach(function(it) {
-      for (var t = 0; t <= it.cycleLen; t++) combined[t] += it.curve[t] || 0;
-    });
-    items.unshift({
-      name: 'Combined Testosterone',
-      unit: 'mg',
-      dot: '#f5c842',
-      curve: combined,
-      cycleLen: maxCycleLen,
-      stackLabel: '',
-      halfLifeStr: testItems.map(function(it) { return it.name; }).join(' + '),
-      isCombined: true
-    });
+function _blSetZoom(z){
+  _blZoom = z; _blPanOffset = 0;
+  var c = document.getElementById('bl-chart');
+  if(c){ _blDrawChart(c); _blAttachPan(c); }
+  _blRenderZoomBar();
+}
+
+function _blAttachPan(canvas){
+  if(!canvas) return;
+  if(canvas._blTS){
+    canvas.removeEventListener('touchstart', canvas._blTS);
+    canvas.removeEventListener('touchmove', canvas._blTM);
+    canvas.removeEventListener('touchend', canvas._blTE);
+    canvas.removeEventListener('mousedown', canvas._blMD);
+    canvas.removeEventListener('mousemove', canvas._blMM);
+    canvas.removeEventListener('mouseup', canvas._blTE);
+    canvas._blTS = null;
   }
+  if(_blZoom==='whole'){ canvas.style.cursor=''; canvas.style.touchAction=''; return; }
+  canvas.style.cursor = 'grab'; canvas.style.touchAction = 'pan-y';
+  var dx0=null, dy0=null, off0=null;
+  canvas._blTS = function(e){ var t=e.touches?e.touches[0]:e; dx0=t.clientX; dy0=t.clientY; off0=_blPanOffset; };
+  canvas._blTM = function(e){
+    if(dx0===null) return;
+    var t=e.touches?e.touches[0]:e, dx=t.clientX-dx0, dy=t.clientY-(dy0||0);
+    if(e.touches && Math.abs(dx)<=Math.abs(dy)) return;
+    if(e.preventDefault) e.preventDefault();
+    var w = canvas._blWin || {xStart:0,xEnd:1,cW:250};
+    _blPanOffset = off0 - dx*((w.xEnd-w.xStart)/(w.cW||250));
+    _blDrawChart(canvas);
+  };
+  canvas._blTE = function(){ dx0=null; };
+  canvas._blMD = canvas._blTS;
+  canvas._blMM = function(e){ if(e.buttons & 1) canvas._blTM(e); };
+  canvas.addEventListener('touchstart', canvas._blTS, {passive:true});
+  canvas.addEventListener('touchmove', canvas._blTM, {passive:false});
+  canvas.addEventListener('touchend', canvas._blTE);
+  canvas.addEventListener('mousedown', canvas._blMD);
+  canvas.addEventListener('mousemove', canvas._blMM);
+  canvas.addEventListener('mouseup', canvas._blTE);
+}
 
-  if (!items.length) {
-    el.innerHTML = '';
-    alert('Blood Levels requires at least one active stack with TRT or Enhanced compounds configured with a dose.');
+function buildBloodLevels(){
+  var el = document.getElementById('blood-body');
+  if(!el) return;
+  _blLines = _blBuildLines();
+  if(!_blLines.length){
+    el.innerHTML = '<div class="empty" style="padding:40px 20px"><div class="empty-icon">🩸</div>'+
+      'No active compounds or supplements to plot.<br>Add a stack with a dose, or track a supplement.</div>';
     return;
   }
-
-  var html = '<div style="padding:12px 16px 4px;font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;">Expected plasma concentration over cycle</div>';
-  items.forEach(function(item, idx) {
-    html += '<div class="card">';
-    html += '<div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:' + item.dot + '"></div><div class="card-title">' + _esc(item.name.toUpperCase()) + '</div></div>';
-    html += '<span style="font-size:10px;color:var(--muted2);padding-right:2px;white-space:nowrap">' + (item.isCombined ? '' : 't½ ') + _esc(item.halfLifeStr) + '</span>';
-    html += '</div>';
-    html += '<div style="padding:2px 16px 14px"><canvas id="pk-chart-' + idx + '" height="110" style="width:100%;display:block;"></canvas></div>';
-    if (items.length > 1 && !item.isCombined && item.stackLabel) {
-      html += '<div style="padding:0 16px 10px;font-size:10px;color:var(--muted2)">' + _esc(item.stackLabel) + ' · ' + item.cycleLen + '-day cycle</div>';
-    }
-    html += '</div>';
-  });
-
+  var html = '<div style="padding:12px 16px 6px;font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px">'+
+    'Relative plasma levels · each line = % of its own peak</div>';
+  html += '<div style="padding:0 16px 16px">';
+  html += '<div id="bl-zoom-bar" style="display:flex;gap:4px;margin-bottom:8px"></div>';
+  html += '<canvas id="bl-chart" style="width:100%;display:block"></canvas>';
+  html += '<div id="bl-legend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px"></div>';
+  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5">Tap a chip to hide/show a line. Zoom to today/week/month, then drag to pan. Supplement curves use approximate half-lives and are a rough guide only.</div>';
+  html += '</div>';
   el.innerHTML = html;
-
-  requestAnimationFrame(function() {
-    items.forEach(function(item, idx) {
-      var canvas = document.getElementById('pk-chart-' + idx);
-      if (canvas) _drawPkChart(canvas, item.curve, item.dot, item.unit, item.cycleLen);
-    });
+  _blRenderZoomBar();
+  _blRenderLegend();
+  requestAnimationFrame(function(){
+    var c = document.getElementById('bl-chart');
+    if(c){ _blDrawChart(c); _blAttachPan(c); }
   });
 }
