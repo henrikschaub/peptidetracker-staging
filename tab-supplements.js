@@ -80,6 +80,100 @@ function _suppFmtDose(suppId, dose){
   }
   return d;
 }
+// ── Vitamin D (25-OH-D) → D3 dose recommendation ─────────────────────────────
+// Personalised D3 guidance from the user's most recent 25-OH-D blood test.
+// Classification thresholds and doses follow the Endocrine Society Clinical
+// Practice Guideline (Holick et al. 2011). 25-OH-D is the circulating storage
+// form; targets here are in nmol/L (ng/mL × 2.496). The optional weight-based
+// loading total uses the van Groningen (2010) formula:
+//   loading IU ≈ 40 × (target − current nmol/L) × body-weight(kg).
+// This is guidance to discuss with a clinician, not a prescription.
+
+// Convert a 25-OH-D reading to nmol/L. Catalogue units are 'nmol/L' | 'ng/mL'.
+function _vitDToNmol(value, unit){
+  var v = parseFloat(value);
+  if(!(v > 0)) return null;
+  return (unit === 'ng/mL') ? v * 2.496 : v;
+}
+
+// Most-recent value for a named blood marker from the T-calc bloodwork log
+// (_tcBwEntries, sorted newest-first). Markers such as Vitamin D live in each
+// entry's extra[] list. Returns {value, unit, date} or null.
+function _suppLatestBwMarker(name){
+  var entries = (typeof _tcBwEntries !== 'undefined' && Array.isArray(_tcBwEntries)) ? _tcBwEntries : null;
+  if(!entries) return null;
+  for(var i=0;i<entries.length;i++){
+    var ex = entries[i] && entries[i].extra;
+    if(!Array.isArray(ex)) continue;
+    for(var j=0;j<ex.length;j++){
+      if(ex[j] && ex[j].name === name && ex[j].value != null && ex[j].value !== ''){
+        return { value: ex[j].value, unit: ex[j].unit || '', date: entries[i].date || '' };
+      }
+    }
+  }
+  return null;
+}
+
+// Classify a 25-OH-D level (nmol/L) and return the D3 dosing recommendation.
+function _vitDRecommendation(nmol, weightKg){
+  if(!(nmol > 0)) return null;
+  var TARGET = 75; // lower bound of sufficiency (nmol/L)
+  var r = { nmol: Math.round(nmol*10)/10 };
+  if(nmol < 50){
+    r.status='Deficient'; r.color='#ef4444';
+    r.loading='125 µg/day (5000 IU) for 8 weeks';
+    r.maintenance='then 50 µg/day (2000 IU)';
+    if(weightKg > 0){
+      var totalIU = Math.round(40 * (TARGET - nmol) * weightKg / 1000) * 1000;
+      r.totalNote = 'Weight-based loading ≈ ' + totalIU.toLocaleString() + ' IU total over 8–12 weeks (' + weightKg + ' kg).';
+    }
+    r.recheck = 8;
+  } else if(nmol < 75){
+    r.status='Insufficient'; r.color='#f59e0b';
+    r.maintenance='50 µg/day (2000 IU)';
+    r.recheck = 10;
+  } else if(nmol <= 125){
+    r.status='Sufficient — at target'; r.color='#3cffa0';
+    r.maintenance='maintain 25–50 µg/day (1000–2000 IU)';
+    r.recheck = 12;
+  } else if(nmol <= 250){
+    r.status='Above target'; r.color='#3b9eff';
+    r.maintenance='no supplementation needed — consider reducing';
+    r.recheck = 12;
+  } else {
+    r.status='Excess'; r.color='#ef4444';
+    r.maintenance='stop supplementation — discuss with your clinician';
+    r.recheck = null;
+  }
+  return r;
+}
+
+// HTML card shown at the top of the Supplements tab when a 25-OH-D value exists.
+// Returns '' when there is no blood test to base a recommendation on.
+function _renderVitDCard(){
+  var m = _suppLatestBwMarker('Vitamin D');
+  if(!m) return '';
+  var nmol = _vitDToNmol(m.value, m.unit);
+  if(nmol == null) return '';
+  var prof = (typeof _userProfile === 'function') ? _userProfile() : {weight_kg:0};
+  var r = _vitDRecommendation(nmol, prof.weight_kg);
+  if(!r) return '';
+  var lines = '';
+  if(r.loading)     lines += '<div style="font-size:13px;color:var(--text);margin-top:6px">Loading: <strong>'+_suppEsc(r.loading)+'</strong></div>';
+  if(r.maintenance) lines += '<div style="font-size:13px;color:var(--text);margin-top:4px">'+(r.loading?'Maintenance: ':'Recommended: ')+'<strong>'+_suppEsc(r.maintenance)+'</strong></div>';
+  if(r.totalNote)   lines += '<div style="font-size:11px;color:var(--muted2);margin-top:6px">'+_suppEsc(r.totalNote)+'</div>';
+  var recheck = r.recheck ? '<div style="font-size:11px;color:var(--muted2);margin-top:6px">Recheck 25-OH-D in '+r.recheck+' weeks.</div>' : '';
+  return '<div style="background:var(--surface);border:1px solid '+r.color+'44;border-left:3px solid '+r.color+';border-radius:12px;padding:14px 16px;margin-bottom:14px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center">'
+      + '<div style="font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--muted2)">Vitamin D — personalised</div>'
+      + '<span style="font-size:11px;font-weight:700;color:'+r.color+'">'+_suppEsc(r.status)+'</span>'
+    + '</div>'
+    + '<div style="font-size:14px;color:var(--text);margin-top:4px">25-OH-D <strong>'+r.nmol+' nmol/L</strong>'+(m.date?' <span style="color:var(--muted2);font-size:11px">('+_suppEsc(m.date)+')</span>':'')+'</div>'
+    + lines + recheck
+    + '<div style="font-size:10px;color:var(--muted2);margin-top:8px;font-style:italic">Guidance from your blood test — confirm with your clinician.</div>'
+  + '</div>';
+}
+
 function _suppDateKey(d){ var x=new Date(d); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
 function _suppToday(){ return _suppDateKey(new Date()); }
 // Dose slots per timing: AM & PM is two doses/day, each checked independently.
@@ -256,7 +350,8 @@ function buildSupplements(){
       '</div>';
     }).join('');
   }
-  el.innerHTML = '<div style="padding:16px">' + header + body + '</div>';
+  var vitD = (typeof _renderVitDCard === 'function') ? _renderVitDCard() : '';
+  el.innerHTML = '<div style="padding:16px">' + header + vitD + body + '</div>';
 }
 
 // ── Add / edit bottom sheet ──────────────────────────────────────────────────
