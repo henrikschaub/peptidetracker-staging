@@ -3560,6 +3560,26 @@ if (typeof G._tcDrawManualChart === 'function') {
   G.document.getElementById  = _cfSavedGetEl;
 }
 
+// Today's free-T level marker: _tcDrawManualChart reports today's level via
+// _testNowHook in EVERY zoom (incl. whole), matching _tcFreeTSeries at nowDay.
+if (typeof G._tcDrawManualChart === 'function' && typeof G._tcFreeTSeries === 'function') {
+  var _nvFT=G._tcp.measuredFT,_nvDose=G._tcp.currentDoseMgWk,_nvBw=G._tcBwEntries,_nvGet=G.document.getElementById;
+  G._tcp.measuredFT='217'; G._tcp.currentDoseMgWk=''; G._tcBwEntries=[{date:'2026-05-25',free_t:217}];
+  var _nvNow=Date.now();
+  function _nvDate(off){ var dt=new Date(_nvNow+off*86400000); return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+  var _nvLog=[-20,-16,-12,-8,-4,0].map(function(o){ return {compId:'testoviron',doseMg:'125',date:_nvDate(o)}; });
+  var _nvCtx={scale:noop,beginPath:noop,arc:noop,fill:noop,stroke:noop,fillText:noop,closePath:noop,save:noop,restore:noop,fillRect:noop,setLineDash:noop,strokeRect:noop,translate:noop,rotate:noop,moveTo:noop,lineTo:noop,measureText:function(){return{width:10};},createLinearGradient:function(){return{addColorStop:noop};}};
+  function _nvRun(zoom){ var cap=null; G.document.getElementById=function(id){ if(id==='tc-manual-chart') return {style:{},classList:{add:noop,remove:noop,contains:function(){return false;}},offsetWidth:350,offsetHeight:250,_testNowHook:function(v){cap=v;},getContext:function(){return _nvCtx;}}; return _nvGet(id); }; G._tcDrawManualChart('tc-manual-chart',_nvLog,zoom); G.document.getElementById=_nvGet; return cap; }
+  var _nvWhole=_nvRun('whole'), _nvToday=_nvRun('today');
+  var _nvS=G._tcFreeTSeries(_nvLog.slice(),{});
+  var _nvNd=Math.max(0,Math.min(_nvS.totalDays,Math.round((_nvNow-_nvS.firstDate.getTime())/86400000)));
+  var _nvExpect=_nvS.total[_nvNd]*(_nvS.calFT_arr?_nvS.calFT_arr[_nvNd]:_nvS.scale);
+  check('_tcDrawManualChart: reports today free-T level in WHOLE zoom', _nvWhole!==null && _nvWhole>0);
+  check('_tcDrawManualChart: today-level matches the model at nowDay', Math.abs(_nvWhole-_nvExpect) < 1);
+  check('_tcDrawManualChart: today-level reported in every zoom (today==whole)', _nvToday!==null && Math.abs(_nvToday-_nvWhole) < 1);
+  G._tcp.measuredFT=_nvFT; G._tcp.currentDoseMgWk=_nvDose; G._tcBwEntries=_nvBw; G.document.getElementById=_nvGet;
+}
+
 // Regression: path 2 (curDose=0) calFT anchor must also be immune to post-BW injections.
 // Root cause: flat baseline added in the else branch used _logMean computed from the
 // full log.  Post-BW injections increased _logMean, which inflated total[anchorDay],
