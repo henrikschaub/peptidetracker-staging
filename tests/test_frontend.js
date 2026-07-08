@@ -4284,13 +4284,15 @@ if (typeof G._blBuildLines === 'function') {
   // lines now carry unit + mg-equivalent peak
   check('_blBuildLines: TRT line carries a unit',  !!_blTrt.unit);
   check('_blBuildLines: TRT line has peakMg > 0',  _blTrt.peakMg > 0);
-  // _blComputeAxes: single when peaks are close, dual when far apart
-  var _axSingle = G._blComputeAxes([{id:'a',peakMg:100},{id:'b',peakMg:120}]);
-  check('_blComputeAxes: single axis when spread < 8×', _axSingle.mode==='single' && _axSingle.assign.a==='L' && _axSingle.assign.b==='L');
-  var _axDual = G._blComputeAxes([{id:'big',peakMg:150},{id:'small',peakMg:0.2}]);
-  check('_blComputeAxes: dual axis on wide spread',     _axDual.mode==='dual');
-  check('_blComputeAxes: big→left, small→right',        _axDual.assign.big==='L' && _axDual.assign.small==='R');
-  check('_blComputeAxes: axis maxes bracket the peaks', _axDual.leftMax >= 150 && _axDual.rightMax >= 0.2 && _axDual.rightMax < 150);
+  // _blLogBounds: single log axis brackets every peak, µg → g on one scale
+  var _axWide = G._blLogBounds([{id:'big',peakMg:1400},{id:'mid',peakMg:5},{id:'small',peakMg:0.1}]);
+  check('_blLogBounds: top ≥ largest peak',   _axWide.top >= 1400);
+  check('_blLogBounds: bottom ≤ smallest peak', _axWide.bottom <= 0.1 && _axWide.bottom > 0);
+  check('_blLogBounds: spans the full µg→g range on one axis', _axWide.top/_axWide.bottom >= 1400/0.1);
+  var _axNarrow = G._blLogBounds([{id:'a',peakMg:100},{id:'b',peakMg:120}]);
+  check('_blLogBounds: close peaks still get ≥2 decades of headroom', _axNarrow.top/_axNarrow.bottom >= 100);
+  check('_blNiceCeil: rounds 1400 → 2000 (1-2-5)', G._blNiceCeil(1400) === 2000);
+  check('_blNiceFloor: rounds 0.1 → 0.1',          G._blNiceFloor(0.1) === 0.1);
   // _blRawMgAt returns real mg-equivalent (not normalised)
   var _rawPeak = G._blRawMgAt(_blTrt, _blPeakDay);
   check('_blRawMgAt: returns mg-equivalent at peak', Math.abs(_rawPeak - _blTrt.peakMg) < 1e-9);
