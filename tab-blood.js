@@ -46,6 +46,28 @@ function _pkCurve(injDays, dosePerInj, halfLifeDays, cycleDays) {
   return curve;
 }
 
+// Samples-per-day for the blood chart. Daily sampling aliases daily-dosed
+// compounds into a flat line (each sample lands at the same post-dose phase);
+// sampling several times per day reveals their real intra-day sawtooth so a
+// frequently-injected compound looks frequent, not smooth.
+var _BL_SPD = 6;
+// Sub-day PK curve: index = step (day × _BL_SPD), so it captures the peak/trough
+// within each dosing interval. Injections occur at the start of their day.
+function _pkCurveFine(injDays, dosePerInj, halfLifeDays, cycleDays) {
+  var spd = _BL_SPD, N = cycleDays * spd;
+  var curve = new Float64Array(N + 1);
+  var kStep = Math.LN2 / (halfLifeDays * spd);
+  var injSteps = injDays.map(function(d){ return d * spd; });
+  for (var t = 0; t <= N; t++) {
+    var c = 0;
+    for (var j = 0; j < injSteps.length; j++) {
+      if (injSteps[j] <= t) c += dosePerInj * Math.exp(-kStep * (t - injSteps[j]));
+    }
+    curve[t] = c;
+  }
+  return curve;
+}
+
 
 // ── Combined blood-levels chart (all active compounds + supplements) ─────────
 // One normalised multi-line overlay: each line is drawn as a % of its own peak
@@ -133,7 +155,7 @@ function _blBuildLines(){
       if(!injDays.length) return;
       lines.push({ id:'pep_'+si+'_'+p.id, name:p.name||p.id, color:(cat&&cat.dot)||p.dot||'#3cffa0',
         kind:'peptide', unit:(p.unit_am||p.unit_pm||'mcg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
-        curve:_pkCurve(injDays, dose, hl, cycleLen) });
+        lastInjDay:injDays[injDays.length-1], curve:_pkCurveFine(injDays, dose, hl, cycleLen) });
     });
 
     // TRT (testosterone esters)
@@ -146,7 +168,7 @@ function _blBuildLines(){
         var trtEntry = TRT_CAT.find(function(x){ return x.id===c.id; });
         lines.push({ id:'trt_'+si+'_'+c.id, name:c.name, color:(trtEntry&&trtEntry.dot)||'#e8a020',
           kind:'trt', unit:(c.unit||'mg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel, isTestosterone:true,
-          curve:_pkCurve(injDays, doseNum, hl, cycleLen) });
+          lastInjDay:injDays[injDays.length-1], curve:_pkCurveFine(injDays, doseNum, hl, cycleLen) });
       });
     }
 
@@ -164,7 +186,7 @@ function _blBuildLines(){
         lines.push({ id:'enh_'+si+'_'+c.id, name:c.name, color:c.dot||ec.dot||'#a855f7',
           kind:'enhanced', unit:((unit||'mg/week').split('/')[0]||'mg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
           isTestosterone:(c.name||'').toLowerCase().indexOf('testosterone')!==-1,
-          curve:_pkCurve(injDays, dpi, hl, cycleLen) });
+          lastInjDay:injDays[injDays.length-1], curve:_pkCurveFine(injDays, dpi, hl, cycleLen) });
       });
     }
   });
@@ -195,7 +217,7 @@ function _blBuildLines(){
     if(!injDays.length) return;
     lines.push({ id:'supp_'+(s.id||s.supp_id), name:s.name||s.supp_id, color:_BL_SUPP_COLORS[i%_BL_SUPP_COLORS.length],
       kind:'supplement', unit:sUnit, startDate:sStart, cycleLen:span, sub:'supplement',
-      curve:_pkCurve(injDays, dose, hl, span) });
+      lastInjDay:injDays[injDays.length-1], curve:_pkCurveFine(injDays, dose, hl, span) });
   });
 
   // Record each line's peak, its mg-equivalent scale, and its offset in global days.
@@ -204,6 +226,10 @@ function _blBuildLines(){
     ln.peak = peak || 1;
     ln.mgScale = _blToMg(1, ln.unit);   // mg per dose-unit
     ln.peakMg  = ln.peak * ln.mgScale;  // peak amount in mg-equivalent
+    ln.spd = _BL_SPD;
+    // Step of the last scheduled injection — the curve is not drawn past this,
+    // so a compound's cycle-end washout tail doesn't drop the line toward zero.
+    ln.lastStep = (ln.lastInjDay != null ? ln.lastInjDay : ln.cycleLen) * _BL_SPD;
     ln.offset = Math.round((ln.startDate.getTime() - firstDate.getTime())/86400000);
   });
   _blTimeline = { firstDate:firstDate, totalDays:totalDays, nowDay:Math.round((NOW.getTime()-firstDate.getTime())/86400000) };
@@ -256,17 +282,19 @@ function _blComputeAxes(visible){
   });
   return {mode:'dual',leftMax:(leftMax*1.1)||1,rightMax:(rightMax*1.1)||1,assign:assign};
 }
-// mg-equivalent value of a line at global day g, or null outside its span.
+// mg-equivalent value of a line at global day g (g may be fractional), or null
+// outside its span or after the last scheduled dose (hides the washout tail).
 function _blRawMgAt(ln, g){
-  var t = g - ln.offset;
-  if(t < 0 || t >= ln.curve.length) return null;
-  return ln.curve[t] * (ln.mgScale||1);
+  var step = Math.round((g - ln.offset) * (ln.spd||1));
+  if(step < 0 || step >= ln.curve.length) return null;
+  if(ln.lastStep != null && step > ln.lastStep) return null;
+  return ln.curve[step] * (ln.mgScale||1);
 }
 // Kept for back-compat: normalised value (0..1) of a line at day g.
 function _blValueAt(ln, g){
-  var t = g - ln.offset;
-  if(t < 0 || t >= ln.curve.length) return null;
-  return ln.curve[t] / ln.peak;
+  var step = Math.round((g - ln.offset) * (ln.spd||1));
+  if(step < 0 || step >= ln.curve.length) return null;
+  return ln.curve[step] / ln.peak;
 }
 
 function _blDrawChart(canvas){
@@ -331,7 +359,8 @@ function _blDrawChart(canvas){
     var side = axes.assign[ln.id]||'L';
     var yFn = side==='R' ? yOfR : yOfL;
     ctx.beginPath(); var started = false;
-    for(var g=Math.floor(xStart); g<=Math.ceil(xEnd); g++){
+    var dg = 1/_BL_SPD;
+    for(var g=xStart; g<=xEnd+1e-9; g+=dg){
       var v = _blRawMgAt(ln, g);
       if(v===null){ started = false; continue; }
       var X = xOf(g), Y = yFn(v);
