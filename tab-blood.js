@@ -358,30 +358,24 @@ function _blFmtMg(v){
   if(v>=0.001) return Math.round(v*1000)+' µg';
   return Math.round(v*1e6)+' ng';
 }
-// Assign visible lines to one or two Y-axes by mg-equivalent magnitude. Lines
-// whose peaks span < 8× share one axis; a wider spread splits at the largest
-// magnitude gap so big compounds (left) and small ones (right) each read well.
-var _blAxes = null;
-function _blComputeAxes(visible){
+// Single LOGARITHMIC Y-axis. The mg-equivalent amounts span µg → g (a
+// million-fold range), so a linear axis buries the small curves at zero. A log
+// axis makes every line visible at once regardless of how many magnitude tiers
+// are present, on one clean scale — no left/right split, no dashing.
+var _blAxis = null;
+function _blNiceCeil(v){ var e=Math.floor(Math.log10(v)), base=Math.pow(10,e), m=v/base; return (m<=1?1:m<=2?2:m<=5?5:10)*base; }
+function _blNiceFloor(v){ var e=Math.floor(Math.log10(v)), base=Math.pow(10,e), m=v/base; return (m>=5?5:m>=2?2:1)*base; }
+function _blLogBounds(visible){
   var peaks=[]; visible.forEach(function(ln){ if(ln.peakMg>0) peaks.push(ln.peakMg); });
-  var assign={};
-  if(!peaks.length){ visible.forEach(function(ln){ assign[ln.id]='L'; }); return {mode:'single',leftMax:1,rightMax:0,assign:assign}; }
+  if(!peaks.length) return {bottom:0.001, top:1};
   var maxP=Math.max.apply(null,peaks), minP=Math.min.apply(null,peaks);
-  if(peaks.length<2 || maxP/minP < 8){
-    visible.forEach(function(ln){ assign[ln.id]='L'; });
-    return {mode:'single',leftMax:(maxP*1.1)||1,rightMax:0,assign:assign};
-  }
-  var sorted=peaks.slice().sort(function(a,b){ return a-b; });
-  var gi=0,gmax=0;
-  for(var i=0;i<sorted.length-1;i++){ var gg=Math.log(sorted[i+1])-Math.log(sorted[i]); if(gg>gmax){ gmax=gg; gi=i; } }
-  var threshold=Math.sqrt(sorted[gi]*sorted[gi+1]);
-  var leftMax=0,rightMax=0;
-  visible.forEach(function(ln){
-    var p=ln.peakMg||0;
-    if(p>=threshold){ assign[ln.id]='L'; if(p>leftMax)leftMax=p; }
-    else { assign[ln.id]='R'; if(p>rightMax)rightMax=p; }
-  });
-  return {mode:'dual',leftMax:(leftMax*1.1)||1,rightMax:(rightMax*1.1)||1,assign:assign};
+  var top=_blNiceCeil(maxP), bottom=_blNiceFloor(minP);
+  // Keep the axis between 2 and 6 decades tall: never so short it wastes space,
+  // never so tall the curves shrink to threads.
+  var dec=Math.log10(top/bottom);
+  if(dec<2) bottom=top/100;
+  if(dec>6) bottom=top/1e6;
+  return {bottom:bottom, top:top};
 }
 // mg-equivalent value of a line at global day g (g may be fractional), or null
 // outside its span or after the last scheduled dose (hides the washout tail).
@@ -408,9 +402,10 @@ function _blDrawChart(canvas){
 
   _blLoadHidden();
   var visible = _blLines.filter(function(ln){ return !_blHidden[ln.id]; });
-  var axes = _blComputeAxes(visible); _blAxes = axes;
+  var axis = _blLogBounds(visible); _blAxis = axis;
+  var lgB = Math.log10(axis.bottom), lgT = Math.log10(axis.top), lgSpan = (lgT-lgB)||1;
 
-  var PAD = {top:10, right:(axes.mode==='dual'?46:14), bottom:22, left:44};
+  var PAD = {top:10, right:14, bottom:22, left:44};
   var cW = cssW-PAD.left-PAD.right, cH = cssH-PAD.top-PAD.bottom;
   var totalDays = _blTimeline.totalDays, nowDay = _blTimeline.nowDay;
   var pan = _blZoom!=='whole' ? Math.round(_blPanOffset||0) : 0;
@@ -421,20 +416,18 @@ function _blDrawChart(canvas){
   if(xEnd <= xStart) xEnd = Math.min(totalDays, xStart+7);
   canvas._blWin = {xStart:xStart, xEnd:xEnd, cW:cW};
   function xOf(g){ return PAD.left + ((g-xStart)/((xEnd-xStart)||1))*cW; }
-  function yOfL(v){ return PAD.top + cH - (v/axes.leftMax)*cH; }
-  function yOfR(v){ return PAD.top + cH - (v/(axes.rightMax||1))*cH; }
+  // Log Y: values at/below the axis floor ride the bottom; above the top clamp in.
+  function yOf(v){ var vv = v>axis.bottom ? (v<axis.top?v:axis.top) : axis.bottom;
+    return PAD.top + cH - ((Math.log10(vv)-lgB)/lgSpan)*cH; }
 
-  // Horizontal grid + left-axis (and optional right-axis) value labels
+  // Horizontal grid + value labels at each power of ten within the axis range.
   ctx.font = '9px DM Sans,sans-serif';
-  [0,0.5,1].forEach(function(f){
-    var y = PAD.top + cH - f*cH;
+  for(var _e=Math.ceil(lgB); _e<=Math.floor(lgT+1e-9); _e++){
+    var _val = Math.pow(10,_e), y = yOf(_val);
     ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
     ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left+cW, y); ctx.stroke();
-    ctx.fillStyle = '#666'; ctx.textAlign = 'right'; ctx.fillText(_blFmtMg(axes.leftMax*f), PAD.left-4, y+3);
-    if(axes.mode==='dual'){
-      ctx.fillStyle = '#8a8a8a'; ctx.textAlign = 'left'; ctx.fillText(_blFmtMg(axes.rightMax*f), PAD.left+cW+4, y+3);
-    }
-  });
+    ctx.fillStyle = '#666'; ctx.textAlign = 'right'; ctx.fillText(_blFmtMg(_val), PAD.left-4, y+3);
+  }
 
   // Vertical date grid + labels
   var winDays = xEnd - xStart;
@@ -455,33 +448,29 @@ function _blDrawChart(canvas){
     ctx.beginPath(); ctx.moveTo(nx, PAD.top); ctx.lineTo(nx, PAD.top+cH); ctx.stroke(); ctx.setLineDash([]);
   }
 
-  // Lines — right-axis lines are dashed so the axis they use is obvious.
-  // Everything is a model projection; to make that obvious the segment from
-  // today forward is drawn dimmed (past = solid, today→future = faded).
+  // Lines — all on the single log axis. Everything is a model projection; to
+  // make that obvious the segment from today forward is drawn dimmed (past =
+  // solid, today→future = faded).
   var dg = 1/_BL_SPD;
-  function _blStrokeSeg(ln, yFn, dashed, a, b, alpha){
+  function _blStrokeSeg(ln, a, b, alpha){
     if(b <= a) return;
     ctx.beginPath(); var started = false;
     for(var g=a; g<=b+1e-9; g+=dg){
       var v = _blRawMgAt(ln, g);
       if(v===null){ started = false; continue; }
-      var X = xOf(g), Y = yFn(v);
+      var X = xOf(g), Y = yOf(v);
       if(!started){ ctx.moveTo(X, Y); started = true; } else ctx.lineTo(X, Y);
     }
     ctx.strokeStyle = ln.color; ctx.lineWidth = 2; ctx.lineJoin = 'round';
     ctx.globalAlpha = alpha;
-    if(dashed) ctx.setLineDash([4,2]);
-    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.stroke(); ctx.globalAlpha = 1;
   }
   var splitAt = Math.max(xStart, Math.min(xEnd, nowDay));
   visible.forEach(function(ln){
-    var side = axes.assign[ln.id]||'L';
-    var yFn = side==='R' ? yOfR : yOfL;
-    var dashed = axes.mode==='dual' && side==='R';
     // Past (solid) up to today, then future (dimmed). Overlap one step so the
     // two segments join without a visible gap at the boundary.
-    _blStrokeSeg(ln, yFn, dashed, xStart, splitAt, 1);
-    _blStrokeSeg(ln, yFn, dashed, Math.max(xStart, splitAt-dg), xEnd, 0.3);
+    _blStrokeSeg(ln, xStart, splitAt, 1);
+    _blStrokeSeg(ln, Math.max(xStart, splitAt-dg), xEnd, 0.3);
   });
   if(!visible.length){
     ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.textAlign = 'center';
@@ -504,18 +493,15 @@ function _blRenderZoomBar(){
 function _blRenderLegend(){
   var leg = document.getElementById('bl-legend'); if(!leg) return;
   _blLoadHidden();
-  var dual = _blAxes && _blAxes.mode==='dual';
   leg.innerHTML = _blLines.map(function(ln){
     var off = !!_blHidden[ln.id];
-    var side = (dual && _blAxes.assign[ln.id]) ? _blAxes.assign[ln.id] : '';
-    var tag = side ? '<span style="font-size:8px;font-weight:800;color:var(--muted2);border:1px solid var(--border);border-radius:4px;padding:0 3px;margin-left:1px">'+side+'</span>' : '';
     var unitTxt = ln.unit ? '<span style="font-size:9px;color:var(--muted2);margin-left:1px">'+_esc(ln.unit)+'</span>' : '';
     return '<button onclick="_blToggleLine(\''+_esc(ln.id)+'\')" style="display:flex;align-items:center;gap:6px;'+
       'background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:5px 11px;cursor:pointer;'+
       'font-family:inherit;opacity:'+(off?'0.4':'1')+'">'+
       '<span style="width:9px;height:9px;border-radius:50%;background:'+ln.color+';flex-shrink:0'+(off?';filter:grayscale(1)':'')+'"></span>'+
       '<span style="font-size:11px;font-weight:600;color:var(--text)'+(off?';text-decoration:line-through':'')+'">'+_esc(ln.name)+'</span>'+
-      unitTxt + tag +
+      unitTxt +
       '</button>';
   }).join('');
 }
@@ -580,12 +566,12 @@ function buildBloodLevels(){
     return;
   }
   var html = '<div style="padding:12px 16px 6px;font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px">'+
-    'Estimated plasma levels · real amounts (mg-eq.), auto-scaled</div>';
+    'Estimated plasma levels · real amounts (mg-eq.), log scale</div>';
   html += '<div style="padding:0 16px 16px">';
   html += '<div id="bl-zoom-bar" style="display:flex;gap:4px;margin-bottom:8px"></div>';
   html += '<canvas id="bl-chart" style="width:100%;display:block"></canvas>';
   html += '<div id="bl-legend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px"></div>';
-  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5">Amounts are mg-equivalent (relative amount in body, not a lab concentration). When magnitudes differ a lot, lines split across two Y-scales — right-axis lines are dashed and tagged <b>R</b>. Solid = to date, dimmed = projected from today forward. Tap a chip to hide/show; zoom then drag to pan. Supplement curves use approximate half-lives.</div>';
+  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5">Amounts are mg-equivalent (relative amount in body, not a lab concentration). The Y-axis is <b>logarithmic</b> (each gridline = 10×) so compounds from µg to g are all visible on one scale. Solid = to date, dimmed = projected from today forward. Tap a chip to hide/show; zoom then drag to pan. Supplement curves use approximate half-lives.</div>';
   html += '</div>';
   el.innerHTML = html;
   _blRenderZoomBar();
