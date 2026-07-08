@@ -4320,11 +4320,11 @@ if (typeof G._blBuildLines === 'function') {
       setLineDash:n,translate:n,rotate:n,fillRect:n,createLinearGradient:function(){return{addColorStop:n};},measureText:function(){return{width:0};}};
     var fcanvas={offsetWidth:320,width:0,height:0,style:{},getContext:function(){return fctx;}};
     var _blThrew=false;
-    try { G._blZoom='whole'; G._blDrawChart(fcanvas);
+    try { G._blZoom='month'; G._blDrawChart(fcanvas);
           G._blZoom='week';  G._blDrawChart(fcanvas); } catch(e){ _blThrew=true; console.error('  _blDrawChart threw:', e.message); }
-    check('_blDrawChart: no throw (whole + week zoom)', !_blThrew);
+    check('_blDrawChart: no throw (month + week zoom)', !_blThrew);
     check('_blDrawChart: records a pan window', fcanvas._blWin && fcanvas._blWin.xEnd > fcanvas._blWin.xStart);
-    G._blZoom='whole';
+    G._blZoom='week';
   })();
 
   G._userStacks = _blSaveStacks; G._activeStackIndices = _blSaveIdx; G._supplements = _blSaveSupp; G._blLines = _blSaveLines;

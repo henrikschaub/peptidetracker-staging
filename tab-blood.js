@@ -72,9 +72,10 @@ function _pkCurveFine(injDays, dosePerInj, halfLifeDays, cycleDays) {
 // ── Combined blood-levels chart (all active compounds + supplements) ─────────
 // One normalised multi-line overlay: each line is drawn as a % of its own peak
 // so compounds in different units (mg / µg / IU) are comparable. Lines can be
-// toggled on/off, and the today/week/month/whole zoom + drag-pan mirrors the
-// T-Calc free-T chart.
-var _blZoom = 'whole';
+// toggled on/off, and the today/week/month zoom + drag-pan mirrors the
+// T-Calc free-T chart. Defaults to 'week' (the fully-zoomed-out 'whole' view
+// was an unreadable dense sawtooth mass at typical cycle lengths).
+var _blZoom = 'week';
 var _blPanOffset = 0;      // days
 var _blHidden = null;      // {lineId:true} hidden lines (lazy-loaded cache)
 var _blLines = [];         // built line objects for the current render
@@ -380,7 +381,7 @@ function _blRenderChart(){ var c = document.getElementById('bl-chart'); if(c) _b
 
 function _blRenderZoomBar(){
   var bar = document.getElementById('bl-zoom-bar'); if(!bar) return;
-  bar.innerHTML = ['today','week','month','whole'].map(function(z){
+  bar.innerHTML = ['today','week','month'].map(function(z){
     var a = _blZoom===z;
     return '<button onclick="_blSetZoom(\''+z+'\')" style="flex:1;background:'+(a?'rgba(102,136,204,0.25)':'none')+
       ';border:1px solid '+(a?'#6688cc66':'var(--border)')+';border-radius:6px;color:'+(a?'#6688cc':'var(--muted2)')+
