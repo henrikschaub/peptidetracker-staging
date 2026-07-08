@@ -146,6 +146,28 @@ function _blTcalcTestosterone() {
   return Object.keys(byComp).map(function(k){ return byComp[k]; }).filter(function(c){ return c.doses.length; });
 }
 
+// Per-compound blood-level reference data (biomarker, clinical unit, reference
+// ranges, dose→level models) served from the backend — all data lives there.
+// { markers:{id:{name,unit,ref:[lo,hi],opt:[lo,hi]}}, compounds:{id:{marker,assay,model}} }
+var _BL_PK = null;
+async function _blSyncPK(){
+  try{
+    var ctrl = new AbortController(); var tid = setTimeout(function(){ ctrl.abort(); }, 6000);
+    var r = await fetch(AGENT_URL+'/blood-levels', { headers:authHeaders(), signal:ctrl.signal });
+    clearTimeout(tid);
+    if(!r.ok){ if(typeof _logHttp==='function') _logHttp('syncBloodPK', r.status, '/blood-levels'); return; }
+    _BL_PK = await r.json();
+    if(document.getElementById('bl-chart')){ _blLines = _blBuildLines(); _blRenderChart(); _blRenderLegend(); }
+  }catch(e){ if(typeof _logErr==='function') _logErr('syncBloodPK', e); }
+}
+// Look up a compound/supplement's blood-level descriptor + its marker.
+function _blPKFor(id){
+  if(!_BL_PK || !_BL_PK.compounds) return null;
+  var c = _BL_PK.compounds[id]; if(!c) return null;
+  var m = (c.marker && _BL_PK.markers) ? _BL_PK.markers[c.marker] : null;
+  return { comp:c, marker:m };
+}
+
 
 // ── Combined blood-levels chart (all active compounds + supplements) ─────────
 // One normalised multi-line overlay: each line is drawn as a % of its own peak
@@ -273,7 +295,7 @@ function _blBuildLines(){
       if(!dose) return;
       var injDays = _pkInjectionDays(p, cycleLen, startDow);
       if(!injDays.length) return;
-      lines.push({ id:'pep_'+si+'_'+p.id, name:p.name||p.id, color:(cat&&cat.dot)||p.dot||'#3cffa0',
+      lines.push({ id:'pep_'+si+'_'+p.id, pkId:p.id, name:p.name||p.id, color:(cat&&cat.dot)||p.dot||'#3cffa0',
         kind:'peptide', unit:(p.unit_am||p.unit_pm||'mcg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
         lastInjDay:injDays[injDays.length-1], tmaxPad:_blTmax(hl), curve:_pkCurveFineAbs(injDays, dose, hl, cycleLen) });
     });
@@ -294,7 +316,7 @@ function _blBuildLines(){
         var injDays = _pkInjectionDays(c, cycleLen, startDow); if(!injDays.length) return;
         var injsPerWeek = injDays.filter(function(d){ return d<7; }).length || 1;
         var dpi = unit==='mg/week' ? doseNum/injsPerWeek : doseNum;
-        lines.push({ id:'enh_'+si+'_'+c.id, name:c.name, color:c.dot||ec.dot||'#a855f7',
+        lines.push({ id:'enh_'+si+'_'+c.id, pkId:c.id, name:c.name, color:c.dot||ec.dot||'#a855f7',
           kind:'enhanced', unit:((unit||'mg/week').split('/')[0]||'mg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
           lastInjDay:injDays[injDays.length-1], tmaxPad:_blTmax(hl), curve:_pkCurveFineAbs(injDays, dpi, hl, cycleLen) });
       });
@@ -329,8 +351,14 @@ function _blBuildLines(){
     var stepDays = s.freq==='weekly' ? 7 : (s.freq==='eod' ? 2 : 1);
     var injDays = []; for(var d=0; d<=span; d+=stepDays) injDays.push(d);
     if(!injDays.length) return;
-    lines.push({ id:'supp_'+(s.id||s.supp_id), name:s.name||s.supp_id, color:_BL_SUPP_COLORS[i%_BL_SUPP_COLORS.length],
+    // Average daily dose in IU (for biomarker models keyed in IU, e.g. Vitamin D →
+    // 25-OH-D). Prefer an explicit "… IU" dose; else convert µg (D3: 1 µg = 40 IU).
+    var _perDose = /IU/i.test(String(s.dose||'')) ? (parseFloat(s.dose)||0)
+                 : (s.supp_id==='vitd3' && sUnit==='µg' ? dose*40 : 0);
+    var _freqF = s.freq==='weekly' ? 1/7 : (s.freq==='eod' ? 1/2 : 1);
+    lines.push({ id:'supp_'+(s.id||s.supp_id), pkId:s.supp_id, name:s.name||s.supp_id, color:_BL_SUPP_COLORS[i%_BL_SUPP_COLORS.length],
       kind:'supplement', unit:sUnit, startDate:sStart, cycleLen:span, sub:'supplement',
+      dailyIU:_perDose*_freqF,
       lastInjDay:injDays[injDays.length-1], tmaxPad:_blTmax(hl), curve:_pkCurveFineAbs(injDays, dose, hl, span) });
   });
 
@@ -348,8 +376,34 @@ function _blBuildLines(){
       var _k = _g - _ftOff;
       _ftCurve[_g] = _k < 0 ? _ftBase : _ftScaleAt(Math.min(_k, _S.totalDays));
     }
-    lines.push({ id:'freeT', name:'Free T', color:'#ff3b30', kind:'freet', conc:true,
+    lines.push({ id:'freeT', pkId:'testosterone', name:'Free T', color:'#ff3b30', kind:'freet', conc:true,
       unit:(_S.unitLabel === 'pmol/L' ? 'pmol/L' : ''), startDate:firstDate, cycleLen:totalDays, curve:_ftCurve });
+  }
+
+  // Convert amount lines into ACTUAL blood levels wherever the backend supplies a
+  // dose→level model (e.g. Vitamin D3 → 25-OH-D). Attach the clinical reference
+  // range to every concentration line (incl. Free T) for the shaded normal band.
+  if (_BL_PK && _BL_PK.compounds) {
+    lines.forEach(function(ln){
+      var pk = _blPKFor(ln.pkId); if(!pk) return;
+      if (ln.conc) { if(pk.marker) ln.marker = pk.marker; return; }
+      if (!pk.comp.assay || !pk.comp.model || !pk.marker) return;
+      var mdl = pk.comp.model;
+      if (mdl.type === 'linear') {
+        var pkAmt = 0; for(var i=0;i<ln.curve.length;i++) if(ln.curve[i]>pkAmt) pkAmt=ln.curve[i];
+        if (pkAmt <= 0) return;
+        var daily = (mdl.unit === 'IU') ? (ln.dailyIU||0) : 0;
+        var steady = mdl.baseline + mdl.perUnitPerDay * daily;
+        var off = Math.round((ln.startDate.getTime()-firstDate.getTime())/86400000);
+        var conc = new Float64Array(totalDays + 1);
+        for (var g=0; g<=totalDays; g++) {
+          var step = Math.round((g-off)*_BL_SPD);
+          var amt = (step>=0 && step<ln.curve.length) ? ln.curve[step] : 0;
+          conc[g] = mdl.baseline + (steady - mdl.baseline) * (amt/pkAmt);   // baseline → steady with accumulation
+        }
+        ln.curve = conc; ln.conc = true; ln.unit = pk.marker.unit; ln.marker = pk.marker; ln.startDate = firstDate;
+      }
+    });
   }
 
   // Record each line's peak and how to place it on the axis. Amount lines convert
@@ -492,6 +546,17 @@ function _blDrawChart(canvas){
     ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left+cW, y); ctx.stroke();
     ctx.fillStyle = '#666'; ctx.textAlign = 'right'; ctx.fillText(_axFmt(_val), PAD.left-4, y+3);
   }
+
+  // Clinical reference-range band(s): a faint shaded normal range for each visible
+  // concentration line that carries a marker (e.g. Free T 200–700 pmol/L, 25-OH-D
+  // 50–125 nmol/L) — shows at a glance whether a level is low / in-range / high.
+  visible.forEach(function(ln){
+    if(!ln.conc || !ln.marker || !ln.marker.ref) return;
+    var yHi = yOf(ln.marker.ref[1]), yLo = yOf(ln.marker.ref[0]);
+    ctx.fillStyle = ln.color + '14'; ctx.fillRect(PAD.left, yHi, cW, yLo - yHi);
+    if(ln.marker.opt){ var yoHi = yOf(ln.marker.opt[1]), yoLo = yOf(ln.marker.opt[0]);
+      ctx.fillStyle = ln.color + '20'; ctx.fillRect(PAD.left, yoHi, cW, yoLo - yoHi); }
+  });
 
   // Vertical date grid + labels
   var winDays = xEnd - xStart;
@@ -643,7 +708,7 @@ function buildBloodLevels(){
   html += '<div id="bl-zoom-bar" style="display:flex;gap:4px;margin-bottom:8px"></div>';
   html += '<canvas id="bl-chart" style="width:100%;display:block"></canvas>';
   html += '<div id="bl-legend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px"></div>';
-  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5"><b>Free T</b> is a real blood level (pmol/L) via the T-Calc model — it starts at your endogenous baseline and rises with injections. Other compounds still show relative amount-in-body (mg-eq.) pending their own blood-level models. The Y-axis is <b>logarithmic</b> (each gridline = 10×); when the visible lines share a unit it is labelled in that unit, otherwise it shows relative magnitude. Solid = to date, dimmed = projected from today forward. Tap a chip to hide/show; zoom then drag to pan.</div>';
+  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5">Lines with a clinical assay show a <b>real blood level</b>: <b>Free T</b> (pmol/L, via the T-Calc model) and <b>Vitamin D</b> (25-OH-D, nmol/L) — each with its shaded normal range. Compounds without a routine blood test (research peptides, GH→IGF-1) still show estimated amount-in-body (mg-eq.). The Y-axis is <b>logarithmic</b> (each gridline = 10×); it labels in a shared unit when the visible lines agree, else relative magnitude. Solid = to date, dimmed = projected from today. Tap a chip to hide/show; zoom then drag to pan.</div>';
   html += '</div>';
   el.innerHTML = html;
   _blRenderZoomBar();

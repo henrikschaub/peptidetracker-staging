@@ -4415,6 +4415,43 @@ if (typeof G._blBuildLines === 'function') {
     G._injectionsCache = _saveInj; G._userStacks = _saveStacks2; G._activeStackIndices = _saveIdx2; G._supplements = _saveSupp2;
   })();
 
+  // Phase 2: backend PK dataset → actual blood levels for compounds with an assay
+  // (Vitamin D3 → 25-OH-D), reference ranges attached, no-assay compounds untouched.
+  (function(){
+    if(typeof G._blPKFor !== 'function') return;
+    var _sInj=G._injectionsCache,_sStk=G._userStacks,_sIdx=G._activeStackIndices,_sSup=G._supplements,
+        _sPK=G._BL_PK,_sMFT=G._tcp.measuredFT,_sDose=G._tcp.currentDoseMgWk,_sBw=G._tcBwEntries;
+    G._BL_PK = {
+      markers: { free_t:{name:'Free testosterone',unit:'pmol/L',ref:[200,700],opt:[400,650]},
+                 vitamin_d_25oh:{name:'25-OH-D',unit:'nmol/L',ref:[50,125],opt:[75,125]} },
+      compounds: { testosterone:{marker:'free_t',assay:true,model:{type:'freeT'}},
+                   testoviron:{marker:'free_t',assay:true,model:{type:'freeT'}},
+                   vitd3:{marker:'vitamin_d_25oh',assay:true,model:{type:'linear',baseline:50,perUnitPerDay:0.017,unit:'IU'}},
+                   retatrutide:{marker:null,assay:false} }
+    };
+    G._tcp.measuredFT='217'; G._tcp.currentDoseMgWk=''; G._tcBwEntries=[{date:'2026-05-25',free_t:217}]; G._injectionsCache={};
+    G._userStacks=[{ name:'P2', cycle_length:12, cycle_start:'2026-06-01',
+      peptides:[{id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0,3],times:['AM'],dose_am:'3',unit_am:'mg',active:true}],
+      trt:{enabled:true,compounds:[{id:'testoviron',name:'Testoviron',dose:'125',unit:'mg',days:[0,3]}]},
+      enhanced:{enabled:false,compounds:[]} }];
+    G._activeStackIndices=[0];
+    G._supplements=[{id:'d',supp_id:'vitd3',name:'Vitamin D3',dose:'5000 IU',freq:'daily',timing:'AM',start_date:'2026-06-01'}];
+    var L=G._blBuildLines();
+    check('_blPKFor: resolves compound + its marker',
+      (function(){var p=G._blPKFor('testoviron'); return !!p && p.comp.marker==='free_t' && !!p.marker && p.marker.unit==='pmol/L';})());
+    var _d3=L.filter(function(l){return l.pkId==='vitd3';})[0];
+    check('_blBuildLines: Vitamin D3 → 25-OH-D concentration (nmol/L)', !!_d3 && _d3.conc===true && _d3.unit==='nmol/L');
+    check('_blBuildLines: D3 starts at the population baseline (~50 nmol/L)', !!_d3 && Math.abs(_d3.curve[0]-50) < 5);
+    check('_blBuildLines: D3 rises above baseline with dosing (~50→135)', !!_d3 && _d3.peak > 60);
+    check('_blBuildLines: D3 carries its reference range for the band', !!_d3 && !!_d3.marker && _d3.marker.ref[0]===50);
+    var _ft=L.filter(function(l){return l.kind==='freet';})[0];
+    check('_blBuildLines: Free T carries its reference range', !!_ft && !!_ft.marker && _ft.marker.unit==='pmol/L');
+    var _rp=L.filter(function(l){return l.pkId==='retatrutide';})[0];
+    check('_blBuildLines: no-assay compound stays an amount line', !!_rp && !_rp.conc && _rp.unit==='mg');
+    G._BL_PK=_sPK; G._injectionsCache=_sInj; G._userStacks=_sStk; G._activeStackIndices=_sIdx; G._supplements=_sSup;
+    G._tcp.measuredFT=_sMFT; G._tcp.currentDoseMgWk=_sDose; G._tcBwEntries=_sBw;
+  })();
+
   G._userStacks = _blSaveStacks; G._activeStackIndices = _blSaveIdx; G._supplements = _blSaveSupp; G._blLines = _blSaveLines;
   G._tcp.measuredFT = _blSaveMFT; G._tcp.currentDoseMgWk = _blSaveDose0; G._injectionsCache = _blSaveInj0; G._tcBwEntries = _blSaveBw0;
 } else {
