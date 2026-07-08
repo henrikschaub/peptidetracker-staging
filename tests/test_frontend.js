@@ -4289,6 +4289,12 @@ if (typeof G._blBuildLines === 'function') {
   check('_blLogBounds: top ≥ largest peak',   _axWide.top >= 1400);
   check('_blLogBounds: bottom ≤ smallest peak', _axWide.bottom <= 0.1 && _axWide.bottom > 0);
   check('_blLogBounds: spans the full µg→g range on one axis', _axWide.top/_axWide.bottom >= 1400/0.1);
+  check('_blLogBounds: smallest line gets ≥ a decade of headroom (not pinned to floor)', _axWide.bottom <= 0.1/5);
+  // regression: with Nebido (grams) + a small supplement (few mg), the small line
+  // must sit well above the floor, not read as a flat zero (Vitamin D3 bug).
+  var _axNebD3 = G._blLogBounds([{id:'neb',peakMg:852},{id:'d3',peakMg:2.7}]);
+  var _d3h = (Math.log10(2.7)-Math.log10(_axNebD3.bottom))/(Math.log10(_axNebD3.top)-Math.log10(_axNebD3.bottom));
+  check('_blLogBounds: mg-scale supplement sits >15% up the axis (not pinned)', _d3h > 0.15);
   var _axNarrow = G._blLogBounds([{id:'a',peakMg:100},{id:'b',peakMg:120}]);
   check('_blLogBounds: close peaks still get ≥2 decades of headroom', _axNarrow.top/_axNarrow.bottom >= 100);
   check('_blNiceCeil: rounds 1400 → 2000 (1-2-5)', G._blNiceCeil(1400) === 2000);

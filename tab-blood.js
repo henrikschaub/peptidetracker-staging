@@ -369,7 +369,11 @@ function _blLogBounds(visible){
   var peaks=[]; visible.forEach(function(ln){ if(ln.peakMg>0) peaks.push(ln.peakMg); });
   if(!peaks.length) return {bottom:0.001, top:1};
   var maxP=Math.max.apply(null,peaks), minP=Math.min.apply(null,peaks);
-  var top=_blNiceCeil(maxP), bottom=_blNiceFloor(minP);
+  var top=_blNiceCeil(maxP);
+  // Put the floor a full DECADE below the smallest line's peak, so that line has
+  // real vertical room to show its shape instead of being pinned to the bottom
+  // edge (otherwise a small compound like Vitamin D3 reads as a flat zero line).
+  var bottom=_blNiceFloor(minP)/10;
   // Keep the axis between 2 and 6 decades tall: never so short it wastes space,
   // never so tall the curves shrink to threads.
   var dec=Math.log10(top/bottom);
