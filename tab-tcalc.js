@@ -1130,11 +1130,14 @@ function _tcDefaultFT(birthYear) {
   return 180;
 }
 
-function _tcDrawManualChart(canvasId, log, zoom3) {
-  var canvas = document.getElementById(canvasId);
-  if (!canvas || !log || log.length === 0) return;
-
-  var sorted = log.slice().sort(function(a, b){ return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+// Pure free-T model extracted from _tcDrawManualChart so BOTH the T-Calc chart
+// and the Blood Levels tab compute free T from the SAME code (no divergence).
+// sorted: injection log sorted ascending by date. hooks: optional {calFT,shbg,start}
+// test hooks (same payloads the draw path used to fire on the canvas).
+// Returns the day-indexed accumulation + calibration so callers can render free T
+// as total[t] * (calFT_arr ? calFT_arr[t] : scale).
+function _tcFreeTSeries(sorted, hooks) {
+  hooks = hooks || {};
   var firstDate = new Date(sorted[0].date);
   var lastDate  = new Date(sorted[sorted.length - 1].date);
 
@@ -1347,7 +1350,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   if (calFT && _mftNum > 0 && _anchorDay >= 0 && _anchorDay <= totalDays && total[_anchorDay] > 0) {
     calFT = _mftNum / total[_anchorDay];
   }
-  if (canvas._testCalFTHook) canvas._testCalFTHook(calFT);
+  if (hooks.calFT) hooks.calFT(calFT);
 
   var scale     = calFT || 1;
   var unitLabel = calFT ? 'pmol/L' : 'mg';
@@ -1429,7 +1432,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
       calFT_arr = _mkArr(_betaC);
       _calFTlo  = _mkArr(_betaLo);
       _calFThi  = _mkArr(_betaHi);
-      if (canvas._testShbgHook) canvas._testShbgHook({ calFT: calFT, arr: calFT_arr, lo: _calFTlo, hi: _calFThi, refDay: _shbgRefDay, total: total, beta: _betaC, personalized: !!_betaFit });
+      if (hooks.shbg) hooks.shbg({ calFT: calFT, arr: calFT_arr, lo: _calFTlo, hi: _calFThi, refDay: _shbgRefDay, total: total, beta: _betaC, personalized: !!_betaFit });
 
       // Modelled SHBG change at "now" vs the bloodwork value, for the chart annotation.
       var _nowDay = Math.max(0, Math.min(totalDays, Math.round((Date.now() - firstDate.getTime()) / 86400000)));
@@ -1442,7 +1445,21 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   // Test hook: the displayed free-T value at the first plotted day (day 0).  With a
   // pre-cycle baseline anchor this must equal the measured baseline, i.e. the curve
   // starts at the baseline and rises — not below it.
-  if (canvas._testStartHook) canvas._testStartHook(total[0] * (calFT_arr ? calFT_arr[0] : scale));
+  if (hooks.start) hooks.start(total[0] * (calFT_arr ? calFT_arr[0] : scale));
+  return { firstDate: firstDate, totalDays: totalDays, total: total, calFT: calFT, scale: scale,
+           calFT_arr: calFT_arr, calFTlo: _calFTlo, calFThi: _calFThi, unitLabel: unitLabel,
+           measuredFT: _mftNum, ghAnnot: _ghAnnot, betaAnnot: _betaAnnot, sorted: sorted };
+}
+
+function _tcDrawManualChart(canvasId, log, zoom3) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas || !log || log.length === 0) return;
+
+  var sorted = log.slice().sort(function(a, b){ return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  var _S = _tcFreeTSeries(sorted, { calFT: canvas._testCalFTHook, shbg: canvas._testShbgHook, start: canvas._testStartHook });
+  var firstDate = _S.firstDate, totalDays = _S.totalDays, total = _S.total, calFT = _S.calFT, scale = _S.scale,
+      calFT_arr = _S.calFT_arr, _calFTlo = _S.calFTlo, _calFThi = _S.calFThi, unitLabel = _S.unitLabel,
+      _mftNum = _S.measuredFT, _ghAnnot = _S.ghAnnot, _betaAnnot = _S.betaAnnot;
 
   var dpr  = window.devicePixelRatio || 1;
   var cssW = canvas.offsetWidth || 300;

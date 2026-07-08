@@ -211,6 +211,47 @@ var _BL_SUPP_COLORS = ['#7bd88f','#5ec8d8','#c084fc','#f0a860','#e879b0','#8ab4f
 
 function _blLoadHidden(){ if(_blHidden===null) _blHidden = getData('proto-blood-hidden', {}) || {}; return _blHidden; }
 
+function _blFmtDateKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// Gather EVERY testosterone injection across all sources — stack TRT esters,
+// enhanced-tier testosterone, and the T-Calc plan — into one dated log. This
+// feeds the shared free-T model (_tcFreeTSeries) so the chart shows a single
+// aggregated "Free T" line in pmol/L rather than a separate line per ester.
+function _blTestosteroneLog(){
+  var log = [];
+  (_userStacks||[]).forEach(function(st, si){
+    if(!_isActiveStack(si)) return;
+    var cycleLen = (st.cycle_length || 12) * 7;
+    var startDate = st.cycle_start ? parseLocalDate(st.cycle_start) : new Date(NOW);
+    var startDow = startDate.getDay();
+    function pushSched(c, dpi){
+      _pkInjectionDays(c, cycleLen, startDow).forEach(function(dd){
+        log.push({ compId:c.id, doseMg:String(dpi), date:_blFmtDateKey(new Date(startDate.getTime()+dd*86400000)) });
+      });
+    }
+    if(st.trt && st.trt.enabled){
+      (st.trt.compounds||[]).forEach(function(c){
+        var doseNum=parseFloat(c.dose)||0; if(doseNum) pushSched(c, doseNum);
+      });
+    }
+    if(st.enhanced && st.enhanced.enabled){
+      (st.enhanced.compounds||[]).forEach(function(c){
+        if((c.name||'').toLowerCase().indexOf('testosterone')===-1) return;
+        var ec = (typeof ENHANCEMENT_COMPOUNDS!=='undefined') ? ENHANCEMENT_COMPOUNDS.find(function(x){return x.id===c.id;}) : null;
+        var doseNum=parseFloat(c.dose)||0; if(!doseNum) return;
+        var unit=c.unit||(ec&&ec.unit)||'mg/week';
+        var injDays=_pkInjectionDays(c, cycleLen, startDow);
+        var injsPerWeek=injDays.filter(function(d){return d<7;}).length||1;
+        pushSched(c, unit==='mg/week'?doseNum/injsPerWeek:doseNum);
+      });
+    }
+  });
+  _blTcalcTestosterone().forEach(function(c){
+    c.doses.forEach(function(d){ log.push({ compId:c.id, doseMg:String(d.dose), date:_blFmtDateKey(d.date) }); });
+  });
+  log.sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+  return log;
+}
+
 // Build the line objects from every active stack's compounds + tracked supplements.
 function _blBuildLines(){
   var lines = [], starts = [], compoundEnds = [];
@@ -237,23 +278,14 @@ function _blBuildLines(){
         lastInjDay:injDays[injDays.length-1], tmaxPad:_blTmax(hl), curve:_pkCurveFineAbs(injDays, dose, hl, cycleLen) });
     });
 
-    // TRT (testosterone esters)
-    if(st.trt && st.trt.enabled){
-      (st.trt.compounds||[]).forEach(function(c){
-        var guide = TRT_GUIDE[c.id]; if(!guide) return;
-        var hl = _parseHalfLifeDays(guide.halfLife); if(!hl) return;
-        var doseNum = parseFloat(c.dose)||0; if(!doseNum) return;
-        var injDays = _pkInjectionDays(c, cycleLen, startDow); if(!injDays.length) return;
-        var trtEntry = TRT_CAT.find(function(x){ return x.id===c.id; });
-        lines.push({ id:'trt_'+si+'_'+c.id, name:c.name, color:(trtEntry&&trtEntry.dot)||'#e8a020',
-          kind:'trt', unit:(c.unit||'mg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel, isTestosterone:true,
-          lastInjDay:injDays[injDays.length-1], tmaxPad:_blTmax(hl), curve:_pkCurveFineAbs(injDays, doseNum, hl, cycleLen) });
-      });
-    }
+    // TRT (testosterone esters) is NOT drawn here as a per-ester amount line —
+    // all testosterone is aggregated into the single "Free T" line (pmol/L) built
+    // below from _blTestosteroneLog() + the shared free-T model.
 
-    // Enhanced
+    // Enhanced (non-testosterone compounds only; testosterone → the Free T line)
     if(st.enhanced && st.enhanced.enabled){
       (st.enhanced.compounds||[]).forEach(function(c){
+        if((c.name||'').toLowerCase().indexOf('testosterone')!==-1) return;
         var ec = ENHANCEMENT_COMPOUNDS.find(function(x){ return x.id===c.id; });
         if(!ec || !ec.cadence) return;
         var hl = ec.id==='hgh' ? 1 : _parseHalfLifeDays(ec.cadence.halfLife); if(!hl) return;
@@ -264,7 +296,6 @@ function _blBuildLines(){
         var dpi = unit==='mg/week' ? doseNum/injsPerWeek : doseNum;
         lines.push({ id:'enh_'+si+'_'+c.id, name:c.name, color:c.dot||ec.dot||'#a855f7',
           kind:'enhanced', unit:((unit||'mg/week').split('/')[0]||'mg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
-          isTestosterone:(c.name||'').toLowerCase().indexOf('testosterone')!==-1,
           lastInjDay:injDays[injDays.length-1], tmaxPad:_blTmax(hl), curve:_pkCurveFineAbs(injDays, dpi, hl, cycleLen) });
       });
     }
@@ -273,14 +304,14 @@ function _blBuildLines(){
   // Global timeline: span from the earliest start to the latest compound end,
   // extended to ~6 weeks past today so ongoing supplements have somewhere to live.
   var supps = (typeof _supplements!=='undefined' && _supplements) ? _supplements.filter(function(s){ return s && s.supp_id; }) : [];
-  var tcalcTest = _blTcalcTestosterone();
+  var tlog = _blTestosteroneLog();
+  var tDates = tlog.map(function(e){ return parseLocalDate(e.date).getTime(); });
   var firstDate = starts.length ? new Date(Math.min.apply(null, starts.map(function(d){ return d.getTime(); }))) : new Date(NOW);
   supps.forEach(function(s){ if(s.start_date){ var d=parseLocalDate(s.start_date); if(d<firstDate) firstDate=d; } });
-  tcalcTest.forEach(function(c){ c.doses.forEach(function(d){ if(d.date<firstDate) firstDate=d.date; }); });
-  var tcalcMax = 0;
-  tcalcTest.forEach(function(c){ c.doses.forEach(function(d){ if(d.date.getTime()>tcalcMax) tcalcMax=d.date.getTime(); }); });
+  tDates.forEach(function(ms){ if(ms<firstDate.getTime()) firstDate=new Date(ms); });
+  var tMax = tDates.length ? Math.max.apply(null, tDates) : 0;
   var maxCompoundEnd = compoundEnds.length ? Math.max.apply(null, compoundEnds) : 0;
-  var lastMs = Math.max(maxCompoundEnd, tcalcMax, supps.length ? (NOW.getTime()+42*86400000) : 0, firstDate.getTime()+7*86400000);
+  var lastMs = Math.max(maxCompoundEnd, tMax, supps.length ? (NOW.getTime()+42*86400000) : 0, firstDate.getTime()+7*86400000);
   var totalDays = Math.max(1, Math.round((lastMs - firstDate.getTime())/86400000));
 
   // Supplement lines across the whole timeline from their start date.
@@ -303,35 +334,43 @@ function _blBuildLines(){
       lastInjDay:injDays[injDays.length-1], tmaxPad:_blTmax(hl), curve:_pkCurveFineAbs(injDays, dose, hl, span) });
   });
 
-  // T-Calc-planned testosterone — drawn in red, spanning the whole timeline with
-  // each planned injection's own (titrated) dose. Half-life comes from the ester.
-  tcalcTest.forEach(function(c){
-    var hl = null, bioav = 1;
-    if (typeof _tcCompInfo === 'function') { var ci = _tcCompInfo(c.id); if (ci) { if (ci.halfLifeDays) hl = ci.halfLifeDays; if (ci.bioavailability) bioav = ci.bioavailability; } }
-    if (!hl && typeof TRT_GUIDE !== 'undefined' && TRT_GUIDE[c.id]) hl = _parseHalfLifeDays(TRT_GUIDE[c.id].halfLife);
-    if (!hl) hl = 7; // testosterone ester fallback
-    var doseSteps = c.doses.map(function(d){
-      return { step: Math.round((d.date.getTime()-firstDate.getTime())/86400000) * _BL_SPD, dose:d.dose };
-    }).filter(function(s){ return s.step >= 0 && s.dose > 0; });
-    if (!doseSteps.length) return;
-    var lastDay = 0; doseSteps.forEach(function(s){ var dd=s.step/_BL_SPD; if(dd>lastDay) lastDay=dd; });
-    lines.push({ id:'tcalc_'+c.id, name:c.name, color:'#ff3b30', kind:'trt',
-      unit:c.unit||'mg', startDate:firstDate, cycleLen:totalDays, sub:'T-Calc', isTestosterone:true,
-      lastInjDay:lastDay, tmaxPad:_blTmax(hl), curve:_blTcalcCurve(doseSteps, hl, bioav, totalDays) });
-  });
+  // Aggregated Free T (pmol/L) — every testosterone injection (stack TRT esters,
+  // enhanced testosterone, and the T-Calc plan) run through the SAME free-T model
+  // the T-Calc chart uses, so this is an actual blood level, not a drug amount.
+  // Before the first injection it sits at the endogenous baseline (measured free T).
+  if (tlog.length && typeof _tcFreeTSeries === 'function') {
+    var _S = _tcFreeTSeries(tlog, {});
+    var _ftScaleAt = function(k){ return _S.total[k] * (_S.calFT_arr ? _S.calFT_arr[k] : _S.scale); };
+    var _ftOff  = Math.round((_S.firstDate.getTime() - firstDate.getTime())/86400000);
+    var _ftBase = _ftScaleAt(0);   // day-0 of the model = endogenous baseline free T
+    var _ftCurve = new Float64Array(totalDays + 1);
+    for (var _g = 0; _g <= totalDays; _g++) {
+      var _k = _g - _ftOff;
+      _ftCurve[_g] = _k < 0 ? _ftBase : _ftScaleAt(Math.min(_k, _S.totalDays));
+    }
+    lines.push({ id:'freeT', name:'Free T', color:'#ff3b30', kind:'freet', conc:true,
+      unit:(_S.unitLabel === 'pmol/L' ? 'pmol/L' : ''), startDate:firstDate, cycleLen:totalDays, curve:_ftCurve });
+  }
 
-  // Record each line's peak, its mg-equivalent scale, and its offset in global days.
+  // Record each line's peak and how to place it on the axis. Amount lines convert
+  // to mg-equivalent and are sub-day sampled; concentration lines (Free T) carry a
+  // real blood level in their own unit, plotted directly and day-indexed.
   lines.forEach(function(ln){
     var peak = 0; for(var t=0;t<ln.curve.length;t++) if(ln.curve[t] > peak) peak = ln.curve[t];
     ln.peak = peak || 1;
-    ln.mgScale = _blToMg(1, ln.unit);   // mg per dose-unit
-    ln.peakMg  = ln.peak * ln.mgScale;  // peak amount in mg-equivalent
-    ln.spd = _BL_SPD;
-    // Step of the last scheduled injection plus its absorption Tmax — the curve
-    // is not drawn past this, so the final dose's hump peaks (absorption model)
-    // but the long post-schedule washout tail doesn't drop the line toward zero.
-    ln.lastStep = Math.round(((ln.lastInjDay != null ? ln.lastInjDay : ln.cycleLen) + (ln.tmaxPad||0)) * _BL_SPD);
-    ln.offset = Math.round((ln.startDate.getTime() - firstDate.getTime())/86400000);
+    if (ln.conc) {
+      ln.mgScale = 1; ln.peakMg = ln.peak; ln.spd = 1; ln.lastStep = null; ln.offset = 0;
+    } else {
+      ln.mgScale = _blToMg(1, ln.unit);   // mg per dose-unit
+      ln.peakMg  = ln.peak * ln.mgScale;  // peak amount in mg-equivalent
+      ln.spd = _BL_SPD;
+      // Draw up to the last dose + its Tmax so the final hump peaks without the long
+      // post-schedule washout tail dropping the line toward zero. Never past the end
+      // of the curve array (Tmax can push beyond the cycle for a long-ester compound).
+      ln.lastStep = Math.min(ln.curve.length - 1,
+        Math.round(((ln.lastInjDay != null ? ln.lastInjDay : ln.cycleLen) + (ln.tmaxPad||0)) * _BL_SPD));
+      ln.offset = Math.round((ln.startDate.getTime() - firstDate.getTime())/86400000);
+    }
   });
   _blTimeline = { firstDate:firstDate, totalDays:totalDays, nowDay:Math.round((NOW.getTime()-firstDate.getTime())/86400000) };
   return lines;
@@ -357,6 +396,26 @@ function _blFmtMg(v){
   if(v>=1)     return (Math.round(v*10)/10)+' mg';
   if(v>=0.001) return Math.round(v*1000)+' µg';
   return Math.round(v*1e6)+' ng';
+}
+// Format a plain number (for concentration lines in their own clinical unit).
+function _blFmtNum(v){
+  if(!(v>0)) return '0';
+  if(v>=1000)  return (Math.round(v/100)/10)+'k';
+  if(v>=1)     return ''+Math.round(v);
+  if(v>=0.01)  return (Math.round(v*100)/100)+'';
+  return v.toExponential(0);
+}
+// Axis-tick formatter chosen from the currently-visible lines: mg-equivalent for
+// amount lines; the shared clinical unit when all visible lines are concentrations
+// in that unit (e.g. "812 pmol/L"); a bare magnitude when the two are mixed.
+function _blAxisFmt(visible){
+  var concUnits = {}, hasAmount = false;
+  visible.forEach(function(ln){ if(ln.conc){ concUnits[ln.unit||'']=1; } else { hasAmount = true; } });
+  var keys = Object.keys(concUnits);
+  if(!hasAmount && keys.length===1 && keys[0]) return function(v){ return _blFmtNum(v)+' '+keys[0]; };
+  if(!hasAmount && keys.length>=1)             return function(v){ return _blFmtNum(v); };
+  if(hasAmount && keys.length===0)             return _blFmtMg;
+  return function(v){ return _blFmtNum(v); };   // mixed units — bare magnitude
 }
 // Single LOGARITHMIC Y-axis. The mg-equivalent amounts span µg → g (a
 // million-fold range), so a linear axis buries the small curves at zero. A log
@@ -425,12 +484,13 @@ function _blDrawChart(canvas){
     return PAD.top + cH - ((Math.log10(vv)-lgB)/lgSpan)*cH; }
 
   // Horizontal grid + value labels at each power of ten within the axis range.
+  var _axFmt = _blAxisFmt(visible);
   ctx.font = '9px DM Sans,sans-serif';
   for(var _e=Math.ceil(lgB); _e<=Math.floor(lgT+1e-9); _e++){
     var _val = Math.pow(10,_e), y = yOf(_val);
     ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
     ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left+cW, y); ctx.stroke();
-    ctx.fillStyle = '#666'; ctx.textAlign = 'right'; ctx.fillText(_blFmtMg(_val), PAD.left-4, y+3);
+    ctx.fillStyle = '#666'; ctx.textAlign = 'right'; ctx.fillText(_axFmt(_val), PAD.left-4, y+3);
   }
 
   // Vertical date grid + labels
@@ -497,9 +557,17 @@ function _blRenderZoomBar(){
 function _blRenderLegend(){
   var leg = document.getElementById('bl-legend'); if(!leg) return;
   _blLoadHidden();
+  var nd = _blTimeline ? _blTimeline.nowDay : 0;
   leg.innerHTML = _blLines.map(function(ln){
     var off = !!_blHidden[ln.id];
-    var unitTxt = ln.unit ? '<span style="font-size:9px;color:var(--muted2);margin-left:1px">'+_esc(ln.unit)+'</span>' : '';
+    // Concentration lines (e.g. Free T) show their actual current blood level;
+    // amount lines just show their dose unit.
+    var meta = ln.unit ? _esc(ln.unit) : '';
+    if(ln.conc){
+      var cv = _blRawMgAt(ln, nd);
+      if(cv!=null && cv>0) meta = _blFmtNum(cv) + (ln.unit ? ' '+_esc(ln.unit) : '');
+    }
+    var unitTxt = meta ? '<span style="font-size:9px;color:var(--muted2);margin-left:1px">'+meta+'</span>' : '';
     return '<button onclick="_blToggleLine(\''+_esc(ln.id)+'\')" style="display:flex;align-items:center;gap:6px;'+
       'background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:5px 11px;cursor:pointer;'+
       'font-family:inherit;opacity:'+(off?'0.4':'1')+'">'+
@@ -570,12 +638,12 @@ function buildBloodLevels(){
     return;
   }
   var html = '<div style="padding:12px 16px 6px;font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px">'+
-    'Estimated plasma levels · real amounts (mg-eq.), log scale</div>';
+    'Estimated blood levels · log scale</div>';
   html += '<div style="padding:0 16px 16px">';
   html += '<div id="bl-zoom-bar" style="display:flex;gap:4px;margin-bottom:8px"></div>';
   html += '<canvas id="bl-chart" style="width:100%;display:block"></canvas>';
   html += '<div id="bl-legend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px"></div>';
-  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5">Amounts are mg-equivalent (relative amount in body, not a lab concentration). The Y-axis is <b>logarithmic</b> (each gridline = 10×) so compounds from µg to g are all visible on one scale. Solid = to date, dimmed = projected from today forward. Tap a chip to hide/show; zoom then drag to pan. Supplement curves use approximate half-lives.</div>';
+  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5"><b>Free T</b> is a real blood level (pmol/L) via the T-Calc model — it starts at your endogenous baseline and rises with injections. Other compounds still show relative amount-in-body (mg-eq.) pending their own blood-level models. The Y-axis is <b>logarithmic</b> (each gridline = 10×); when the visible lines share a unit it is labelled in that unit, otherwise it shows relative magnitude. Solid = to date, dimmed = projected from today forward. Tap a chip to hide/show; zoom then drag to pan.</div>';
   html += '</div>';
   el.innerHTML = html;
   _blRenderZoomBar();
