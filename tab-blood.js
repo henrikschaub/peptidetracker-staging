@@ -68,6 +68,44 @@ function _pkCurveFine(injDays, dosePerInj, halfLifeDays, cycleDays) {
   return curve;
 }
 
+// Like _pkCurveFine but each injection carries its own dose — used for the
+// T-Calc-planned testosterone, whose per-injection dose is titrated over time.
+// doseSteps: [{step, dose}] (step = day × _BL_SPD).
+function _pkCurveFineVar(doseSteps, halfLifeDays, cycleDays) {
+  var spd = _BL_SPD, N = cycleDays * spd;
+  var curve = new Float64Array(N + 1);
+  var kStep = Math.LN2 / (halfLifeDays * spd);
+  for (var t = 0; t <= N; t++) {
+    var c = 0;
+    for (var j = 0; j < doseSteps.length; j++) {
+      if (doseSteps[j].step <= t) c += doseSteps[j].dose * Math.exp(-kStep * (t - doseSteps[j].step));
+    }
+    curve[t] = c;
+  }
+  return curve;
+}
+
+// T-Calc-planned testosterone (injections with cycle_id 'tcalc') — planned via
+// the T-Calc planner rather than configured as a stack TRT compound, so it is
+// otherwise absent from the chart. Gather its dated injections per compound.
+function _blTcalcTestosterone() {
+  if (typeof _injectionsCache === 'undefined' || !_injectionsCache) return [];
+  var byComp = {};
+  Object.keys(_injectionsCache).forEach(function(dk){
+    (_injectionsCache[dk]||[]).forEach(function(e){
+      if (!e || e.cycle_id !== 'tcalc') return;
+      if (e.tier && e.tier !== 'trt') return;
+      if (e.active === false) return;
+      var cid = e.compound_id || e.compound_name || 'testosterone';
+      var c = byComp[cid] || (byComp[cid] = { id:cid, name:e.compound_name||cid, unit:e.unit||'mg', doses:[] });
+      var dose = parseFloat(e.dose) || 0;
+      var d = (typeof parseLocalDate === 'function') ? parseLocalDate(e.date) : new Date(e.date);
+      if (d && dose > 0) c.doses.push({ date:d, dose:dose });
+    });
+  });
+  return Object.keys(byComp).map(function(k){ return byComp[k]; }).filter(function(c){ return c.doses.length; });
+}
+
 
 // ── Combined blood-levels chart (all active compounds + supplements) ─────────
 // One normalised multi-line overlay: each line is drawn as a % of its own peak
@@ -195,10 +233,14 @@ function _blBuildLines(){
   // Global timeline: span from the earliest start to the latest compound end,
   // extended to ~6 weeks past today so ongoing supplements have somewhere to live.
   var supps = (typeof _supplements!=='undefined' && _supplements) ? _supplements.filter(function(s){ return s && s.supp_id; }) : [];
+  var tcalcTest = _blTcalcTestosterone();
   var firstDate = starts.length ? new Date(Math.min.apply(null, starts.map(function(d){ return d.getTime(); }))) : new Date(NOW);
   supps.forEach(function(s){ if(s.start_date){ var d=parseLocalDate(s.start_date); if(d<firstDate) firstDate=d; } });
+  tcalcTest.forEach(function(c){ c.doses.forEach(function(d){ if(d.date<firstDate) firstDate=d.date; }); });
+  var tcalcMax = 0;
+  tcalcTest.forEach(function(c){ c.doses.forEach(function(d){ if(d.date.getTime()>tcalcMax) tcalcMax=d.date.getTime(); }); });
   var maxCompoundEnd = compoundEnds.length ? Math.max.apply(null, compoundEnds) : 0;
-  var lastMs = Math.max(maxCompoundEnd, supps.length ? (NOW.getTime()+42*86400000) : 0, firstDate.getTime()+7*86400000);
+  var lastMs = Math.max(maxCompoundEnd, tcalcMax, supps.length ? (NOW.getTime()+42*86400000) : 0, firstDate.getTime()+7*86400000);
   var totalDays = Math.max(1, Math.round((lastMs - firstDate.getTime())/86400000));
 
   // Supplement lines across the whole timeline from their start date.
@@ -219,6 +261,23 @@ function _blBuildLines(){
     lines.push({ id:'supp_'+(s.id||s.supp_id), name:s.name||s.supp_id, color:_BL_SUPP_COLORS[i%_BL_SUPP_COLORS.length],
       kind:'supplement', unit:sUnit, startDate:sStart, cycleLen:span, sub:'supplement',
       lastInjDay:injDays[injDays.length-1], curve:_pkCurveFine(injDays, dose, hl, span) });
+  });
+
+  // T-Calc-planned testosterone — drawn in red, spanning the whole timeline with
+  // each planned injection's own (titrated) dose. Half-life comes from the ester.
+  tcalcTest.forEach(function(c){
+    var hl = null;
+    if (typeof _tcCompInfo === 'function') { var ci = _tcCompInfo(c.id); if (ci && ci.halfLifeDays) hl = ci.halfLifeDays; }
+    if (!hl && typeof TRT_GUIDE !== 'undefined' && TRT_GUIDE[c.id]) hl = _parseHalfLifeDays(TRT_GUIDE[c.id].halfLife);
+    if (!hl) hl = 7; // testosterone ester fallback
+    var doseSteps = c.doses.map(function(d){
+      return { step: Math.round((d.date.getTime()-firstDate.getTime())/86400000) * _BL_SPD, dose:d.dose };
+    }).filter(function(s){ return s.step >= 0 && s.dose > 0; });
+    if (!doseSteps.length) return;
+    var lastDay = 0; doseSteps.forEach(function(s){ var dd=s.step/_BL_SPD; if(dd>lastDay) lastDay=dd; });
+    lines.push({ id:'tcalc_'+c.id, name:c.name, color:'#ff3b30', kind:'trt',
+      unit:c.unit||'mg', startDate:firstDate, cycleLen:totalDays, sub:'T-Calc', isTestosterone:true,
+      lastInjDay:lastDay, curve:_pkCurveFineVar(doseSteps, hl, totalDays) });
   });
 
   // Record each line's peak, its mg-equivalent scale, and its offset in global days.

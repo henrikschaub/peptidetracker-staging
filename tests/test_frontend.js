@@ -4327,6 +4327,28 @@ if (typeof G._blBuildLines === 'function') {
     G._blZoom='week';
   })();
 
+  // T-Calc-planned testosterone becomes its own red line even with no stack TRT
+  (function(){
+    var _saveInj = G._injectionsCache, _saveStacks2 = G._userStacks, _saveIdx2 = G._activeStackIndices, _saveSupp2 = G._supplements;
+    G._userStacks = [{ name:'T', cycle_length:12, cycle_start:'2026-06-01',
+      peptides:[], trt:{enabled:false,compounds:[]}, enhanced:{enabled:false,compounds:[]} }];
+    G._activeStackIndices = [0]; G._supplements = [];
+    G._injectionsCache = {
+      '2026-06-05':[{cycle_id:'tcalc',compound_id:'enanthate',compound_name:'Testosterone Enanthate',tier:'trt',date:'2026-06-05',dose:'100',unit:'mg',active:true}],
+      '2026-06-12':[{cycle_id:'tcalc',compound_id:'enanthate',compound_name:'Testosterone Enanthate',tier:'trt',date:'2026-06-12',dose:'125',unit:'mg',active:true}]
+    };
+    var _tl = G._blBuildLines();
+    var _tline = _tl.filter(function(l){ return typeof l.id==='string' && l.id.indexOf('tcalc_')===0; })[0];
+    check('_blBuildLines: T-Calc testosterone becomes a line', !!_tline);
+    check('_blBuildLines: T-Calc line is red',          _tline && _tline.color === '#ff3b30');
+    check('_blBuildLines: T-Calc line flagged testosterone', _tline && _tline.isTestosterone === true);
+    check('_blBuildLines: T-Calc line has a peak > 0',  _tline && _tline.peak > 0);
+    check('_blBuildLines: T-Calc line uses mg unit',    _tline && _tline.unit === 'mg');
+    // titrated per-injection dosing: 2nd dose (125) stacks on the decaying 1st (100)
+    check('_blBuildLines: T-Calc line carries a curve', _tline && _tline.curve && _tline.curve.length > 1);
+    G._injectionsCache = _saveInj; G._userStacks = _saveStacks2; G._activeStackIndices = _saveIdx2; G._supplements = _saveSupp2;
+  })();
+
   G._userStacks = _blSaveStacks; G._activeStackIndices = _blSaveIdx; G._supplements = _blSaveSupp; G._blLines = _blSaveLines;
 } else {
   check('_blBuildLines defined', false);
