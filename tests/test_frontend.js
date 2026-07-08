@@ -4259,6 +4259,19 @@ if (typeof G._blBuildLines === 'function') {
   check('_blRawMgAt: non-null at the last dose',
     G._blRawMgAt(_blTrt, _blTrt.offset + _blTrt.lastStep/_blTrt.spd) !== null);
 
+  // absorption model for EVERY line kind: a dose at day 0 gives curve[0] ~ 0
+  // (nothing absorbed yet) and a peak strictly later — not an instant jump.
+  ['peptide','trt','supplement'].forEach(function(kind){
+    var _ln = _blLines.filter(function(l){ return l.kind===kind; })[0];
+    if (!_ln) { check('_blBuildLines: '+kind+' line present for absorption check', false); return; }
+    var _am = 0; for (var _k=1;_k<_ln.curve.length;_k++) if (_ln.curve[_k] > _ln.curve[_am]) _am = _k;
+    check('_blBuildLines: '+kind+' uses absorption (curve[0] ~ 0, not an instant jump)', _ln.curve[0] < _ln.curve[_am] * 0.2);
+    check('_blBuildLines: '+kind+' peak is delayed after the dose (absorption)', _am > 0);
+  });
+  // _blKa keeps absorption faster than elimination even for ultra-short halves
+  check('_blKa: clamps ka above ke for ultra-short half-life', G._blKa(0.02, Math.LN2/0.02) > Math.LN2/0.02);
+  check('_blKa: leaves ester ka unclamped (ka>ke already)', G._blKa(4.5, Math.LN2/4.5) === G._tcKa(4.5));
+
   // mg-equivalent conversion + dual-axis scaling
   check('_blToMg: mg passes through',      G._blToMg(50,'mg') === 50);
   check('_blToMg: µg → mg (×0.001)',       G._blToMg(500,'µg') === 0.5);
