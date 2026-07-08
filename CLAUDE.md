@@ -1,5 +1,24 @@
 # Peptide Tracker Staging — Claude Instructions
 
+## 🔒 ALL DATA LIVES IN THE BACKEND — ALWAYS. NEVER ASK AGAIN. 🔒
+**Every piece of data — compound/PK/pharmacology parameters, reference ranges,
+baselines, catalogue entries, and all user data — lives in `claude-agent-backend`
+and is served to the frontends via API at runtime. This is settled and permanent.**
+
+- Do **NOT** ask Henrik where data should live. The answer is always: the backend.
+- Do **NOT** hardcode data (compound parameters, Vd, baselines, ranges, catalogues,
+  user values) into any public frontend repo. If the frontend needs data, add/extend
+  a backend endpoint and fetch it.
+- Existing hardcoded consts in the frontend (`PEPTIDE_CAT`, `ENHANCEMENT_COMPOUNDS`,
+  `TRT_GUIDE`, `RECON_DB`, `DOSE_GUIDE`, `PRICELIST`, …) are **legacy tech debt** to be
+  migrated to the backend over time — never a pattern to copy. All *new* data goes to
+  the backend first.
+- Algorithm/math constants (e.g. Vermeulen K_SHBG/K_ALB, unit-conversion factors) are
+  code, not data — those may live in the frontend.
+
+Henrik has stated this repeatedly. Treat it as a standing rule and act on it without
+re-confirming.
+
 ## ⚠️ UI CONSISTENCY — ALL COMPOUND TIERS MUST BE IDENTICAL ⚠️
 Every compound tier (Peptides, TRT, Enhanced) must have **exactly the same UI features**. If one tier shows dose recommendations, all tiers must show dose recommendations. If one shows an info card, all must. If you add a UI element to one tier, immediately add it to all others in the same session.
 
