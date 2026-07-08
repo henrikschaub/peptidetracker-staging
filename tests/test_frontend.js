@@ -4247,9 +4247,17 @@ if (typeof G._blBuildLines === 'function') {
   // normalisation: each line's peak maps to exactly 1.0
   var _blTrt = _blLines.filter(function(l){return l.kind==='trt';})[0];
   var _blArgmax = 0; for (var _bi=1;_bi<_blTrt.curve.length;_bi++) if (_blTrt.curve[_bi] > _blTrt.curve[_blArgmax]) _blArgmax = _bi;
-  check('_blValueAt: peak normalises to 1.0', G._blValueAt(_blTrt, _blTrt.offset + _blArgmax) === 1);
+  // curves are sub-day sampled (_BL_SPD steps/day); convert the argmax step → day
+  var _blPeakDay = _blTrt.offset + _blArgmax / _blTrt.spd;
+  check('_blBuildLines: sub-day sampling (spd>1)', _blTrt.spd > 1);
+  check('_blValueAt: peak normalises to 1.0', G._blValueAt(_blTrt, _blPeakDay) === 1);
   check('_blValueAt: null before a line starts', G._blValueAt(_blTrt, _blTrt.offset - 1) === null);
   check('_blValueAt: null after a line ends',    G._blValueAt(_blTrt, _blTrt.offset + _blTrt.curve.length) === null);
+  // end-of-cycle washout tail is truncated (no drop toward zero past the last dose)
+  check('_blRawMgAt: null past the last dose (no washout tail)',
+    G._blRawMgAt(_blTrt, _blTrt.offset + _blTrt.lastStep/_blTrt.spd + 2) === null);
+  check('_blRawMgAt: non-null at the last dose',
+    G._blRawMgAt(_blTrt, _blTrt.offset + _blTrt.lastStep/_blTrt.spd) !== null);
 
   // mg-equivalent conversion + dual-axis scaling
   check('_blToMg: mg passes through',      G._blToMg(50,'mg') === 50);
@@ -4271,7 +4279,7 @@ if (typeof G._blBuildLines === 'function') {
   check('_blComputeAxes: big→left, small→right',        _axDual.assign.big==='L' && _axDual.assign.small==='R');
   check('_blComputeAxes: axis maxes bracket the peaks', _axDual.leftMax >= 150 && _axDual.rightMax >= 0.2 && _axDual.rightMax < 150);
   // _blRawMgAt returns real mg-equivalent (not normalised)
-  var _rawPeak = G._blRawMgAt(_blTrt, _blTrt.offset + _blArgmax);
+  var _rawPeak = G._blRawMgAt(_blTrt, _blPeakDay);
   check('_blRawMgAt: returns mg-equivalent at peak', Math.abs(_rawPeak - _blTrt.peakMg) < 1e-9);
 
   // supplement half-life map (evidence-based plasma half-lives, in days)
