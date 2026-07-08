@@ -1499,6 +1499,9 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   if (_zoom === 'today')       { xStart = Math.max(0, nowDay - 2 + panDays); xEnd = Math.min(xDays, nowDay + 2 + panDays); }
   else if (_zoom === 'week')   { xStart = Math.max(0, nowDay - 3 + panDays); xEnd = Math.min(xDays, nowDay + 4 + panDays); }
   else if (_zoom === 'month')  { xStart = Math.max(0, nowDay - 15 + panDays); xEnd = Math.min(xDays, nowDay + 15 + panDays); }
+  // Whole view: make sure "today" is inside the window so its marker/level show
+  // even when the curve has already washed back to baseline before today.
+  if (_zoom === 'whole' && nowDay > xEnd && nowDay <= totalDays) xEnd = nowDay;
   if (xEnd <= xStart) xEnd = Math.min(xDays, xStart + 7);
 
   // Find peak within visible window
@@ -1594,11 +1597,31 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   }
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
 
-  // "Now" vertical line for zoomed views
-  if (_zoom !== 'whole' && nowDay >= xStart && nowDay <= xEnd) {
+  // "Now" vertical line + TODAY'S free-T level (Y-axis label) — shown in EVERY
+  // zoom, including Whole. The horizontal marker + left-axis number always report
+  // today's estimated free T; a dot marks where "now" meets the curve.
+  var _ndClamp = Math.max(0, Math.min(totalDays, nowDay));
+  var _nowLvl = calFT ? (total[_ndClamp] * (calFT_arr ? calFT_arr[_ndClamp] : scale)) : 0;
+  if (canvas._testNowHook) canvas._testNowHook(_nowLvl);
+  if (nowDay >= xStart && nowDay <= xEnd) {
     var nowX = xOf(nowDay);
-    ctx.strokeStyle = '#ffffff22'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
+    ctx.strokeStyle = '#ffffff33'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(nowX, PAD.top); ctx.lineTo(nowX, PAD.top + cH); ctx.stroke();
+    ctx.fillStyle = '#ffffff99'; ctx.font = 'bold 8px DM Sans,sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('today', nowX, PAD.top + 8);
+    if (calFT && _nowLvl > 0) {
+      var _nlY = yOf(_nowLvl);
+      ctx.strokeStyle = '#ffffff66'; ctx.lineWidth = 1; ctx.setLineDash([2,2]);
+      ctx.beginPath(); ctx.moveTo(PAD.left, _nlY); ctx.lineTo(PAD.left + cW, _nlY); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(nowX, _nlY, 3, 0, 2*Math.PI); ctx.fill();
+      // Boxed Y-axis label so today's level stays legible over the gridline numbers.
+      var _lbl = String(Math.round(_nowLvl));
+      ctx.font = 'bold 9px DM Sans,sans-serif'; ctx.textAlign = 'right';
+      var _tw = ctx.measureText(_lbl).width;
+      ctx.fillStyle = '#000000cc'; ctx.fillRect(PAD.left - 7 - _tw, _nlY - 6, _tw + 6, 12);
+      ctx.fillStyle = '#ffffff'; ctx.fillText(_lbl, PAD.left - 4, _nlY + 3);
+    }
   }
 
   sorted.forEach(function(e) {
