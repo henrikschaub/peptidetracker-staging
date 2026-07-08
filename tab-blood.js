@@ -355,21 +355,33 @@ function _blDrawChart(canvas){
     ctx.beginPath(); ctx.moveTo(nx, PAD.top); ctx.lineTo(nx, PAD.top+cH); ctx.stroke(); ctx.setLineDash([]);
   }
 
-  // Lines — right-axis lines are dashed so the axis they use is obvious
-  visible.forEach(function(ln){
-    var side = axes.assign[ln.id]||'L';
-    var yFn = side==='R' ? yOfR : yOfL;
+  // Lines — right-axis lines are dashed so the axis they use is obvious.
+  // Everything is a model projection; to make that obvious the segment from
+  // today forward is drawn dimmed (past = solid, today→future = faded).
+  var dg = 1/_BL_SPD;
+  function _blStrokeSeg(ln, yFn, dashed, a, b, alpha){
+    if(b <= a) return;
     ctx.beginPath(); var started = false;
-    var dg = 1/_BL_SPD;
-    for(var g=xStart; g<=xEnd+1e-9; g+=dg){
+    for(var g=a; g<=b+1e-9; g+=dg){
       var v = _blRawMgAt(ln, g);
       if(v===null){ started = false; continue; }
       var X = xOf(g), Y = yFn(v);
       if(!started){ ctx.moveTo(X, Y); started = true; } else ctx.lineTo(X, Y);
     }
     ctx.strokeStyle = ln.color; ctx.lineWidth = 2; ctx.lineJoin = 'round';
-    if(axes.mode==='dual' && side==='R') ctx.setLineDash([4,2]);
-    ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = alpha;
+    if(dashed) ctx.setLineDash([4,2]);
+    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  }
+  var splitAt = Math.max(xStart, Math.min(xEnd, nowDay));
+  visible.forEach(function(ln){
+    var side = axes.assign[ln.id]||'L';
+    var yFn = side==='R' ? yOfR : yOfL;
+    var dashed = axes.mode==='dual' && side==='R';
+    // Past (solid) up to today, then future (dimmed). Overlap one step so the
+    // two segments join without a visible gap at the boundary.
+    _blStrokeSeg(ln, yFn, dashed, xStart, splitAt, 1);
+    _blStrokeSeg(ln, yFn, dashed, Math.max(xStart, splitAt-dg), xEnd, 0.3);
   });
   if(!visible.length){
     ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.textAlign = 'center';
@@ -473,7 +485,7 @@ function buildBloodLevels(){
   html += '<div id="bl-zoom-bar" style="display:flex;gap:4px;margin-bottom:8px"></div>';
   html += '<canvas id="bl-chart" style="width:100%;display:block"></canvas>';
   html += '<div id="bl-legend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px"></div>';
-  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5">Amounts are mg-equivalent (relative amount in body, not a lab concentration). When magnitudes differ a lot, lines split across two Y-scales — right-axis lines are dashed and tagged <b>R</b>. Tap a chip to hide/show; zoom then drag to pan. Supplement curves use approximate half-lives.</div>';
+  html += '<div style="margin-top:10px;font-size:10px;color:var(--muted2);line-height:1.5">Amounts are mg-equivalent (relative amount in body, not a lab concentration). When magnitudes differ a lot, lines split across two Y-scales — right-axis lines are dashed and tagged <b>R</b>. Solid = to date, dimmed = projected from today forward. Tap a chip to hide/show; zoom then drag to pan. Supplement curves use approximate half-lives.</div>';
   html += '</div>';
   el.innerHTML = html;
   _blRenderZoomBar();
