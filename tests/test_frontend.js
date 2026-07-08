@@ -4346,6 +4346,19 @@ if (typeof G._blBuildLines === 'function') {
     check('_blBuildLines: T-Calc line uses mg unit',    _tline && _tline.unit === 'mg');
     // titrated per-injection dosing: 2nd dose (125) stacks on the decaying 1st (100)
     check('_blBuildLines: T-Calc line carries a curve', _tline && _tline.curve && _tline.curve.length > 1);
+    // absorption model (matches T-Calc): a single injection peaks AFTER the shot,
+    // not at the instant — value ~0 at the injection step, argmax strictly later.
+    G._injectionsCache = {
+      '2026-06-05':[{cycle_id:'tcalc',compound_id:'enanthate',compound_name:'Testosterone Enanthate',tier:'trt',date:'2026-06-05',dose:'100',unit:'mg',active:true}]
+    };
+    var _tl1 = G._blBuildLines();
+    var _t1 = _tl1.filter(function(l){ return typeof l.id==='string' && l.id.indexOf('tcalc_')===0; })[0];
+    if (_t1) {
+      var _injStep = Math.round((new Date('2026-06-05T00:00:00').getTime() - G._blTimeline.firstDate.getTime())/86400000) * _t1.spd;
+      var _am = 0; for (var _q=1;_q<_t1.curve.length;_q++) if (_t1.curve[_q] > _t1.curve[_am]) _am = _q;
+      check('_blBuildLines: T-Calc peak is delayed (absorption, not instant jump)', _am > _injStep);
+      check('_blBuildLines: T-Calc curve ~0 at the injection instant', _t1.curve[_injStep] < _t1.curve[_am] * 0.2);
+    } else { check('_blBuildLines: single T-Calc injection builds a line', false); }
     G._injectionsCache = _saveInj; G._userStacks = _saveStacks2; G._activeStackIndices = _saveIdx2; G._supplements = _saveSupp2;
   })();
 

@@ -68,21 +68,32 @@ function _pkCurveFine(injDays, dosePerInj, halfLifeDays, cycleDays) {
   return curve;
 }
 
-// Like _pkCurveFine but each injection carries its own dose — used for the
-// T-Calc-planned testosterone, whose per-injection dose is titrated over time.
-// doseSteps: [{step, dose}] (step = day × _BL_SPD).
-function _pkCurveFineVar(doseSteps, halfLifeDays, cycleDays) {
+// Sub-day PK curve for T-Calc-planned testosterone. Uses the SAME 1-compartment
+// first-order ABSORPTION model as the T-Calc chart (_tcPkConc: rise to a Tmax
+// peak, then fall) rather than an instantaneous-input decay, so the Blood Levels
+// red line matches the T-Calc plasma curve. Each injection carries its own
+// (titrated) dose. doseSteps: [{step, dose}] (step = day × _BL_SPD, dose in mg).
+function _blTcalcCurve(doseSteps, halfLifeDays, bioav, cycleDays) {
   var spd = _BL_SPD, N = cycleDays * spd;
   var curve = new Float64Array(N + 1);
-  var kStep = Math.LN2 / (halfLifeDays * spd);
-  for (var t = 0; t <= N; t++) {
-    var c = 0;
-    for (var j = 0; j < doseSteps.length; j++) {
-      if (doseSteps[j].step <= t) c += doseSteps[j].dose * Math.exp(-kStep * (t - doseSteps[j].step));
+  var ke = Math.LN2 / halfLifeDays;
+  var ka = (typeof _tcKa === 'function') ? _tcKa(halfLifeDays) : ke * 4;
+  var useAbs = (typeof _tcPkConc === 'function');
+  for (var j = 0; j < doseSteps.length; j++) {
+    var dose = doseSteps[j].dose * (bioav || 1), s0 = doseSteps[j].step;
+    for (var t = s0; t <= N; t++) {
+      var dt = (t - s0) / spd;
+      curve[t] += useAbs ? _tcPkConc(dose, ka, ke, dt) : dose * Math.exp(-ke * dt);
     }
-    curve[t] = c;
   }
   return curve;
+}
+// Tmax (days to peak) for the absorption model — used to extend the drawn range
+// just past the last injection so its hump peaks before the line ends.
+function _blTcalcTmax(halfLifeDays) {
+  var ke = Math.LN2 / halfLifeDays;
+  var ka = (typeof _tcKa === 'function') ? _tcKa(halfLifeDays) : ke * 4;
+  return (ka > ke) ? Math.log(ka / ke) / (ka - ke) : 1;
 }
 
 // T-Calc-planned testosterone (injections with cycle_id 'tcalc') — planned via
@@ -266,8 +277,8 @@ function _blBuildLines(){
   // T-Calc-planned testosterone — drawn in red, spanning the whole timeline with
   // each planned injection's own (titrated) dose. Half-life comes from the ester.
   tcalcTest.forEach(function(c){
-    var hl = null;
-    if (typeof _tcCompInfo === 'function') { var ci = _tcCompInfo(c.id); if (ci && ci.halfLifeDays) hl = ci.halfLifeDays; }
+    var hl = null, bioav = 1;
+    if (typeof _tcCompInfo === 'function') { var ci = _tcCompInfo(c.id); if (ci) { if (ci.halfLifeDays) hl = ci.halfLifeDays; if (ci.bioavailability) bioav = ci.bioavailability; } }
     if (!hl && typeof TRT_GUIDE !== 'undefined' && TRT_GUIDE[c.id]) hl = _parseHalfLifeDays(TRT_GUIDE[c.id].halfLife);
     if (!hl) hl = 7; // testosterone ester fallback
     var doseSteps = c.doses.map(function(d){
@@ -275,9 +286,13 @@ function _blBuildLines(){
     }).filter(function(s){ return s.step >= 0 && s.dose > 0; });
     if (!doseSteps.length) return;
     var lastDay = 0; doseSteps.forEach(function(s){ var dd=s.step/_BL_SPD; if(dd>lastDay) lastDay=dd; });
+    // Extend the drawn range past the last injection by Tmax + ~1 half-life so
+    // the final absorption hump peaks and starts to fall (as the T-Calc chart
+    // shows) instead of being cut off at the injection instant.
+    var tailDay = lastDay + _blTcalcTmax(hl) + hl;
     lines.push({ id:'tcalc_'+c.id, name:c.name, color:'#ff3b30', kind:'trt',
       unit:c.unit||'mg', startDate:firstDate, cycleLen:totalDays, sub:'T-Calc', isTestosterone:true,
-      lastInjDay:lastDay, curve:_pkCurveFineVar(doseSteps, hl, totalDays) });
+      lastInjDay:tailDay, curve:_blTcalcCurve(doseSteps, hl, bioav, totalDays) });
   });
 
   // Record each line's peak, its mg-equivalent scale, and its offset in global days.
