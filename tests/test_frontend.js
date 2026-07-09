@@ -3191,6 +3191,44 @@ if (typeof G._tcFreeTSeries === 'function') {
   G._tcp.measuredFT = _fsFT; G._tcp.currentDoseMgWk = _fsDose; G._tcBwEntries = _fsBw;
 }
 
+// Confidence tiers: the model must render an HONEST estimate — with a wide, clearly
+// wider-when-less-data uncertainty band — even when the user has no bloodwork, so people
+// who can't test regularly still get something, flagged as lower confidence.
+if (typeof G._tcFreeTSeries === 'function') {
+  var _t3p0 = G._tcp, _t3Bw0 = G._tcBwEntries, _t3Gh0 = G._tcGhStack;
+  var _t3Log = [{compId:'testoviron',doseMg:'125',date:'2026-06-24'},{compId:'testoviron',doseMg:'125',date:'2026-06-28'}].sort(function(a,b){return a.date<b.date?-1:1;});
+  G._tcGhStack = [];
+
+  // estimate: no measured FT, no SHBG/TT, no bloodwork → age-default level + wide band
+  G._tcp = {measuredFT:'', currentDoseMgWk:'', totalT:'', shbg:'', birthYear:'1985', manualLog:_t3Log};
+  G._tcBwEntries = null;
+  var _t3e = G._tcFreeTSeries(_t3Log, {});
+  var _t3mid = Math.floor(_t3e.totalDays / 2);
+  check('tier: no bloodwork at all → "estimate"', _t3e.tier === 'estimate');
+  check('tier: estimate still renders a calibrated pmol/L curve', _t3e.calFT > 0 && !!_t3e.calFT_arr && _t3e.unitLabel === 'pmol/L');
+  check('tier: estimate carries a wide (~±35%) uncertainty band',
+    !!_t3e.calFThi && Math.abs(_t3e.calFThi[_t3mid]/_t3e.calFT_arr[_t3mid] - 1.35) < 0.02 && Math.abs(_t3e.calFTlo[_t3mid]/_t3e.calFT_arr[_t3mid] - 0.65) < 0.02);
+
+  // partial: a measured FT but no SHBG/total-T → medium band, no SHBG dynamics
+  G._tcp = {measuredFT:'300', currentDoseMgWk:'', totalT:'', shbg:'', birthYear:'1985', manualLog:_t3Log};
+  var _t3pt = G._tcFreeTSeries(_t3Log, {});
+  check('tier: measured FT but no SHBG/TT → "partial"', _t3pt.tier === 'partial');
+  check('tier: partial band (~±20%) is narrower than the no-bloodwork estimate band',
+    !!_t3pt.calFThi && Math.abs(_t3pt.calFThi[_t3mid]/_t3pt.calFT_arr[_t3mid] - 1.20) < 0.02);
+
+  // measured: FT + total T + SHBG + a bloodwork entry → real SHBG model (β-band, not flat)
+  var _t3mLog = [{compId:'testoviron',doseMg:'100',date:'2026-06-24'}];
+  for (var _t3i=0; _t3i<8; _t3i++){ var _t3d=new Date(new Date('2026-06-26').getTime()+_t3i*3*86400000); _t3mLog.push({compId:'nebido',doseMg:'100',date:_t3d.getFullYear()+'-'+String(_t3d.getMonth()+1).padStart(2,'0')+'-'+String(_t3d.getDate()).padStart(2,'0')}); }
+  G._tcp = {measuredFT:'400', currentDoseMgWk:'', totalT:'25', shbg:'40', birthYear:'1985', manualLog:_t3mLog};
+  G._tcBwEntries = [{date:'2026-06-24', total_t:25, shbg:40, free_t:400}];
+  var _t3ms = G._tcFreeTSeries(_t3mLog, {});
+  check('tier: full bloodwork → "measured"', _t3ms.tier === 'measured');
+  check('tier: measured band is a real β-band with width away from the draw (not synthetic flat)',
+    !!_t3ms.calFThi && !!_t3ms.calFTlo && _t3ms.calFThi[_t3ms.totalDays] > _t3ms.calFTlo[_t3ms.totalDays]);
+
+  G._tcp = _t3p0; G._tcBwEntries = _t3Bw0; G._tcGhStack = _t3Gh0;
+}
+
 // Regression: warm-start ke for curDose=0 must use slowest compound ke (not weighted avg).
 // Bug: weighted ke was dominated by TE (short HL=4.5d), causing the prior-protocol
 // baseline to wash out in ~7 days. By Day 30 it was <6% of initial, leaving total
