@@ -31,7 +31,7 @@ var _tcBwAddExtras    = [];   // custom extra-test rows while add sheet is open
 var _tcEditSeriesId = null;   // seriesId currently open in the Edit Series sheet
 var _tcChartZoom   = 'whole'; // active zoom level: 'today' | 'week' | 'month' | 'whole'
 var _tcChartPanOffset = 0;   // horizontal pan in days (float, only used in zoomed modes)
-var _tcGhStack = [];          // [{pepId, startDateStr, interactions}] — GH compounds from active stacks
+var _tcGhStack = [];          // [{pepId, startDateStr, interactions, dailyDose}] — SHBG suppressors from active stacks (dailyDose in the compound's doseResponse unit)
 var _tcSysInter = null;       // compounds map from /systemic-interactions
 var _tcActiveStacks = null;   // raw response from /protocol/stacks
 
@@ -225,6 +225,61 @@ function _tcSaveProfile() {
   }).catch(function(){});
 }
 
+// Saturating Emax dose-response for SHBG suppression: effMaxSupp(dose) = emax·dose/(dose+ed50).
+// ed50/emax are calibrated backend-side so effMaxSupp(typicalDose) == the legacy fixed
+// maxSuppression, so a user dosed at the reference sees no change; only off-reference doses scale.
+function _tcEffMaxSupp(dr, dose) {
+  if (!dr || !(dose > 0) || !(dr.ed50 > 0) || !(dr.emax > 0)) return null;
+  return dr.emax * dose / (dose + dr.ed50);
+}
+
+// Convert an amount between dosing units (mass only; IU is not mass-convertible).
+// Units may carry a "/period" suffix (e.g. "mg/week") which is ignored here.
+function _tcConvDose(amt, fromU, toU) {
+  fromU = String(fromU || '').toLowerCase().split('/')[0].trim();
+  toU   = String(toU   || '').toLowerCase().split('/')[0].trim();
+  if (fromU === 'µg') fromU = 'mcg';
+  if (toU   === 'µg') toU   = 'mcg';
+  if (!(amt > 0) || !fromU || !toU) return null;
+  if (fromU === toU) return amt;
+  if (fromU === 'iu' || toU === 'iu') return null;   // IU ↔ mass is compound-specific — refuse
+  var toMg = { mg: 1, mcg: 0.001, g: 1000 };
+  if (toMg[fromU] == null || toMg[toU] == null) return null;
+  return amt * toMg[fromU] / toMg[toU];
+}
+
+// Average daily dose for an SHBG suppressor, expressed in its backend doseResponse unit.
+// Chronic SHBG suppression tracks average exposure, so sub-daily schedules are averaged
+// over the week (days-per-week / 7). Returns null when the dose can't be resolved or
+// converted — the caller then falls back to the fixed maxSuppression.
+function _tcSuppDailyDose(inter, kind, obj) {
+  var dr = inter && inter.shbg && inter.shbg.doseResponse;
+  if (!dr || !dr.unit || !obj) return null;
+  var nativeDaily = 0, nativeUnit = '';
+  if (kind === 'peptide') {
+    var times = obj.times || ['AM'];
+    var per = (times.indexOf('AM') >= 0 ? (parseDec(obj.dose_am) || 0) : 0) +
+              (times.indexOf('PM') >= 0 ? (parseDec(obj.dose_pm) || 0) : 0);
+    var dpw = (obj.days || [0, 1, 2, 3, 4, 5, 6]).length;
+    nativeDaily = per * dpw / 7;
+    nativeUnit = obj.unit_am || obj.unit_pm || 'mcg';
+  } else if (kind === 'compound') {
+    var raw = parseDec(obj.dose) || 0;
+    var parts = String(obj.unit || 'mg/week').split('/');
+    var period = (parts[1] || 'week').toLowerCase();
+    var factor = (period === 'day') ? 1 : (period === 'eod' || period === '2day') ? 0.5 : 1 / 7;
+    nativeDaily = raw * factor;
+    nativeUnit = parts[0] || 'mg';
+  } else if (kind === 'supp') {
+    var rawS = parseDec(obj.dose) || 0;
+    var m = String(obj.dose || '').match(/(mcg|µg|mg|iu|g)/i);
+    nativeUnit = m ? m[1] : 'mg';
+    var f = (obj.freq === 'weekly') ? 1 / 7 : (obj.freq === 'eod') ? 0.5 : 1;
+    nativeDaily = rawS * f;
+  }
+  return _tcConvDose(nativeDaily, nativeUnit, dr.unit);
+}
+
 function _tcComputeGhStack() {
   if (!_tcSysInter) return;
   _tcGhStack = [];
@@ -241,7 +296,7 @@ function _tcComputeGhStack() {
       if (!pepId || !_tcSysInter[pepId]) return;
       var inter = _tcSysInter[pepId];
       if (!inter.shbg || inter.shbg.direction !== 'suppress') return;
-      _tcGhStack.push({pepId: pepId, startDateStr: pep.start_date || cycleStart, interactions: inter});
+      _tcGhStack.push({pepId: pepId, startDateStr: pep.start_date || cycleStart, interactions: inter, dailyDose: _tcSuppDailyDose(inter, 'peptide', pep)});
     });
     // Enhanced compounds — no per-compound start_date, fall back to cycle_start
     if (stack.enhanced && stack.enhanced.compounds) {
@@ -250,7 +305,7 @@ function _tcComputeGhStack() {
         if (!cId || !_tcSysInter[cId]) return;
         var inter = _tcSysInter[cId];
         if (!inter.shbg || inter.shbg.direction !== 'suppress') return;
-        _tcGhStack.push({pepId: cId, startDateStr: c.start_date || cycleStart, interactions: inter});
+        _tcGhStack.push({pepId: cId, startDateStr: c.start_date || cycleStart, interactions: inter, dailyDose: _tcSuppDailyDose(inter, 'compound', c)});
       });
     }
     // TRT compounds — same fallback
@@ -260,7 +315,7 @@ function _tcComputeGhStack() {
         if (!cId || !_tcSysInter[cId]) return;
         var inter = _tcSysInter[cId];
         if (!inter.shbg || inter.shbg.direction !== 'suppress') return;
-        _tcGhStack.push({pepId: cId, startDateStr: c.start_date || cycleStart, interactions: inter});
+        _tcGhStack.push({pepId: cId, startDateStr: c.start_date || cycleStart, interactions: inter, dailyDose: _tcSuppDailyDose(inter, 'compound', c)});
       });
     }
   });
@@ -273,7 +328,7 @@ function _tcComputeGhStack() {
     if (!s || !s.supp_id) return;
     var inter = _tcSysInter[s.supp_id];
     if (!inter || !inter.shbg || inter.shbg.direction !== 'suppress') return;
-    _tcGhStack.push({pepId: 'supp_' + s.supp_id, startDateStr: s.start_date || '', interactions: inter});
+    _tcGhStack.push({pepId: 'supp_' + s.supp_id, startDateStr: s.start_date || '', interactions: inter, dailyDose: _tcSuppDailyDose(inter, 'supp', s)});
   });
 }
 
@@ -1357,8 +1412,9 @@ function _tcFreeTSeries(sorted, hooks) {
 
   // Time-varying SHBG → free-T model.  Two drivers, both anchored at the bloodwork draw so the
   // curve passes exactly through the measured free T / SHBG (no double-counting):
-  //   1. SHBG-suppressing compounds & supplements (GH peptides, Boron): fixed-asymptote ramp
-  //      SHBG ×= ∏_i (1 − maxSupp_i × (1 − e^(−t/halfTime_i))).
+  //   1. SHBG-suppressing compounds & supplements (GH peptides, Boron): dose-scaled ramp
+  //      SHBG ×= ∏_i (1 − asym_i × (1 − e^(−t/halfTime_i))), asym_i = effMaxSupp(dailyDose_i)
+  //      so lowering a dose relaxes SHBG back up over halfTime (no all-or-nothing switch).
   //   2. Testosterone's OWN dose-dependent SHBG suppression: SHBG scales as a power law of the
   //      modelled (lagged) T level relative to the draw — SHBG(t)/SHBG_draw = (T_lag(t)/T_lag_draw)^(−β).
   //      This is the dominant driver on a TRT/enhanced schedule and the main source of drift
@@ -1373,13 +1429,19 @@ function _tcFreeTSeries(sorted, hooks) {
     var _vermBw = _tcVermeulenFT(_ttNum, _shbgBw);
     if (_vermBw) {
       // Compound SHBG suppressors (may be empty — testosterone alone still drives the model).
+      // Asymptote is dose-scaled: effMaxSupp(dailyDose) when the dose resolves, else the
+      // legacy fixed maxSuppression. The (1−e^(−t/halfTime)) ramp makes it time-varying, so
+      // suppression relaxes toward the dose-scaled target over halfTimeDays from the start date.
       var _ghParams = [];
       _tcGhStack.forEach(function(gh) {
         var _ghStart = gh.startDateStr ? new Date(gh.startDateStr + 'T12:00:00') : null;
         if (!_ghStart) return;
+        var _dr   = gh.interactions.shbg.doseResponse;
+        var _asym = _tcEffMaxSupp(_dr, gh.dailyDose);
+        if (_asym == null) _asym = gh.interactions.shbg.maxSuppression;
         _ghParams.push({
           ghDay0:   Math.round((_ghStart - firstDate) / 86400000),
-          maxSupp:  gh.interactions.shbg.maxSuppression,
+          asym:     _asym,
           halfTime: gh.interactions.shbg.halfTimeDays
         });
       });
@@ -1387,7 +1449,7 @@ function _tcFreeTSeries(sorted, hooks) {
         var p = 1;
         _ghParams.forEach(function(gp) {
           var t = Math.max(0, day - gp.ghDay0);
-          if (t > 0) p *= (1 - gp.maxSupp * (1 - Math.exp(-t / gp.halfTime)));
+          if (t > 0) p *= (1 - gp.asym * (1 - Math.exp(-t / gp.halfTime)));
         });
         return p;
       };

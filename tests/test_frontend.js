@@ -4158,6 +4158,70 @@ if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
   check('SUPPLEMENT_CAT defined (tab-supplements.js loaded)', false);
 }
 
+// ── SHBG suppression is dose-dependent + time-varying (Emax dose-response) ──
+console.log('\n── T-calc: dose-dependent SHBG suppression (effMaxSupp) ──');
+if (typeof G._tcEffMaxSupp === 'function') {
+  var _drH = {unit:'IU/day', ed50:2, emax:0.56, typicalDose:5};
+  // saturating Emax: 0 at 0 dose, monotone up, capped by emax, calibrated at typical dose
+  check('effMaxSupp: zero dose → zero suppression', G._tcEffMaxSupp(_drH, 0) === null || G._tcEffMaxSupp(_drH, 0) === 0);
+  check('effMaxSupp: monotone increasing in dose', G._tcEffMaxSupp(_drH, 4) < G._tcEffMaxSupp(_drH, 5) && G._tcEffMaxSupp(_drH, 5) < G._tcEffMaxSupp(_drH, 8));
+  check('effMaxSupp: calibrated to ~0.40 at the 5 IU typical dose', Math.abs(G._tcEffMaxSupp(_drH, 5) - 0.40) < 0.02);
+  check('effMaxSupp: saturates below emax', G._tcEffMaxSupp(_drH, 1e6) <= _drH.emax + 1e-9);
+  check('effMaxSupp: HGH 4 IU suppresses less than the 5 IU reference', G._tcEffMaxSupp(_drH, 4) < G._tcEffMaxSupp(_drH, 5));
+  check('effMaxSupp: null/invalid dose-response → null', G._tcEffMaxSupp(null, 5) === null && G._tcEffMaxSupp({ed50:2,emax:0.5}, -1) === null);
+}
+if (typeof G._tcConvDose === 'function') {
+  check('convDose: mcg → mg divides by 1000', Math.abs(G._tcConvDose(300, 'mcg', 'mg/day') - 0.3) < 1e-9);
+  check('convDose: same unit is identity (strips /period)', G._tcConvDose(10, 'mg', 'mg/day') === 10);
+  check('convDose: IU ↔ mass refused (returns null)', G._tcConvDose(5, 'IU', 'mg/day') === null);
+  check('convDose: IU → IU passes through', Math.abs(G._tcConvDose(5, 'IU', 'IU/day') - 5) < 1e-9);
+}
+if (typeof G._tcSuppDailyDose === 'function') {
+  var _iHgh = {shbg:{direction:'suppress', maxSuppression:0.40, halfTimeDays:25, doseResponse:{unit:'IU/day', ed50:2, emax:0.56, typicalDose:5}}};
+  // peptide dosed 5 IU AM every day → 5 IU/day
+  check('suppDailyDose: daily IU peptide → 5 IU/day',
+    Math.abs(G._tcSuppDailyDose(_iHgh, 'peptide', {dose_am:'5', unit_am:'IU', times:['AM'], days:[0,1,2,3,4,5,6]}) - 5) < 1e-9);
+  // same 5 IU dosed only 5 days/week → averaged to 5·5/7 IU/day
+  check('suppDailyDose: 5-day/week schedule is averaged over the week',
+    Math.abs(G._tcSuppDailyDose(_iHgh, 'peptide', {dose_am:'5', unit_am:'IU', times:['AM'], days:[1,2,3,4,5]}) - 5*5/7) < 1e-9);
+  var _iBor = {shbg:{direction:'suppress', maxSuppression:0.09, halfTimeDays:4, doseResponse:{unit:'mg/day', ed50:4, emax:0.126, typicalDose:10}}};
+  check('suppDailyDose: daily boron supplement "10 mg" → 10 mg/day',
+    Math.abs(G._tcSuppDailyDose(_iBor, 'supp', {dose:'10 mg', freq:'daily'}) - 10) < 1e-9);
+  var _iCjc = {shbg:{direction:'suppress', maxSuppression:0.20, halfTimeDays:32, doseResponse:{unit:'mcg/day', ed50:120, emax:0.28, typicalDose:300}}};
+  check('suppDailyDose: enhanced compound "2100 mcg/week" → 300 mcg/day',
+    Math.abs(G._tcSuppDailyDose(_iCjc, 'compound', {dose:'2100', unit:'mcg/week'}) - 300) < 1e-9);
+  check('suppDailyDose: no dose-response → null', G._tcSuppDailyDose({shbg:{direction:'suppress',maxSuppression:0.2,halfTimeDays:10}}, 'supp', {dose:'10 mg', freq:'daily'}) === null);
+}
+
+// integration: a lower GH dose leaves SHBG higher → a lower free-T peak than the reference dose.
+if (typeof G._tcDrawManualChart === 'function' && typeof G._tcEffMaxSupp === 'function') {
+  var _ddSaveTp = G._tcp, _ddSaveBw = G._tcBwEntries, _ddSaveGh = G._tcGhStack, _ddSaveGE = G.document.getElementById;
+  var _ddCap = null;
+  var _ddCtx = { scale:noop,beginPath:noop,arc:noop,fill:noop,stroke:noop,fillText:noop,closePath:noop,save:noop,restore:noop,fillRect:noop,setLineDash:noop,strokeRect:noop,translate:noop,rotate:noop,moveTo:noop,lineTo:noop,measureText:function(){return{width:0};},createLinearGradient:function(){return{addColorStop:noop};} };
+  G.document.getElementById = function(id){ return id==='tc-manual-chart' ? { style:{},classList:{add:noop,remove:noop,contains:function(){return false;}},offsetWidth:350,offsetHeight:250,_testShbgHook:function(v){_ddCap=v;},getContext:function(){return _ddCtx;} } : _ddSaveGE(id); };
+  var _ddLog = [{compId:'testoviron',doseMg:'100',date:'2026-06-01'}];
+  for (var _ddi=0;_ddi<12;_ddi++){ var _ddd=new Date(new Date('2026-06-03').getTime()+_ddi*3*86400000); _ddLog.push({compId:'nebido',doseMg:'100',date:_ddd.getFullYear()+'-'+String(_ddd.getMonth()+1).padStart(2,'0')+'-'+String(_ddd.getDate()).padStart(2,'0')}); }
+  G._tcp = {measuredFT:'400', currentDoseMgWk:'0', totalT:'25', shbg:'40', birthYear:'1980', manualLog:_ddLog};
+  G._tcBwEntries = [{date:'2026-06-15', total_t:25, shbg:40, free_t:400}];
+  var _ghInter = {shbg:{direction:'suppress', maxSuppression:0.40, halfTimeDays:25, doseResponse:{unit:'IU/day', ed50:2, emax:0.56, typicalDose:5}}};
+  function _ddPeak(dailyDose){
+    G._tcGhStack = [{pepId:'hgh', startDateStr:'2026-06-01', interactions:_ghInter, dailyDose:dailyDose}];
+    _ddCap = null; G._tcDrawManualChart('tc-manual-chart', _ddLog);
+    var arr=_ddCap.arr, tot=_ddCap.total, pk=0,pv=0;
+    for(var t=0;t<tot.length;t++){ var v=tot[t]*arr[t]; if(v>pv){pv=v;pk=t;} }
+    return pv;
+  }
+  var _ddThrew=false, _peak2=0, _peak4=0, _peak5=0, _peak8=0;
+  try { _peak2=_ddPeak(2); _peak4=_ddPeak(4); _peak5=_ddPeak(5); _peak8=_ddPeak(8); } catch(e){ _ddThrew=true; console.error('  dose-dep test threw:', e.message); }
+  check('dose-dep SHBG: no crash', !_ddThrew && _ddCap !== null);
+  // Higher GH dose → more SHBG suppression → higher modelled free-T peak (monotone in dose).
+  check('dose-dep SHBG: free-T peak increases monotonically with GH dose (2<4<8 IU)',
+    !_ddThrew && _peak2 < _peak4 && _peak4 < _peak8, 'peak2='+_peak2.toFixed(1)+' peak4='+_peak4.toFixed(1)+' peak8='+_peak8.toFixed(1));
+  check('dose-dep SHBG: lower HGH dose (4 IU) → lower free-T peak than 5 IU reference',
+    !_ddThrew && _peak4 < _peak5, 'peak4='+_peak4.toFixed(1)+' peak5='+_peak5.toFixed(1));
+  G._tcp = _ddSaveTp; G._tcBwEntries = _ddSaveBw; G._tcGhStack = _ddSaveGh; G.document.getElementById = _ddSaveGE;
+}
+
 // ── Testosterone → SHBG dose-dependent free-T model (+ uncertainty band) ──
 console.log('\n── T-calc: testosterone→SHBG dose-dependent model + β band ──');
 if (typeof G._tcDrawManualChart === 'function') {
