@@ -4478,6 +4478,25 @@ if (typeof G._blBuildLines === 'function') {
   check('_blBuildLines defined', false);
 }
 
+// ── parseDec (decimal comma AND dot support) ─────────────────────────────────
+console.log('\n── parseDec ────────────────────────────────────────────────');
+check('parseDec defined',            typeof G.parseDec === 'function');
+check('parseDec("82,5") → 82.5',     G.parseDec('82,5') === 82.5);
+check('parseDec("82.5") → 82.5',     G.parseDec('82.5') === 82.5);
+check('parseDec("0,25") → 0.25',     G.parseDec('0,25') === 0.25);
+check('parseDec(" 90 ") → 90',       G.parseDec(' 90 ') === 90);
+check('parseDec("") → NaN',          Number.isNaN(G.parseDec('')));
+check('parseDec(null) → NaN',        Number.isNaN(G.parseDec(null)));
+check('parseDec(5) → 5 (number passthrough)', G.parseDec(5) === 5);
+check('decimal inputs use inputmode="decimal"', (html.match(/inputmode="decimal"/g) || []).length >= 5);
+check('body measurements parse via parseDec',  html.includes('var v=parseDec(inp.value);'));
+{
+  const tcalcSrc = fs.readFileSync(path.join(__dirname, '../tab-tcalc.js'), 'utf8');
+  check('tab-tcalc.js has no raw parseFloat left', !tcalcSrc.includes('parseFloat('));
+  const stackSrc = fs.readFileSync(path.join(__dirname, '../tab-stack.js'), 'utf8');
+  check('tab-stack.js has no raw parseFloat left', !stackSrc.includes('parseFloat('));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);

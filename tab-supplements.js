@@ -96,7 +96,7 @@ function _suppFmtDose(suppId, dose){
 
 // Convert a 25-OH-D reading to nmol/L. Catalogue units are 'nmol/L' | 'ng/mL'.
 function _vitDToNmol(value, unit){
-  var v = parseFloat(value);
+  var v = parseDec(value);
   if(!(v > 0)) return null;
   return (unit === 'ng/mL') ? v * 2.496 : v;
 }

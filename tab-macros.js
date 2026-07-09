@@ -1,6 +1,6 @@
 /* ── MACROS ── */
 var _macrosPhase='recomp';
-function loadMacros(){var bw=parseFloat(localStorage.getItem('user_weight'))||0;renderMacros(bw);}
+function loadMacros(){var bw=parseDec(localStorage.getItem('user_weight'))||0;renderMacros(bw);}
 function switchMacrosPhase(p){_macrosPhase=p;loadMacros();}
 function calcMacros(bw,phase){
   var protein=Math.round(bw*2.2);
