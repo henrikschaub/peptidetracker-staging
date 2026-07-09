@@ -74,7 +74,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
           <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px">Weight (kg)</div>
-          <div style="display:flex;gap:6px"><input id="bc-weight-in" type="number" step="0.1" placeholder="0.0" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:14px;flex:1;font-family:inherit;outline:none;width:0"><button onclick="saveBodyMeasurement('weight')" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit">Save</button></div>
+          <div style="display:flex;gap:6px"><input id="bc-weight-in" type="text" inputmode="decimal" placeholder="0.0" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:14px;flex:1;font-family:inherit;outline:none;width:0"><button onclick="saveBodyMeasurement('weight')" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit">Save</button></div>
         </div>
         <div>
           <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px">Height (cm)</div>
@@ -95,9 +95,9 @@
       <div class="card-body" style="gap:12px;">
         <div class="info-row"><span class="info-label">Height</span><span class="info-val" style="color:var(--muted2)" id="bc-height-display">— cm</span></div>
         <div class="divider"></div>
-        <div style="display:flex;flex-direction:column;gap:4px;"><label class="info-label">Neck circumference (cm)</label><input id="bc-neck" type="number" step="0.5" min="20" max="60" placeholder="e.g. 42.0" onblur="this.value=this.value.replace(',','.')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:16px;font-family:'DM Sans',sans-serif;width:100%;outline:none;"></div>
-        <div style="display:flex;flex-direction:column;gap:4px;"><label class="info-label">Waist circumference (cm)</label><input id="bc-belly" type="number" step="0.5" min="50" max="160" placeholder="e.g. 94.0" onblur="this.value=this.value.replace(',','.')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:16px;font-family:'DM Sans',sans-serif;width:100%;outline:none;"></div>
-        <div id="bc-hip-row" style="display:none;flex-direction:column;gap:4px;"><label class="info-label">Hip circumference (cm)</label><input id="bc-hip" type="number" step="0.5" min="60" max="200" placeholder="e.g. 96.0" onblur="this.value=this.value.replace(',','.')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:16px;font-family:'DM Sans',sans-serif;width:100%;outline:none;"></div>
+        <div style="display:flex;flex-direction:column;gap:4px;"><label class="info-label">Neck circumference (cm)</label><input id="bc-neck" type="text" inputmode="decimal" placeholder="e.g. 42.0" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:16px;font-family:'DM Sans',sans-serif;width:100%;outline:none;"></div>
+        <div style="display:flex;flex-direction:column;gap:4px;"><label class="info-label">Waist circumference (cm)</label><input id="bc-belly" type="text" inputmode="decimal" placeholder="e.g. 94.0" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:16px;font-family:'DM Sans',sans-serif;width:100%;outline:none;"></div>
+        <div id="bc-hip-row" style="display:none;flex-direction:column;gap:4px;"><label class="info-label">Hip circumference (cm)</label><input id="bc-hip" type="text" inputmode="decimal" placeholder="e.g. 96.0" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:16px;font-family:'DM Sans',sans-serif;width:100%;outline:none;"></div>
         <button onclick="bcLog()" style="margin-top:4px;padding:12px;border-radius:8px;background:var(--accent);border:none;color:#000;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;text-transform:uppercase;letter-spacing:1.5px;cursor:pointer;width:100%;">Log Entry</button>
         <div id="bc-err" style="font-size:11px;color:var(--danger);min-height:14px;text-align:center;"></div>
       </div>
@@ -205,6 +205,7 @@
 <script>
 const VERSION='1.439';
 const IS_STAGING=(window.location.pathname||'').startsWith('/peptidetracker-staging');
+function parseDec(v){if(typeof v==='number')return v;return parseFloat(String(v==null?'':v).trim().replace(',','.'));}
 if(IS_STAGING){var _S='staging:';var _r=window.localStorage;var _PT=new Set(['google_token','google_email','session_token']);var _pk=function(k){return _PT.has(k)?k:_S+k;};var _p=new Proxy(_r,{get:function(t,n){if(n==='getItem')return function(k){return _r.getItem(_pk(k));};if(n==='setItem')return function(k,v){_r.setItem(_pk(k),v);};if(n==='removeItem')return function(k){_r.removeItem(_pk(k));};if(n==='clear')return function(){Object.keys(_r).filter(function(k){return k.startsWith(_S);}).forEach(function(k){_r.removeItem(k);});};if(n==='key')return function(i){return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);})[i]||null;};if(n==='length')return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).length;if(typeof t[n]==='function')return t[n].bind(t);return t[n];},set:function(t,n,v){t[n]=v;return true;},ownKeys:function(){return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);});},getOwnPropertyDescriptor:function(t,n){if(Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);}).includes(n))return{configurable:true,enumerable:true,value:_r.getItem(_S+n)};return undefined;},has:function(t,n){return _r.getItem(_pk(n))!==null;}});try{Object.defineProperty(window,'localStorage',{get:function(){return _p;},configurable:true});}catch(e){}}
 const AGENT_URL="https://claude-agent-api-aged-sun-3616.fly.dev";
 const HEIGHT_CM=182;
@@ -476,7 +477,7 @@ const STACK_RULES=[
 ];
 // Cross-stack pharmacological axis clusters — compounds sharing the same axis conflict across stacks
 const CROSS_STACK_CLUSTERS={'ghrh':'gh-axis','ghrp':'gh-axis','hgh':'gh-axis','glp1':'glp1-axis'};
-function _doseLabel(pepId,doseVal,unit){var d=parseFloat(doseVal);var du=(unit==='mcg'?'µg':unit);if(!pepId||!doseVal||isNaN(d)||d<=0)return(doseVal||'')+(du||'');if(unit==='IU'||unit==='mcg')return doseVal+(du||'');var rec=RECON_DB[pepId];if(!rec||rec.unit==='IU')return doseVal+(du||'');var vi=rec.defaultVi!==undefined?rec.defaultVi:0;var wi=rec.defaultWi!==undefined?rec.defaultWi:0;var conc=(rec.vials||[])[vi]/((rec.water||[])[wi]);if(!conc||isNaN(conc))return doseVal+(du||'');var extra='';if(unit==='mg'){var iu=Math.round(d/conc*100);if(iu>0)extra=' ('+iu+' IU)';}else if(unit==='ml'){var mg=Math.round(d*conc);var iu=Math.round(d*100);var p=[];if(mg>0)p.push(mg+'mg');if(iu>0)p.push(iu+' IU');if(p.length)extra=' ('+p.join(' · ')+')';}return doseVal+(du||'')+extra;}
+function _doseLabel(pepId,doseVal,unit){var d=parseDec(doseVal);var du=(unit==='mcg'?'µg':unit);if(!pepId||!doseVal||isNaN(d)||d<=0)return(doseVal||'')+(du||'');if(unit==='IU'||unit==='mcg')return doseVal+(du||'');var rec=RECON_DB[pepId];if(!rec||rec.unit==='IU')return doseVal+(du||'');var vi=rec.defaultVi!==undefined?rec.defaultVi:0;var wi=rec.defaultWi!==undefined?rec.defaultWi:0;var conc=(rec.vials||[])[vi]/((rec.water||[])[wi]);if(!conc||isNaN(conc))return doseVal+(du||'');var extra='';if(unit==='mg'){var iu=Math.round(d/conc*100);if(iu>0)extra=' ('+iu+' IU)';}else if(unit==='ml'){var mg=Math.round(d*conc);var iu=Math.round(d*100);var p=[];if(mg>0)p.push(mg+'mg');if(iu>0)p.push(iu+' IU');if(p.length)extra=' ('+p.join(' · ')+')';}return doseVal+(du||'')+extra;}
 // Returns {dose, unit, phaseIdx, totalPhases} for today based on dose_phases + cycle_start, or null if no ramp
 function _effectiveDose(p,cycleStart){if(!p||!p.dose_phases||!p.dose_phases.length||!cycleStart)return null;var sd=parseLocalDate(cycleStart);var wk=Math.floor((NOW-sd)/604800000);if(wk<0)wk=0;var phases=p.dose_phases.slice().sort(function(a,b){return a.w-b.w;});var cur=phases[0];var curIdx=0;for(var i=1;i<phases.length;i++){if(wk>=phases[i].w){cur=phases[i];curIdx=i;}}return cur?{dose:cur.d,unit:cur.u,phaseIdx:curIdx,totalPhases:phases.length}:null;}
 // ── User protocol state ──────────────────────────────────────────────────────
@@ -585,7 +586,7 @@ async function loadUserStacks(){
         if(parseLocalDate(p.end_date)<=today){delete p.end_date;}
       }
       // Glow dose was incorrectly defaulted to 0.2 ml before PR #13 fixed it to 0.09 ml (9 IU)
-      if((p.id==='glow'||p.id==='glow-1')&&(parseFloat(p.dose_am)===0.2||(parseFloat(p.dose_am)===0.09&&p.unit_am!=='ml'))){p.dose_am='0.09';p.unit_am='ml';}
+      if((p.id==='glow'||p.id==='glow-1')&&(parseDec(p.dose_am)===0.2||(parseDec(p.dose_am)===0.09&&p.unit_am!=='ml'))){p.dose_am='0.09';p.unit_am='ml';}
     });
   });
   updateWEEKLY();
@@ -966,7 +967,7 @@ function closeCartModal(){
   document.body.style.overflow='';
 }
 function _cartDoseMgPerInj(doseVal,doseUnit,reconDb){
-  var d=parseFloat(doseVal);if(!d||isNaN(d))return 0;
+  var d=parseDec(doseVal);if(!d||isNaN(d))return 0;
   if(!reconDb)return doseUnit==='mg'?d:doseUnit==='mcg'?d/1000:0;
   var vialUnit=reconDb.unit||'mg';
   if(vialUnit==='IU')return null; // HGH/HCG: keep in IU, handled separately
@@ -1006,8 +1007,8 @@ function _calcPeptideCartItem(p,weeks){
   var times=p.times||['AM'];
   var totalInUnit=0;
   if(isIuProduct){
-    var dAm=times.includes('AM')?parseFloat(p.dose_am||0):0;
-    var dPm=times.includes('PM')?parseFloat(p.dose_pm||0):0;
+    var dAm=times.includes('AM')?parseDec(p.dose_am||0):0;
+    var dPm=times.includes('PM')?parseDec(p.dose_pm||0):0;
     totalInUnit=(dAm+dPm)*days*weeks;
     if(!totalInUnit)return{name:p.name||cat.name,sku:cat.sku,noData:true};
     if(!pl)return{name:p.name||cat.name,sku:cat.sku,total:Math.round(totalInUnit*10)/10,unit:'IU',vials:null,boxes:null};
@@ -1033,7 +1034,7 @@ function _calcEnhancementCartItem(c,weeks){
   if(ec&&ec.id==='hgh'){
     var pepHgh=PEPTIDE_CAT.find(function(p){return p.id==='hgh';});
     var pl=pepHgh?PRICELIST[pepHgh.sku]:null;
-    var doseVal=parseFloat(c.dose)||0;
+    var doseVal=parseDec(c.dose)||0;
     var unit=c.unit||'IU/day';
     var totalIU=unit==='IU/day'?doseVal*7*weeks:doseVal*weeks;
     if(!totalIU)return null;
@@ -1042,7 +1043,7 @@ function _calcEnhancementCartItem(c,weeks){
     return{name:c.name,totalMg:Math.round(totalIU),totalUnit:'IU',units:vials,unitLabel:vials===1?'vial':'vials',packDesc:'('+pl.q+' IU/vial)',sku:pepHgh.sku};
   }
   if(!ec||!ec.pack)return null;
-  var doseVal=parseFloat(c.dose)||0;var unit=c.unit||'mg/week';
+  var doseVal=parseDec(c.dose)||0;var unit=c.unit||'mg/week';
   var totalMg=0;
   if(unit==='mg/week')totalMg=doseVal*weeks;
   else if(unit==='mg/day')totalMg=doseVal*7*weeks;
@@ -1150,7 +1151,7 @@ function deleteWeight(date){weights=weights.filter(function(w){return w.date!==d
 function saveBodyMeasurement(type){
   var inp=document.getElementById('bc-'+type+'-in');
   if(!inp)return;
-  var v=parseFloat(inp.value);
+  var v=parseDec(inp.value);
   if(isNaN(v)||v<=0)return;
   localStorage.setItem('user_'+type,v);
   pushPepSettingsToAgent({['user_'+type]:v});
@@ -1170,7 +1171,7 @@ function saveBodyMeasurement(type){
 function saveWeightFromInput(){
   var inp=document.getElementById('weight-input');
   if(!inp)return;
-  var w=parseFloat(inp.value);
+  var w=parseDec(inp.value);
   if(!isNaN(w)&&w>0){
     saveUserWeight(w);
     inp.style.borderColor='var(--accent3)';
@@ -1252,7 +1253,7 @@ function _obHtml2(){
     +'<div class="ob-field"><label>Height (cm)</label>'
     +'<input type="number" placeholder="180" min="100" max="250" value="'+(_obData.height||'')+'" oninput="_obData.height=this.value"></div>'
     +'<div class="ob-field"><label>Body Weight (kg)</label>'
-    +'<input type="number" placeholder="85" min="30" max="300" step="0.1" value="'+(_obData.weight||'')+'" oninput="_obData.weight=this.value"></div>'
+    +'<input type="text" inputmode="decimal" placeholder="85" value="'+(_obData.weight||'')+'" oninput="_obData.weight=this.value"></div>'
     +'<div style="font-size:12px;color:var(--muted);margin-top:-6px;line-height:1.5">All fields optional — skip if you prefer.</div>';
 }
 function obSelectTheme(id){_obData.theme=id;applyTheme(id);obRender();}
@@ -1266,7 +1267,7 @@ function obNext(){if(_obStep===2){obFinish();return;}_obStep++;obRender();}
 function obBack(){if(_obStep===0)return;_obStep--;obRender();}
 function obSkip(){obFinish();}
 function obFinish(){
-  var profile={sex:_obData.sex,height:_obData.height?parseFloat(_obData.height):null,weight:_obData.weight?parseFloat(_obData.weight):null,onboarded:true};
+  var profile={sex:_obData.sex,height:_obData.height?parseDec(_obData.height):null,weight:_obData.weight?parseDec(_obData.weight):null,onboarded:true};
   setData('pep-profile',profile);
   if(_obData.sex)setBioSex(_obData.sex);
   if(profile.height){localStorage.setItem('user_height',String(profile.height));var hi=document.getElementById('bc-height-in');if(hi)hi.value=profile.height;}
@@ -1302,7 +1303,7 @@ async function pushPepSettingsToAgent(kv){try{const r=await fetch(AGENT_URL+'/us
 function wipeLocalCache(){if(!confirm('Clear all locally cached data? The app will reload and re-fetch everything from the backend. You will stay signed in.'))return;var _t=window.localStorage.getItem('google_token');var _e=window.localStorage.getItem('google_email');var _s=window.localStorage.getItem('session_token');window.localStorage.clear();if(_t)window.localStorage.setItem('google_token',_t);if(_e)window.localStorage.setItem('google_email',_e);if(_s)window.localStorage.setItem('session_token',_s);window.location.reload();}
 async function syncPepSettingsFromAgent(){try{const r=await fetch(AGENT_URL+'/user-settings',{headers:authHeaders()});if(!r.ok){_logHttp('syncPepSettings',r.status,'/user-settings');return;}const s=await r.json();if(!s)return;if(s['proto-tab-vis']){_tabVis=Object.assign({},TAB_DEFAULTS,s['proto-tab-vis']);setData('proto-tab-vis',s['proto-tab-vis']);applyTabVis();buildTabsSettingsCard();}if(s['user_sex'])setBioSex(s['user_sex']);if(s['user_height']){localStorage.setItem('user_height',String(s['user_height']));const hi=document.getElementById('bc-height-in');if(hi)hi.value=s['user_height'];}if(s['user_weight']){localStorage.setItem('user_weight',String(s['user_weight']));const wi=document.getElementById('bc-weight-in');if(wi)wi.value=s['user_weight'];}if(s['user_age']){localStorage.setItem('user_age',String(s['user_age']));const ai=document.getElementById('bc-age-in');if(ai)ai.value=s['user_age'];}if(s['proto-blood-hidden'])setData('proto-blood-hidden',s['proto-blood-hidden']);if(s['pep-theme'])applyTheme(s['pep-theme']);if(s['macros-train-time'])localStorage.setItem('macros-train-time',s['macros-train-time']);if(s['macros-train-dur'])localStorage.setItem('macros-train-dur',String(s['macros-train-dur']));}catch(e){_logErr('syncPepSettings',e);}}
 function applyTabVis(){Object.keys(TAB_LABELS).forEach(id=>{const btn=document.getElementById('tab-btn-'+id);if(btn)btn.style.display=_tabVis[id]?'':'none';});}
-function _userProfile(){return{sex:localStorage.getItem('user_sex')||'male',age:parseInt(localStorage.getItem('user_age')||'0')||0,weight_kg:parseFloat(localStorage.getItem('user_weight')||'0')||0};}
+function _userProfile(){return{sex:localStorage.getItem('user_sex')||'male',age:parseInt(localStorage.getItem('user_age')||'0')||0,weight_kg:parseDec(localStorage.getItem('user_weight')||'0')||0};}
 // ── IGF-1 → GH-axis dose direction ───────────────────────────────────────────
 // GH-axis peptides/hGH are titrated to IGF-1 in the upper-normal range for age.
 // There is NO validated IGF-1→mg dose-response, so this gives a DIRECTION and a
@@ -1331,7 +1332,7 @@ function _igf1RefRange(age){
   return {lo:60,hi:190};
 }
 // Normalise an IGF-1 reading to ng/mL (1 nmol/L ≈ 7.649 ng/mL).
-function _igf1ToNgml(value,unit){var v=parseFloat(value);if(!(v>0))return null;return unit==='nmol/L'?v*7.649:v;}
+function _igf1ToNgml(value,unit){var v=parseDec(value);if(!(v>0))return null;return unit==='nmol/L'?v*7.649:v;}
 // Directional GH-axis recommendation from IGF-1. refLo/refHi override the table.
 function _igf1Recommendation(value,unit,age,refLo,refHi){
   var ngml=_igf1ToNgml(value,unit);if(ngml==null)return null;

@@ -5,16 +5,16 @@ function _parseHalfLifeDays(str) {
   var s = str.toLowerCase();
   // "X–Y days" or "X-Y days" → average of range
   var m = s.match(/~?(\d+(?:\.\d+)?)[–\-](\d+(?:\.\d+)?)\s*days?/);
-  if (m) return (parseFloat(m[1]) + parseFloat(m[2])) / 2;
+  if (m) return (parseDec(m[1]) + parseDec(m[2])) / 2;
   // "~X.X days" or "X days"
   m = s.match(/~?(\d+(?:\.\d+)?)\s*days?/);
-  if (m) return parseFloat(m[1]);
+  if (m) return parseDec(m[1]);
   // "~X hours" or "X h"
   m = s.match(/~?(\d+(?:\.\d+)?)\s*h(?:ours?)?(?:\s|$)/);
-  if (m) return parseFloat(m[1]) / 24;
+  if (m) return parseDec(m[1]) / 24;
   // "~X min"
   m = s.match(/~?(\d+(?:\.\d+)?)\s*min/);
-  if (m) return parseFloat(m[1]) / 60 / 24;
+  if (m) return parseDec(m[1]) / 60 / 24;
   return null;
 }
 
@@ -138,7 +138,7 @@ function _blTcalcTestosterone() {
       if (e.active === false) return;
       var cid = e.compound_id || e.compound_name || 'testosterone';
       var c = byComp[cid] || (byComp[cid] = { id:cid, name:e.compound_name||cid, unit:e.unit||'mg', doses:[] });
-      var dose = parseFloat(e.dose) || 0;
+      var dose = parseDec(e.dose) || 0;
       var d = (typeof parseLocalDate === 'function') ? parseLocalDate(e.date) : new Date(e.date);
       if (d && dose > 0) c.doses.push({ date:d, dose:dose });
     });
@@ -252,14 +252,14 @@ function _blTestosteroneLog(){
     }
     if(st.trt && st.trt.enabled){
       (st.trt.compounds||[]).forEach(function(c){
-        var doseNum=parseFloat(c.dose)||0; if(doseNum) pushSched(c, doseNum);
+        var doseNum=parseDec(c.dose)||0; if(doseNum) pushSched(c, doseNum);
       });
     }
     if(st.enhanced && st.enhanced.enabled){
       (st.enhanced.compounds||[]).forEach(function(c){
         if((c.name||'').toLowerCase().indexOf('testosterone')===-1) return;
         var ec = (typeof ENHANCEMENT_COMPOUNDS!=='undefined') ? ENHANCEMENT_COMPOUNDS.find(function(x){return x.id===c.id;}) : null;
-        var doseNum=parseFloat(c.dose)||0; if(!doseNum) return;
+        var doseNum=parseDec(c.dose)||0; if(!doseNum) return;
         var unit=c.unit||(ec&&ec.unit)||'mg/week';
         var injDays=_pkInjectionDays(c, cycleLen, startDow);
         var injsPerWeek=injDays.filter(function(d){return d<7;}).length||1;
@@ -291,7 +291,7 @@ function _blBuildLines(){
       var cat = (typeof PEPTIDE_CAT!=='undefined') ? PEPTIDE_CAT.find(function(x){ return x.id===p.id; }) : null;
       var hl = _parseHalfLifeDays(cat ? cat.halfLife : (p.halfLife||''));
       if(!hl) return;
-      var dose = (parseFloat(p.dose_am)||0) + (parseFloat(p.dose_pm)||0);
+      var dose = (parseDec(p.dose_am)||0) + (parseDec(p.dose_pm)||0);
       if(!dose) return;
       var injDays = _pkInjectionDays(p, cycleLen, startDow);
       if(!injDays.length) return;
@@ -311,7 +311,7 @@ function _blBuildLines(){
         var ec = ENHANCEMENT_COMPOUNDS.find(function(x){ return x.id===c.id; });
         if(!ec || !ec.cadence) return;
         var hl = ec.id==='hgh' ? 1 : _parseHalfLifeDays(ec.cadence.halfLife); if(!hl) return;
-        var doseNum = parseFloat(c.dose)||0; if(!doseNum) return;
+        var doseNum = parseDec(c.dose)||0; if(!doseNum) return;
         var unit = c.unit || ec.unit || 'mg/week';
         var injDays = _pkInjectionDays(c, cycleLen, startDow); if(!injDays.length) return;
         var injsPerWeek = injDays.filter(function(d){ return d<7; }).length || 1;
@@ -343,7 +343,7 @@ function _blBuildLines(){
     // so the mg-equivalent magnitude is correct rather than treating IU as mg.
     var _fmt = (typeof _suppFmtDose==='function') ? _suppFmtDose(s.supp_id, s.dose) : s.dose;
     var _sp  = (typeof _suppParseDose==='function') ? _suppParseDose(_fmt) : null;
-    var dose = _sp ? _sp.amount : (parseFloat(s.dose) || 1);
+    var dose = _sp ? _sp.amount : (parseDec(s.dose) || 1);
     var sUnit = _sp ? _sp.unit : 'mg';
     var sStart = s.start_date ? parseLocalDate(s.start_date) : firstDate;
     var offset = Math.round((sStart.getTime() - firstDate.getTime())/86400000);
@@ -353,7 +353,7 @@ function _blBuildLines(){
     if(!injDays.length) return;
     // Average daily dose in IU (for biomarker models keyed in IU, e.g. Vitamin D →
     // 25-OH-D). Prefer an explicit "… IU" dose; else convert µg (D3: 1 µg = 40 IU).
-    var _perDose = /IU/i.test(String(s.dose||'')) ? (parseFloat(s.dose)||0)
+    var _perDose = /IU/i.test(String(s.dose||'')) ? (parseDec(s.dose)||0)
                  : (s.supp_id==='vitd3' && sUnit==='µg' ? dose*40 : 0);
     var _freqF = s.freq==='weekly' ? 1/7 : (s.freq==='eod' ? 1/2 : 1);
     lines.push({ id:'supp_'+(s.id||s.supp_id), pkId:s.supp_id, name:s.name||s.supp_id, color:_BL_SUPP_COLORS[i%_BL_SUPP_COLORS.length],

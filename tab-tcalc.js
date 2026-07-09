@@ -57,7 +57,7 @@ function _tcFitBeta(entries) {
   if (!entries || !entries.length) return null;
   var pts = [];
   entries.forEach(function(e) {
-    var tt = parseFloat(e && e.total_t), sh = parseFloat(e && e.shbg);
+    var tt = parseDec(e && e.total_t), sh = parseDec(e && e.shbg);
     if (tt > 0 && sh > 0) pts.push({ x: Math.log(tt), y: Math.log(sh) });
   });
   if (pts.length < 2) return null;
@@ -408,11 +408,11 @@ function _tcOpenInventory() {
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
           '<div>' +
             '<div style="font-size:9px;color:#444;letter-spacing:1.2px;font-weight:700;margin-bottom:5px">STOCK (' + unit + ')</div>' +
-            '<input type="number" min="0" max="99999" step="' + (isHCG ? '1000' : '100') + '" value="' + _esc(inv.totalMg || '') + '" placeholder="' + (isHCG ? '5000' : '1000') + '" onchange="_tcInvSetField(\'' + id + '\',\'totalMg\',this.value)" style="' + iSty + '">' +
+            '<input type="text" inputmode="decimal" value="' + _esc(inv.totalMg || '') + '" placeholder="' + (isHCG ? '5000' : '1000') + '" onchange="_tcInvSetField(\'' + id + '\',\'totalMg\',this.value)" style="' + iSty + '">' +
           '</div>' +
           '<div>' +
             '<div style="font-size:9px;color:#444;letter-spacing:1.2px;font-weight:700;margin-bottom:5px">TOTAL PAID</div>' +
-            '<input type="number" min="0" step="0.01" value="' + _esc(inv.costTotal || '') + '" placeholder="e.g. 45" onchange="_tcInvSetField(\'' + id + '\',\'costTotal\',this.value)" style="' + iSty + '">' +
+            '<input type="text" inputmode="decimal" value="' + _esc(inv.costTotal || '') + '" placeholder="e.g. 45" onchange="_tcInvSetField(\'' + id + '\',\'costTotal\',this.value)" style="' + iSty + '">' +
           '</div>' +
         '</div>' +
         (cd.usageNote ? '<div style="font-size:10px;color:#555;margin-top:10px;line-height:1.4">' + _esc(cd.usageNote) + '</div>' : '') +
@@ -547,7 +547,7 @@ function _tcOpenManualLog() {
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
           '<div style="min-width:0"><div style="font-size:9px;color:#444;letter-spacing:1.2px;font-weight:700;margin-bottom:5px">DOSE (mg)</div>' +
-          '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';width:100%"></div>' +
+          '<input type="text" inputmode="decimal" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';width:100%"></div>' +
           '<div style="min-width:0"><div style="font-size:9px;color:#444;letter-spacing:1.2px;font-weight:700;margin-bottom:5px">DATE</div>' +
           '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';width:100%"></div>' +
         '</div>' +
@@ -560,7 +560,7 @@ function _tcOpenManualLog() {
 
   html += '<button onclick="_tcAddManualEntry()" style="width:100%;background:#0d0d0d;border:1px dashed #2a2a2a;border-radius:10px;color:#555;font-size:13px;font-weight:700;padding:13px;cursor:pointer;font-family:inherit;letter-spacing:0.5px;margin-bottom:20px">+ ADD INJECTION</button>';
 
-  var validLog = log.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; });
+  var validLog = log.filter(function(e){ return e.date && e.doseMg && parseDec(e.doseMg) > 0; });
   if (validLog.length > 0) {
     html += '<div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:14px;padding:14px">' +
       '<div style="font-size:10px;color:#444;letter-spacing:1.8px;font-weight:700;margin-bottom:10px">PLASMA CURVE</div>' +
@@ -624,7 +624,7 @@ function _tcShowAddSheet() {
     '<select id="tc-as-comp" style="'+iSty+'">'+compOpts+'</select></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
     '<div style="min-width:0"><label style="'+lSty+'">DOSE (mg)</label>' +
-    '<input id="tc-as-dose" type="number" min="0" max="9999" step="1" placeholder="e.g. 100" style="'+iSty+'"></div>' +
+    '<input id="tc-as-dose" type="text" inputmode="decimal" placeholder="e.g. 100" style="'+iSty+'"></div>' +
     '<div style="min-width:0"><label style="'+lSty+'">DATE</label>' +
     '<input id="tc-as-date" type="date" value="'+_esc(defaultDate)+'" style="'+iSty+'"></div>' +
     '</div>' +
@@ -670,7 +670,7 @@ function _tcConfirmAddSheet() {
   var countEl=document.getElementById('tc-as-count');
   var intervalEl=document.getElementById('tc-as-interval');
   var compId=compEl?compEl.value:'';
-  var doseMg=doseEl?parseFloat(doseEl.value):0;
+  var doseMg=doseEl?parseDec(doseEl.value):0;
   var startDate=dateEl?dateEl.value:'';
   var isSeries=_tcAddSheet&&_tcAddSheet.isSeries;
   if(!compId||!startDate||!(doseMg>0)){return;}
@@ -771,7 +771,7 @@ function _tcOpenEditSeriesSheet(sid) {
     '<select id="tc-es-comp" style="'+iSty+'">'+compOpts+'</select></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
     '<div style="min-width:0"><label style="'+lSty+'">DOSE (mg)</label>' +
-    '<input id="tc-es-dose" type="number" min="0" max="9999" step="1" placeholder="e.g. 100" value="'+_esc(String(doseMg))+'" style="'+iSty+'"></div>' +
+    '<input id="tc-es-dose" type="text" inputmode="decimal" placeholder="e.g. 100" value="'+_esc(String(doseMg))+'" style="'+iSty+'"></div>' +
     '<div style="min-width:0"><label style="'+lSty+'">START DATE</label>' +
     '<input id="tc-es-date" type="date" value="'+_esc(startDate)+'" style="'+iSty+'"></div>' +
     '</div>' +
@@ -822,7 +822,7 @@ function _tcShowSeriesDetail(sid) {
 function _tcSetChartZoom(z) {
   _tcChartZoom = z;
   _tcChartPanOffset = 0;
-  var validLog = (_tcp && _tcp.manualLog) ? _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; }) : [];
+  var validLog = (_tcp && _tcp.manualLog) ? _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseDec(e.doseMg) > 0; }) : [];
   _tcDrawManualChart('tc-main-chart', validLog, z);
   _tcAttachPanListeners(document.getElementById('tc-main-chart'));
   ['today','week','month','whole'].forEach(function(zz) {
@@ -862,7 +862,7 @@ function _tcAttachPanListeners(canvas) {
     if (e.preventDefault) e.preventDefault();
     var s = canvas._tcPanState || state;
     _tcChartPanOffset = _pOff - dx * ((s.xEnd - s.xStart) / (s.cW || 250));
-    var vl = (_tcp && _tcp.manualLog) ? _tcp.manualLog.filter(function(e2){ return e2.date && e2.doseMg && parseFloat(e2.doseMg) > 0; }) : [];
+    var vl = (_tcp && _tcp.manualLog) ? _tcp.manualLog.filter(function(e2){ return e2.date && e2.doseMg && parseDec(e2.doseMg) > 0; }) : [];
     _tcDrawManualChart(canvas.id, vl, _tcChartZoom);
   };
   canvas._tcTouchEnd = function() { _pDX = null; };
@@ -886,7 +886,7 @@ function _tcSaveEditSeries() {
   var countEl=document.getElementById('tc-es-count');
   var intervalEl=document.getElementById('tc-es-interval');
   var compId=compEl?compEl.value:'';
-  var doseMg=doseEl?parseFloat(doseEl.value):0;
+  var doseMg=doseEl?parseDec(doseEl.value):0;
   var startDate=dateEl?dateEl.value:'';
   var count=countEl?Math.max(2,parseInt(countEl.value)||10):10;
   var intervalDays=intervalEl?Math.max(1,parseInt(intervalEl.value)||2):2;
@@ -929,7 +929,7 @@ function _tcSetManualField(idx, field, val) {
     buildTCalc();
     _tcSyncLogToBackend();
   } else {
-    var validLog = _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; });
+    var validLog = _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseDec(e.doseMg) > 0; });
     if (validLog.length > 0 && document.getElementById('tc-main-chart')) {
       _tcDrawManualChart('tc-main-chart', validLog, _tcChartZoom);
     } else {
@@ -993,15 +993,15 @@ function _tcBwOpenAddSheet() {
     '<input id="tc-bw-date" type="date" value="'+_esc(todayStr)+'" max="'+todayStr+'" style="'+iSty+'"></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
     '<div><label style="'+lSty+'">TOTAL T (nmol/L)</label>' +
-    '<input id="tc-bw-tt" type="number" min="0" max="200" step="0.1" placeholder="e.g. 16.2" value="'+_esc(defTT)+'" style="'+iSty+'"></div>' +
+    '<input id="tc-bw-tt" type="text" inputmode="decimal" placeholder="e.g. 16.2" value="'+_esc(defTT)+'" style="'+iSty+'"></div>' +
     '<div><label style="'+lSty+'">SHBG (nmol/L)</label>' +
-    '<input id="tc-bw-shbg" type="number" min="0" max="300" step="1" placeholder="e.g. 45" value="'+_esc(defSHBG)+'" style="'+iSty+'"></div>' +
+    '<input id="tc-bw-shbg" type="text" inputmode="decimal" placeholder="e.g. 45" value="'+_esc(defSHBG)+'" style="'+iSty+'"></div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">' +
     '<div><label style="'+lSty+'">FREE T (pmol/L)</label>' +
-    '<input id="tc-bw-ft" type="number" min="0" max="10000" step="1" placeholder="e.g. 217" value="'+_esc(defFT)+'" style="'+iSty+'"></div>' +
+    '<input id="tc-bw-ft" type="text" inputmode="decimal" placeholder="e.g. 217" value="'+_esc(defFT)+'" style="'+iSty+'"></div>' +
     '<div><label style="'+lSty+'">DOSE AT BW (mg/wk)</label>' +
-    '<input id="tc-bw-dose" type="number" min="0" max="2000" step="10" placeholder="e.g. 150" value="'+_esc(defDose)+'" style="'+iSty+'"></div>' +
+    '<input id="tc-bw-dose" type="text" inputmode="decimal" placeholder="e.g. 150" value="'+_esc(defDose)+'" style="'+iSty+'"></div>' +
     '</div>' +
     '<div id="tc-bw-extras-container" style="margin-bottom:8px"></div>' +
     '<button onclick="_tcBwAddExtraRow()" style="width:100%;background:none;border:1px dashed var(--border);border-radius:8px;color:var(--muted2);font-size:12px;font-weight:700;letter-spacing:0.5px;cursor:pointer;padding:10px;font-family:inherit;margin-bottom:14px">+ ADD TEST</button>' +
@@ -1052,14 +1052,14 @@ function _tcBwRenderExtras() {
           '<button onclick="_tcBwRemoveExtra('+i+')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:16px;cursor:pointer;padding:6px 10px;line-height:1;flex-shrink:0">×</button>' +
         '</div>' +
         '<div style="display:flex;gap:6px;align-items:center">' +
-          '<input placeholder="Value" type="number" value="'+_esc(row.value||'')+'" oninput="_tcBwAddExtras['+i+'].value=this.value" style="'+iSty+'">' +
+          '<input placeholder="Value" type="text" inputmode="decimal" value="'+_esc(row.value||'')+'" oninput="_tcBwAddExtras['+i+'].value=this.value" style="'+iSty+'">' +
           '<select onchange="_tcBwAddExtras['+i+'].unit=this.value" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px;font-family:inherit;outline:none;box-sizing:border-box;flex-shrink:0"'+(curTest?'':' disabled')+'>'+unitOpts+'</select>' +
         '</div>' +
         (row.name==='IGF-1'
           ? '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">' +
-              '<input placeholder="Lab ref low" type="number" value="'+_esc(row.ref_lo||'')+'" oninput="_tcBwAddExtras['+i+'].ref_lo=this.value" style="'+iSty+'">' +
+              '<input placeholder="Lab ref low" type="text" inputmode="decimal" value="'+_esc(row.ref_lo||'')+'" oninput="_tcBwAddExtras['+i+'].ref_lo=this.value" style="'+iSty+'">' +
               '<span style="color:var(--muted2);font-size:12px;flex-shrink:0">–</span>' +
-              '<input placeholder="Lab ref high" type="number" value="'+_esc(row.ref_hi||'')+'" oninput="_tcBwAddExtras['+i+'].ref_hi=this.value" style="'+iSty+'">' +
+              '<input placeholder="Lab ref high" type="text" inputmode="decimal" value="'+_esc(row.ref_hi||'')+'" oninput="_tcBwAddExtras['+i+'].ref_hi=this.value" style="'+iSty+'">' +
             '</div>' +
             '<div style="font-size:10px;color:var(--muted2);margin-top:4px">Optional: your lab’s IGF-1 reference range (same unit as above) for a personalised GH-axis target.</div>'
           : '') +
@@ -1084,10 +1084,10 @@ async function _tcBwConfirmAdd() {
   if (date > new Date().toISOString().slice(0, 10)) { alert('Blood test date cannot be in the future.'); return; }
   var entry = {
     date:       date,
-    total_t:    ttEl   && ttEl.value   ? parseFloat(ttEl.value)   : null,
-    shbg:       shbgEl && shbgEl.value ? parseFloat(shbgEl.value) : null,
-    free_t:     ftEl   && ftEl.value   ? parseFloat(ftEl.value)   : null,
-    dose_at_bw: doseEl && doseEl.value ? parseFloat(doseEl.value) : null,
+    total_t:    ttEl   && ttEl.value   ? parseDec(ttEl.value)   : null,
+    shbg:       shbgEl && shbgEl.value ? parseDec(shbgEl.value) : null,
+    free_t:     ftEl   && ftEl.value   ? parseDec(ftEl.value)   : null,
+    dose_at_bw: doseEl && doseEl.value ? parseDec(doseEl.value) : null,
     extra:      _tcBwAddExtras.filter(function(r){ return r.name; })
   };
   var h = (typeof authHeaders==='function') ? authHeaders() : null;
@@ -1158,15 +1158,15 @@ function _tcFreeTSeries(sorted, hooks) {
     var ke    = Math.LN2 / hl;
     var ka    = _tcKa(hl);
     var injectDay = Math.round((new Date(e.date) - firstDate) / 86400000);
-    var absorbed  = parseFloat(e.doseMg) * bioav;
+    var absorbed  = parseDec(e.doseMg) * bioav;
     for (var t = injectDay; t <= totalDays; t++) {
       total[t] += _tcPkConc(absorbed, ka, ke, t - injectDay);
     }
   });
 
   // Calibrated pmol/L scale using settled peak/trough over the log window (not washout tail)
-  var _mftNum  = parseFloat(_tcp.measuredFT)      || _tcDefaultFT(parseInt(_tcp.birthYear) || 0);
-  var _curDose = parseFloat(_tcp.currentDoseMgWk) || 0;
+  var _mftNum  = parseDec(_tcp.measuredFT)      || _tcDefaultFT(parseInt(_tcp.birthYear) || 0);
+  var _curDose = parseDec(_tcp.currentDoseMgWk) || 0;
   var _logDays = totalDays - washoutDays - 1;
   var _midLog  = Math.max(0, Math.floor(_logDays / 2));
   var _logPeak = 0, _logTrough = Infinity;
@@ -1179,7 +1179,7 @@ function _tcFreeTSeries(sorted, hooks) {
   var _logMean = (_logPeak + _logTrough) / 2 || _logPeak;
   // Always compute absorbed totals — needed for both calFT and warm-start
   var _totalAbsMg = 0;
-  sorted.forEach(function(e) { _totalAbsMg += parseFloat(e.doseMg) * ((_tcCompInfo(e.compId).bioavailability) || 1); });
+  sorted.forEach(function(e) { _totalAbsMg += parseDec(e.doseMg) * ((_tcCompInfo(e.compId).bioavailability) || 1); });
   var _effMgWk = _logDays > 0 ? _totalAbsMg / _logDays * 7 : 0;
 
   var calFT = null;
@@ -1245,7 +1245,7 @@ function _tcFreeTSeries(sorted, hooks) {
       var _wsGroups = {}, _wsTotalAbsMg = 0;
       _wsSorted.forEach(function(e) {
         var _wsBioav = (_tcCompInfo(e.compId).bioavailability || 1);
-        var _wsAbs   = parseFloat(e.doseMg) * _wsBioav;
+        var _wsAbs   = parseDec(e.doseMg) * _wsBioav;
         _wsTotalAbsMg += _wsAbs;
         _wsGroups[e.compId] = (_wsGroups[e.compId] || 0) + _wsAbs;
       });
@@ -1316,7 +1316,7 @@ function _tcFreeTSeries(sorted, hooks) {
             var _bwcd = _tcCompInfo(e.compId);
             var _bwke = Math.LN2 / (_bwcd.halfLifeDays || 1);
             var _bwka = _tcKa(_bwcd.halfLifeDays || 1);
-            var _bwabs = parseFloat(e.doseMg) * (_bwcd.bioavailability || 1);
+            var _bwabs = parseDec(e.doseMg) * (_bwcd.bioavailability || 1);
             for (var _bwt = 0; _bwt <= totalDays; _bwt++) {
               _bwDayArr[_bwt] += _tcPkConc(_bwabs, _bwka, _bwke, _bwt);
             }
@@ -1367,8 +1367,8 @@ function _tcFreeTSeries(sorted, hooks) {
   var calFT_arr = null, _calFTlo = null, _calFThi = null;
   var _ghAnnot  = '';
   var _betaAnnot = '';
-  var _ttNum  = parseFloat(_tcp.totalT) || 0;
-  var _shbgBw = parseFloat(_tcp.shbg)   || 0;
+  var _ttNum  = parseDec(_tcp.totalT) || 0;
+  var _shbgBw = parseDec(_tcp.shbg)   || 0;
   if (calFT && _ttNum > 0 && _shbgBw > 0) {
     var _vermBw = _tcVermeulenFT(_ttNum, _shbgBw);
     if (_vermBw) {
@@ -1668,11 +1668,11 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
 function _tcOptimize() {
   var result = {plan: null, suggestions: [], warnings: [], calibration: {}};
 
-  var ttNum   = parseFloat(_tcp.totalT)          || 0;
-  var shbgNum = parseFloat(_tcp.shbg)            || 0;
-  var mftNum  = parseFloat(_tcp.measuredFT)      || 0;
-  var curDose = parseFloat(_tcp.currentDoseMgWk) || 0;
-  var tgtFT   = parseFloat(_tcp.targetFT)        || 0;
+  var ttNum   = parseDec(_tcp.totalT)          || 0;
+  var shbgNum = parseDec(_tcp.shbg)            || 0;
+  var mftNum  = parseDec(_tcp.measuredFT)      || 0;
+  var curDose = parseDec(_tcp.currentDoseMgWk) || 0;
+  var tgtFT   = parseDec(_tcp.targetFT)        || 0;
 
   var vermFT  = (ttNum > 0 && shbgNum > 0) ? _tcVermeulenFT(ttNum, shbgNum) : null;
   var ftFrac  = null;
@@ -1736,8 +1736,8 @@ function _tcOptimize() {
 
   autoMgPerWeek = Math.max(50, Math.min(600, autoMgPerWeek));
 
-  var ovDose     = parseFloat(_tcp.overrideDoseMgWk)    || 0;
-  var ovInterval = parseFloat(_tcp.overrideIntervalDays) || 0;
+  var ovDose     = parseDec(_tcp.overrideDoseMgWk)    || 0;
+  var ovInterval = parseDec(_tcp.overrideIntervalDays) || 0;
   var isManual   = ovDose > 0 || ovInterval > 0;
   if (isManual) doseSource = 'manual';
   var reqMgPerWeek = ovDose > 0 ? ovDose : autoMgPerWeek;
@@ -1762,13 +1762,13 @@ function _tcOptimize() {
     var cd       = _tcCompInfo(inv.compId);
     var bioav    = cd.bioavailability || 1;
     var frac     = totalPkWeight > 0 ? pkWeights[idx] / totalPkWeight : 1 / testInv.length;
-    var stock    = parseFloat(inv.totalMg) || 0;
+    var stock    = parseDec(inv.totalMg) || 0;
     var compMgWkBioav  = reqMgPerWeek * frac;        // bioavailable mg/week for this compound
     var compMgWkApplied = compMgWkBioav / bioav;     // applied mg/week (what the user actually uses)
 
     var optInterval  = 0.585 * cd.halfLifeDays;
     var compInterval = ovInterval > 0         ? ovInterval
-                     : _tcp.preferredFreqDays !== 'auto' ? _tcSnapInterval(parseFloat(_tcp.preferredFreqDays) || optInterval)
+                     : _tcp.preferredFreqDays !== 'auto' ? _tcSnapInterval(parseDec(_tcp.preferredFreqDays) || optInterval)
                      : _tcSnapInterval(optInterval);
 
     // Cap applied dose per application when the compound has a physical maximum
@@ -1803,7 +1803,7 @@ function _tcOptimize() {
     }
 
     // Cost per mg from user-entered purchase price (cost is per applied mg)
-    var costTotal  = parseFloat(inv.costTotal) || 0;
+    var costTotal  = parseDec(inv.costTotal) || 0;
     var costPerMg  = (costTotal > 0 && stock > 0) ? costTotal / stock : null;
     var costPerWeek = costPerMg !== null ? compMgWkApplied * costPerMg : null;
 
@@ -2088,7 +2088,7 @@ async function _tcSyncLogToBackend() {
   // Group future log entries (>= today) by compId
   var byComp={};
   (_tcp.manualLog||[]).forEach(function(e){
-    if(!e.compId||!e.date||!(parseFloat(e.doseMg)>0))return;
+    if(!e.compId||!e.date||!(parseDec(e.doseMg)>0))return;
     if(e.date<todayStr)return;
     if(!byComp[e.compId])byComp[e.compId]=[];
     byComp[e.compId].push(e);
@@ -2109,7 +2109,7 @@ async function _tcSyncLogToBackend() {
         cycle_id:'tcalc',compound_id:cid,
         compound_name:cd.name||cid,tier:'trt',
         date:e.date,
-        dose:String(Math.round(parseFloat(e.doseMg)*10)/10),
+        dose:String(Math.round(parseDec(e.doseMg)*10)/10),
         unit:'mg',dot:cd.dot||'#e8a020',
         source:'tcalc'
       };
@@ -2134,7 +2134,7 @@ async function _tcPushLogToSchedule() {
   var _now=new Date();_now.setHours(0,0,0,0);
   var todayStr=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0')+'-'+String(_now.getDate()).padStart(2,'0');
   await _tcSyncLogToBackend();
-  var futureCount=log.filter(function(e){return e.date>=todayStr&&parseFloat(e.doseMg)>0;}).length;
+  var futureCount=log.filter(function(e){return e.date>=todayStr&&parseDec(e.doseMg)>0;}).length;
   alert('Pushed '+futureCount+' future injection'+(futureCount===1?'':'s')+' to schedule.');
 }
 
@@ -2160,8 +2160,8 @@ function buildTCalc() {
 
   var log      = _tcp.manualLog || [];
   var comps    = _tcManualComps();
-  var validLog = log.filter(function(e){ return e.date && e.doseMg && parseFloat(e.doseMg) > 0; });
-  var mftNum   = parseFloat(_tcp.measuredFT) || 0;
+  var validLog = log.filter(function(e){ return e.date && e.doseMg && parseDec(e.doseMg) > 0; });
+  var mftNum   = parseDec(_tcp.measuredFT) || 0;
 
   var html = '';
 
@@ -2282,7 +2282,7 @@ function buildTCalc() {
         html += '</div>';
         html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
         html += '<div style="min-width:0;overflow:hidden"><div style="' + lSty + '">DOSE (mg)</div>';
-        html += '<input type="number" min="0" max="9999" step="1" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
+        html += '<input type="text" inputmode="decimal" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
         html += '<div style="min-width:0;overflow:hidden"><div style="' + lSty + '">DATE</div>';
         html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
         html += '</div></div>';
@@ -2370,12 +2370,12 @@ function buildTCalc() {
     html += '</div>';
 
     // Calculated outputs from latest entry
-    var _bwTgt = parseFloat(_tcp.targetFT) || 0;
+    var _bwTgt = parseDec(_tcp.targetFT) || 0;
     if (_latestBw) {
-      var _bwTT   = parseFloat(_latestBw.total_t)   || 0;
-      var _bwSHBG = parseFloat(_latestBw.shbg)       || 0;
-      var _bwMFT  = parseFloat(_latestBw.free_t)     || 0;
-      var _bwDose = parseFloat(_latestBw.dose_at_bw) || 0;
+      var _bwTT   = parseDec(_latestBw.total_t)   || 0;
+      var _bwSHBG = parseDec(_latestBw.shbg)       || 0;
+      var _bwMFT  = parseDec(_latestBw.free_t)     || 0;
+      var _bwDose = parseDec(_latestBw.dose_at_bw) || 0;
       var _bwVerm = (_bwTT > 0 && _bwSHBG > 0) ? _tcVermeulenFT(_bwTT, _bwSHBG) : null;
       var _bwFrac = _bwMFT > 0 && _bwTT > 0 ? _bwMFT / (_bwTT * 1000)
                   : (_bwVerm !== null && _bwTT > 0 ? _bwVerm / (_bwTT * 1000) : null);
