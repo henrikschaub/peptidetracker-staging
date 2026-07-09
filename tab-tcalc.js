@@ -1221,6 +1221,9 @@ function _tcFreeTSeries(sorted, hooks) {
 
   // Calibrated pmol/L scale using settled peak/trough over the log window (not washout tail)
   var _mftNum  = parseDec(_tcp.measuredFT)      || _tcDefaultFT(parseInt(_tcp.birthYear) || 0);
+  // True when the free-T level is an age-based population default rather than the
+  // user's own measured value — drives the confidence tier / warning band below.
+  var _ftIsDefault = !(parseDec(_tcp.measuredFT) > 0);
   var _curDose = parseDec(_tcp.currentDoseMgWk) || 0;
   var _logDays = totalDays - washoutDays - 1;
   var _midLog  = Math.max(0, Math.floor(_logDays / 2));
@@ -1504,13 +1507,34 @@ function _tcFreeTSeries(sorted, hooks) {
     }
   }
 
+  // Confidence tier + always-visible uncertainty band.
+  //   measured : the SHBG model ran off real bloodwork (β-band already built above)
+  //   partial  : the user gave a measured free T but no SHBG/total-T, so there are no
+  //              SHBG dynamics — medium band, no dose-driven swing
+  //   estimate : no bloodwork at all — free T is an age-based population default (wide band)
+  // For the two non-measured tiers we synthesise a symmetric relative band so the chart
+  // never implies false precision; the draw path renders these dashed with a warning badge.
+  // This is what lets users who can't test regularly still see an honest estimate.
+  var _tier = calFT_arr ? 'measured' : (_ftIsDefault ? 'estimate' : 'partial');
+  if (!calFT_arr && calFT) {
+    var _estFrac = (_tier === 'estimate') ? 0.35 : 0.20;
+    calFT_arr = new Float64Array(totalDays + 1);
+    _calFTlo  = new Float64Array(totalDays + 1);
+    _calFThi  = new Float64Array(totalDays + 1);
+    for (var _et = 0; _et <= totalDays; _et++) {
+      calFT_arr[_et] = scale;
+      _calFTlo[_et]  = scale * (1 - _estFrac);
+      _calFThi[_et]  = scale * (1 + _estFrac);
+    }
+  }
+
   // Test hook: the displayed free-T value at the first plotted day (day 0).  With a
   // pre-cycle baseline anchor this must equal the measured baseline, i.e. the curve
   // starts at the baseline and rises — not below it.
   if (hooks.start) hooks.start(total[0] * (calFT_arr ? calFT_arr[0] : scale));
   return { firstDate: firstDate, totalDays: totalDays, total: total, calFT: calFT, scale: scale,
            calFT_arr: calFT_arr, calFTlo: _calFTlo, calFThi: _calFThi, unitLabel: unitLabel,
-           measuredFT: _mftNum, ghAnnot: _ghAnnot, betaAnnot: _betaAnnot, sorted: sorted };
+           measuredFT: _mftNum, ghAnnot: _ghAnnot, betaAnnot: _betaAnnot, tier: _tier, sorted: sorted };
 }
 
 function _tcDrawManualChart(canvasId, log, zoom3) {
@@ -1521,7 +1545,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   var _S = _tcFreeTSeries(sorted, { calFT: canvas._testCalFTHook, shbg: canvas._testShbgHook, start: canvas._testStartHook });
   var firstDate = _S.firstDate, totalDays = _S.totalDays, total = _S.total, calFT = _S.calFT, scale = _S.scale,
       calFT_arr = _S.calFT_arr, _calFTlo = _S.calFTlo, _calFThi = _S.calFThi, unitLabel = _S.unitLabel,
-      _mftNum = _S.measuredFT, _ghAnnot = _S.ghAnnot, _betaAnnot = _S.betaAnnot;
+      _mftNum = _S.measuredFT, _ghAnnot = _S.ghAnnot, _betaAnnot = _S.betaAnnot, _tier = _S.tier;
 
   var dpr  = window.devicePixelRatio || 1;
   var cssW = canvas.offsetWidth || 300;
@@ -1657,7 +1681,23 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   for (var t3 = xStart + 1; t3 <= xEnd; t3++) {
     ctx.lineTo(xOf(t3), yOf(total[t3] * (calFT_arr ? calFT_arr[t3] : scale) || 0));
   }
+  // Estimate tiers (no bloodwork, or no SHBG data) draw dashed to signal lower confidence.
+  if (_tier && _tier !== 'measured') ctx.setLineDash([5,3]);
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Warning badge for estimate tiers — a pill top-left of the plot so the user never
+  // mistakes an age-default / no-SHBG curve for a bloodwork-calibrated result.
+  if (_tier && _tier !== 'measured' && calFT) {
+    var _badge = (_tier === 'estimate') ? '⚠ ESTIMATE · NO BLOODWORK' : '⚠ EST · NO SHBG DATA';
+    ctx.font = 'bold 8px DM Sans,sans-serif'; ctx.textAlign = 'left';
+    var _badgeW = (ctx.measureText(_badge).width || 0) + 10;
+    var _bx = PAD.left + 2, _by = PAD.top + 2;
+    ctx.fillStyle = '#e8a020dd';
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(_bx, _by, _badgeW, 12, 3); ctx.fill(); }
+    else { ctx.fillRect(_bx, _by, _badgeW, 12); }
+    ctx.fillStyle = '#1a1205'; ctx.fillText(_badge, _bx + 5, _by + 9);
+  }
 
   // "Now" vertical line + TODAY'S free-T level (Y-axis label) — shown in EVERY
   // zoom, including Whole. The horizontal marker + left-axis number always report
