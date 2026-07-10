@@ -1139,13 +1139,25 @@ async function _tcBwConfirmAdd() {
   var date   = dateEl ? dateEl.value : '';
   if (!date) { alert('Date is required.'); return; }
   if (date > new Date().toISOString().slice(0, 10)) { alert('Blood test date cannot be in the future.'); return; }
+  // Snapshot the SHBG-suppressor doses active RIGHT NOW so the free-T model can
+  // freeze the unsuppressed SHBG baseline from this draw even if a dose changes later.
+  var _suppSnap = (_tcGhStack || []).map(function(gh) {
+    var _dr = gh.interactions && gh.interactions.shbg && gh.interactions.shbg.doseResponse;
+    return {
+      id:        gh.pepId,
+      dailyDose: (gh.dailyDose != null ? gh.dailyDose : null),
+      unit:      (_dr && _dr.unit) || '',
+      startDate: gh.startDateStr || ''
+    };
+  }).filter(function(s){ return s.id; });
   var entry = {
-    date:       date,
-    total_t:    ttEl   && ttEl.value   ? parseDec(ttEl.value)   : null,
-    shbg:       shbgEl && shbgEl.value ? parseDec(shbgEl.value) : null,
-    free_t:     ftEl   && ftEl.value   ? parseDec(ftEl.value)   : null,
-    dose_at_bw: doseEl && doseEl.value ? parseDec(doseEl.value) : null,
-    extra:      _tcBwAddExtras.filter(function(r){ return r.name; })
+    date:        date,
+    total_t:     ttEl   && ttEl.value   ? parseDec(ttEl.value)   : null,
+    shbg:        shbgEl && shbgEl.value ? parseDec(shbgEl.value) : null,
+    free_t:      ftEl   && ftEl.value   ? parseDec(ftEl.value)   : null,
+    dose_at_bw:  doseEl && doseEl.value ? parseDec(doseEl.value) : null,
+    extra:       _tcBwAddExtras.filter(function(r){ return r.name; }),
+    suppressors: _suppSnap
   };
   var h = (typeof authHeaders==='function') ? authHeaders() : null;
   if (!h) { alert('Sign in required.'); return; }
@@ -1435,38 +1447,72 @@ function _tcFreeTSeries(sorted, hooks) {
   if (calFT && _ttNum > 0 && _shbgBw > 0) {
     var _vermBw = _tcVermeulenFT(_ttNum, _shbgBw);
     if (_vermBw) {
-      // Compound SHBG suppressors (may be empty — testosterone alone still drives the model).
-      // Asymptote is dose-scaled: effMaxSupp(dailyDose) when the dose resolves, else the
-      // legacy fixed maxSuppression. The (1−e^(−t/halfTime)) ramp makes it time-varying, so
-      // suppression relaxes toward the dose-scaled target over halfTimeDays from the start date.
-      var _ghParams = [];
-      _tcGhStack.forEach(function(gh) {
-        var _ghStart = gh.startDateStr ? new Date(gh.startDateStr + 'T12:00:00') : null;
-        if (!_ghStart) return;
-        var _dr   = gh.interactions.shbg.doseResponse;
-        var _asym = _tcEffMaxSupp(_dr, gh.dailyDose);
-        if (_asym == null) _asym = gh.interactions.shbg.maxSuppression;
-        _ghParams.push({
-          ghDay0:   Math.round((_ghStart - firstDate) / 86400000),
-          asym:     _asym,
-          halfTime: gh.interactions.shbg.halfTimeDays
-        });
-      });
-      var _ghProd = function(day) {
-        var p = 1;
-        _ghParams.forEach(function(gp) {
-          var t = Math.max(0, day - gp.ghDay0);
-          if (t > 0) p *= (1 - gp.asym * (1 - Math.exp(-t / gp.halfTime)));
-        });
-        return p;
-      };
       // SHBG anchor day: the bloodwork draw if entered, else the free-T calibration anchor.
-      var _bwDate = _tcBwEntries && _tcBwEntries[0] ? _tcBwEntries[0].date : null;
+      var _bwEntry = (_tcBwEntries && _tcBwEntries[0]) ? _tcBwEntries[0] : null;
+      var _bwDate = _bwEntry ? _bwEntry.date : null;
       var _shbgRefDay = _bwDate
         ? Math.round((new Date(_bwDate + 'T12:00:00') - firstDate) / 86400000)
         : _anchorDay;
       _shbgRefDay = Math.max(0, Math.min(totalDays, _shbgRefDay || 0));
+      // Doses that were ACTIVE AT THE DRAW, snapshotted when the bloodwork was saved.
+      // Keyed by compound id → dailyDose (in its doseResponse unit). Present only for
+      // draws recorded after this feature shipped; absent → we fall back to today's dose.
+      var _snapMap = null;
+      if (_bwEntry && Array.isArray(_bwEntry.suppressors) && _bwEntry.suppressors.length) {
+        _snapMap = {};
+        _bwEntry.suppressors.forEach(function(s){ if (s && s.id != null) _snapMap[s.id] = s.dailyDose; });
+      }
+
+      // Each suppressor carries TWO asymptotes: asymSnap (dose active at the draw) and
+      // asymCur (today's dose). Suppression follows a two-segment first-order relaxation —
+      // it ramps toward asymSnap up to the draw, then relaxes toward asymCur afterwards.
+      // This keeps SHBG(draw) fixed (so the inferred baseline no longer moves when the
+      // user changes a dose today) while the forward curve still tracks the new dose.
+      var _ghParams = [];
+      _tcGhStack.forEach(function(gh) {
+        var _ghStart = gh.startDateStr ? new Date(gh.startDateStr + 'T12:00:00') : null;
+        if (!_ghStart) return;
+        var _dr      = gh.interactions.shbg.doseResponse;
+        var _fixed   = gh.interactions.shbg.maxSuppression;
+        var _asymCur = _tcEffMaxSupp(_dr, gh.dailyDose);
+        if (_asymCur == null) _asymCur = _fixed;
+        // asymSnap null → single-segment current-dose ramp (legacy behaviour) unless the
+        // compound is explicitly recorded in the draw snapshot.
+        var _asymSnap = null;
+        if (_snapMap && Object.prototype.hasOwnProperty.call(_snapMap, gh.pepId)) {
+          _asymSnap = _tcEffMaxSupp(_dr, _snapMap[gh.pepId]);
+          if (_asymSnap == null) _asymSnap = _fixed;
+        }
+        _ghParams.push({
+          ghDay0:   Math.round((_ghStart - firstDate) / 86400000),
+          drawDay:  _shbgRefDay,
+          asymCur:  _asymCur,
+          asymSnap: _asymSnap,
+          halfTime: gh.interactions.shbg.halfTimeDays
+        });
+      });
+      var _suppAt = function(gp, day) {
+        if (day <= gp.ghDay0) return 0;
+        // No draw snapshot, or compound started at/after the draw → single current-dose ramp.
+        if (gp.asymSnap == null || gp.ghDay0 >= gp.drawDay) {
+          return gp.asymCur * (1 - Math.exp(-(day - gp.ghDay0) / gp.halfTime));
+        }
+        // Snapshot segment: dose active at the draw, from start → draw.
+        if (day <= gp.drawDay) {
+          return gp.asymSnap * (1 - Math.exp(-(day - gp.ghDay0) / gp.halfTime));
+        }
+        // Post-draw: relax from the level reached at the draw toward today's asymptote.
+        var suppDraw = gp.asymSnap * (1 - Math.exp(-(gp.drawDay - gp.ghDay0) / gp.halfTime));
+        return gp.asymCur + (suppDraw - gp.asymCur) * Math.exp(-(day - gp.drawDay) / gp.halfTime);
+      };
+      var _ghProd = function(day) {
+        var p = 1;
+        _ghParams.forEach(function(gp) { p *= (1 - _suppAt(gp, day)); });
+        return p;
+      };
       // Back-calculate the unsuppressed SHBG base from the compound product at the anchor.
+      // With a draw snapshot _ghProd(drawDay) uses asymSnap, so the base is fixed against
+      // later dose edits (the whole point of this fix).
       var _prodRef = _ghProd(_shbgRefDay);
       var _shbgBase = (_prodRef > 0.05) ? _shbgBw / _prodRef : _shbgBw;
       // Lagged testosterone level: EMA of the modelled accumulation (SHBG responds over weeks).

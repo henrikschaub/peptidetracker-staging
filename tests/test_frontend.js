@@ -4285,6 +4285,53 @@ if (typeof G._tcDrawManualChart === 'function' && typeof G._tcEffMaxSupp === 'fu
   G._tcp = _ddSaveTp; G._tcBwEntries = _ddSaveBw; G._tcGhStack = _ddSaveGh; G.document.getElementById = _ddSaveGE;
 }
 
+// ── Mid-cycle draw: a suppressor-dose snapshot freezes the SHBG baseline ──
+// A change to today's dose must NOT retroactively move the pre-draw curve / baseline
+// (the snapshot pins the draw), but MUST move the forward (post-draw) curve.
+console.log('\n── T-calc: draw snapshot decouples the SHBG baseline from today\'s dose ──');
+if (typeof G._tcFreeTSeries === 'function') {
+  var _snSaveTp = G._tcp, _snSaveBw = G._tcBwEntries, _snSaveGh = G._tcGhStack;
+  var _snLog = [{compId:'testoviron', doseMg:'100', date:'2026-06-01'}];
+  for (var _sni=0; _sni<16; _sni++){ var _snd=new Date(new Date('2026-06-03').getTime()+_sni*3*86400000); _snLog.push({compId:'nebido', doseMg:'100', date:_snd.getFullYear()+'-'+String(_snd.getMonth()+1).padStart(2,'0')+'-'+String(_snd.getDate()).padStart(2,'0')}); }
+  var _snInter = {shbg:{direction:'suppress', maxSuppression:0.40, halfTimeDays:25, doseResponse:{unit:'IU/day', ed50:2, emax:0.56, typicalDose:5}}};
+  // Mid-cycle draw on 2026-06-20; suppressor started 2026-06-01 (draw is day ~19).
+  var _snSuppSnap = [{id:'hgh', dailyDose:5, unit:'IU/day', startDate:'2026-06-01'}];
+  G._tcp = {measuredFT:'400', currentDoseMgWk:'0', totalT:'25', shbg:'40', birthYear:'1985', manualLog:_snLog};
+
+  function _snSeries(dailyDose, withSnap){
+    G._tcGhStack = [{pepId:'hgh', startDateStr:'2026-06-01', interactions:_snInter, dailyDose:dailyDose}];
+    G._tcBwEntries = [{date:'2026-06-20', total_t:25, shbg:40, free_t:400, suppressors: withSnap ? _snSuppSnap : undefined}];
+    var s = G._tcFreeTSeries(_snLog.slice(), {});
+    return { ft:function(d){ return s.total[d]*(s.calFT_arr?s.calFT_arr[d]:s.scale); }, calFT:s.calFT, days:s.totalDays };
+  }
+
+  var _snThrew=false, _s5, _s4, _s5n, _s4n;
+  try { _s5=_snSeries(5,true); _s4=_snSeries(4,true); _s5n=_snSeries(5,false); _s4n=_snSeries(4,false); }
+  catch(e){ _snThrew=true; console.error('  snapshot test threw:', e.message); }
+  check('draw snapshot: no crash', !_snThrew && _s5 && _s4);
+  if (!_snThrew) {
+    var _preDay = 8, _postDay = 45;   // before vs after the day-19 draw
+    // WITH snapshot: today's dose (5→4) must not move the pre-draw free T (baseline frozen).
+    check('draw snapshot: pre-draw free T is unchanged when today\'s dose changes',
+      Math.abs(_s5.ft(_preDay) - _s4.ft(_preDay)) < 1e-6,
+      'ft5='+_s5.ft(_preDay).toFixed(4)+' ft4='+_s4.ft(_preDay).toFixed(4));
+    // …but the forward curve DOES respond to the new dose (more GH → more free T).
+    check('draw snapshot: post-draw free T tracks today\'s dose (5 IU > 4 IU)',
+      _s5.ft(_postDay) > _s4.ft(_postDay) + 1e-6,
+      'ft5='+_s5.ft(_postDay).toFixed(2)+' ft4='+_s4.ft(_postDay).toFixed(2));
+    // Calibration stays exact at the draw regardless of the snapshot.
+    var _snRef = 19;
+    check('draw snapshot: curve still passes through the measured free T at the draw',
+      Math.abs(_s5.ft(_snRef) - 400) < 400*0.03, 'ft@draw='+_s5.ft(_snRef).toFixed(1));
+    // Contrast: WITHOUT a snapshot the old coupling remains — a dose change moves the
+    // pre-draw curve too. This is exactly what the snapshot fixes.
+    check('draw snapshot: WITHOUT a snapshot the pre-draw curve is (still) dose-coupled',
+      Math.abs(_s5n.ft(_preDay) - _s4n.ft(_preDay)) > 1e-6,
+      'ft5='+_s5n.ft(_preDay).toFixed(4)+' ft4='+_s4n.ft(_preDay).toFixed(4));
+  }
+  G._tcp = _snSaveTp; G._tcBwEntries = _snSaveBw; G._tcGhStack = _snSaveGh;
+}
+
 // ── Testosterone → SHBG dose-dependent free-T model (+ uncertainty band) ──
 console.log('\n── T-calc: testosterone→SHBG dose-dependent model + β band ──');
 if (typeof G._tcDrawManualChart === 'function') {
