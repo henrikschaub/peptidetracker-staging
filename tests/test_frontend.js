@@ -78,6 +78,17 @@ tabFiles.forEach(f => {
 });
 const G = sandbox;
 
+// Seed the age→free-T population baseline the app fetches from the backend
+// (/systemic-interactions → ftBaseline). In the real app init() sets this; the
+// test fetch stub returns nothing, so provide the same reference data here.
+G._tcFtBaseline = {
+  unit: 'pmol/L', default: 350,
+  bands: [
+    {max_age:24, value:450}, {max_age:34, value:400}, {max_age:44, value:340},
+    {max_age:54, value:280}, {max_age:64, value:220}, {max_age:200, value:180},
+  ],
+};
+
 let passed=0, failed=0;
 function check(name, condition, detail) {
   if(condition){console.log(`  ✓ ${name}`);passed++;}
@@ -3189,6 +3200,20 @@ if (typeof G._tcFreeTSeries === 'function') {
   G._tcFreeTSeries(_fsLog, { start: function(v){ _fsHookVal = v; } });
   check('_tcFreeTSeries: fires the start hook with day-0 free T', _fsHookVal !== null && Math.abs(_fsHookVal - _fsFtAt(0)) < 1e-6);
   G._tcp.measuredFT = _fsFT; G._tcp.currentDoseMgWk = _fsDose; G._tcBwEntries = _fsBw;
+}
+
+// _tcDefaultFT: age→free-T midpoint comes from the backend baseline, NOT hardcoded.
+if (typeof G._tcDefaultFT === 'function') {
+  var _dfSaved = G._tcFtBaseline;
+  check('_tcDefaultFT: unknown birth year → backend "default" midpoint', G._tcDefaultFT(0) === 350);
+  check('_tcDefaultFT: age band lookup uses backend values (age ~40 → 340)',
+    G._tcDefaultFT(new Date().getFullYear() - 40) === 340);
+  check('_tcDefaultFT: oldest band applies beyond the last max_age', G._tcDefaultFT(new Date().getFullYear() - 80) === 180);
+  // No reference data hardcoded in the frontend: with the baseline unloaded it must
+  // return a neutral 0, never a population number baked into the code.
+  G._tcFtBaseline = null;
+  check('_tcDefaultFT: neutral 0 when the backend baseline has not loaded', G._tcDefaultFT(0) === 0 && G._tcDefaultFT(1985) === 0);
+  G._tcFtBaseline = _dfSaved;
 }
 
 // Confidence tiers: the model must render an HONEST estimate — with a wide, clearly
