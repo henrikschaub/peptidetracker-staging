@@ -33,6 +33,7 @@ var _tcChartZoom   = 'whole'; // active zoom level: 'today' | 'week' | 'month' |
 var _tcChartPanOffset = 0;   // horizontal pan in days (float, only used in zoomed modes)
 var _tcGhStack = [];          // [{pepId, startDateStr, interactions, dailyDose}] — SHBG suppressors from active stacks (dailyDose in the compound's doseResponse unit)
 var _tcSysInter = null;       // compounds map from /systemic-interactions
+var _tcFtBaseline = null;      // age→free-T population baseline (pmol/L) from /systemic-interactions
 var _tcActiveStacks = null;   // raw response from /protocol/stacks
 
 // Testosterone → SHBG dose-response model. Exogenous androgens suppress hepatic
@@ -198,6 +199,7 @@ function _tcLoadProfile() {
     .then(function(d) {
       if (!d || !d.compounds) return;
       _tcSysInter = d.compounds;
+      if (d.ftBaseline) _tcFtBaseline = d.ftBaseline;
       _tcComputeGhStack();
       buildTCalc();
     })
@@ -1172,17 +1174,19 @@ async function _tcBwDeleteEntry(id) {
   await _tcFetchBwEntries();
 }
 
-// Age-stratified free T reference midpoints (pmol/L) for when no bloodwork is entered.
-// Values are approximate midpoints of published male reference ranges.
+// Age→free-T reference midpoint (pmol/L) used when no measured free T is entered.
+// The table is reference DATA and lives in the backend (/systemic-interactions →
+// ftBaseline); we only hold it here once fetched. Returns 0 (neutral) until it loads
+// so no population numbers are ever hardcoded in the frontend.
 function _tcDefaultFT(birthYear) {
-  if (!birthYear) return 350;
+  var b = _tcFtBaseline;
+  if (!b || !b.bands) return 0;
+  if (!birthYear) return b.default || 0;
   var age = new Date().getFullYear() - birthYear;
-  if (age < 25) return 450;
-  if (age < 35) return 400;
-  if (age < 45) return 340;
-  if (age < 55) return 280;
-  if (age < 65) return 220;
-  return 180;
+  for (var i = 0; i < b.bands.length; i++) {
+    if (age <= b.bands[i].max_age) return b.bands[i].value;
+  }
+  return b.bands[b.bands.length - 1].value;
 }
 
 // Pure free-T model extracted from _tcDrawManualChart so BOTH the T-Calc chart
