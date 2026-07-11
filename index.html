@@ -203,7 +203,7 @@
   </div>
 </div>
 <script>
-const VERSION='1.451';
+const VERSION='1.452';
 const IS_STAGING=(window.location.pathname||'').startsWith('/peptidetracker-staging');
 function parseDec(v){if(typeof v==='number')return v;return parseFloat(String(v==null?'':v).trim().replace(',','.'));}
 if(IS_STAGING){var _S='staging:';var _r=window.localStorage;var _PT=new Set(['google_token','google_email','session_token']);var _pk=function(k){return _PT.has(k)?k:_S+k;};var _p=new Proxy(_r,{get:function(t,n){if(n==='getItem')return function(k){return _r.getItem(_pk(k));};if(n==='setItem')return function(k,v){_r.setItem(_pk(k),v);};if(n==='removeItem')return function(k){_r.removeItem(_pk(k));};if(n==='clear')return function(){Object.keys(_r).filter(function(k){return k.startsWith(_S);}).forEach(function(k){_r.removeItem(k);});};if(n==='key')return function(i){return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);})[i]||null;};if(n==='length')return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).length;if(typeof t[n]==='function')return t[n].bind(t);return t[n];},set:function(t,n,v){t[n]=v;return true;},ownKeys:function(){return Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);});},getOwnPropertyDescriptor:function(t,n){if(Object.keys(_r).filter(function(k){return k.startsWith(_S);}).map(function(k){return k.slice(_S.length);}).includes(n))return{configurable:true,enumerable:true,value:_r.getItem(_S+n)};return undefined;},has:function(t,n){return _r.getItem(_pk(n))!==null;}});try{Object.defineProperty(window,'localStorage',{get:function(){return _p;},configurable:true});}catch(e){}}
@@ -1356,17 +1356,17 @@ function _dosePersonalization(pepId,profile){var mods=[];var ghAxis=['cjc-ipa','
 function toggleTabVis(id){if(id==='settings')return;_tabVis[id]=!_tabVis[id];setData('proto-tab-vis',_tabVis);pushPepSettingsToAgent({'proto-tab-vis':_tabVis});if(!_tabVis[id]&&_currentTab===id){const b=document.getElementById('tab-btn-today');if(b)switchTab('today',b);}applyTabVis();buildTabsSettingsCard();}
 function buildTabsSettingsCard(){const card=document.getElementById('s-tabs-card');if(!card)return;const rows=Object.entries(TAB_LABELS).map(([id,label])=>{const on=!!_tabVis[id];return'<div style="padding:11px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--text)">'+label+'</span><button onclick="toggleTabVis(\''+id+'\')" style="background:'+(on?'var(--accent)':'var(--surface2)')+';color:'+(on?'#000':'var(--muted)')+';border:1px solid '+(on?'transparent':'var(--border)')+';border-radius:20px;padding:4px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;min-width:48px">'+(on?'ON':'OFF')+'</button></div>';}).join('');card.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">'+sSecHdr('tabs','Tabs')+sSecBody('tabs')+rows+'<div style="padding:8px 16px 10px;font-size:11px;color:var(--muted2)">Settings is always visible</div></div></div>';}
 </script>
-<script src="tab-cycles.js?v=1.451"></script>
-<script src="tab-macros.js?v=1.451"></script>
-<script src="tab-stack.js?v=1.451"></script>
-<script src="tab-today.js?v=1.451"></script>
-<script src="tab-schedule.js?v=1.451"></script>
-<script src="tab-timeline.js?v=1.451"></script>
-<script src="tab-body.js?v=1.451"></script>
-<script src="tab-recon.js?v=1.451"></script>
-<script src="tab-blood.js?v=1.451"></script>
-<script src="tab-tcalc.js?v=1.451"></script>
-<script src="tab-supplements.js?v=1.451"></script>
+<script src="tab-cycles.js?v=1.452"></script>
+<script src="tab-macros.js?v=1.452"></script>
+<script src="tab-stack.js?v=1.452"></script>
+<script src="tab-today.js?v=1.452"></script>
+<script src="tab-schedule.js?v=1.452"></script>
+<script src="tab-timeline.js?v=1.452"></script>
+<script src="tab-body.js?v=1.452"></script>
+<script src="tab-recon.js?v=1.452"></script>
+<script src="tab-blood.js?v=1.452"></script>
+<script src="tab-tcalc.js?v=1.452"></script>
+<script src="tab-supplements.js?v=1.452"></script>
 <script>
 init();
 if(IS_STAGING){const dc=document.getElementById('s-deploy-card');if(dc)dc.style.display='';}
