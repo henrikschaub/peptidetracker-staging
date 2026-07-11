@@ -1434,7 +1434,7 @@ function wizStepEnhanced(body,footer){
     return cat&&cat.cls==='base';
   });
   if(!hasTest){
-    html='<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#f59e0b;">⚠ Testosterone (Enanthate or Cypionate) is required for an enhanced cycle.</div>'+html;
+    html='<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#f59e0b;">⚠ A testosterone base is required for an enhanced cycle.</div>'+html;
   }
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1'+(hasTest?'':';opacity:0.5')+'" '+(hasTest?'':'disabled ')+'onclick="wizNext()">Next →</button>';
