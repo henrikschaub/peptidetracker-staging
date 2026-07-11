@@ -240,6 +240,34 @@ if(typeof G._nextStackName==='function'){
   G._userStacks=_nsSaved;
 }
 
+// ── Today view: de-dupe injection slots (dose-edit doubling fix) ──
+if (typeof G._dedupInjectionSlots === 'function') {
+  // A slot with both an administered (logged) shot and a newly-planned one collapses
+  // to ONE row, keeping the logged shot.
+  var _ddOut = G._dedupInjectionSlots([
+    {compound_id:'hgh', time_of_day:'AM', dose:'2', logged:true},
+    {compound_id:'hgh', time_of_day:'AM', dose:'3', logged:false},
+  ]);
+  check('dedup slots: duplicate compound+slot collapses to one', _ddOut.length === 1);
+  check('dedup slots: keeps the already-logged shot', _ddOut[0].logged === true && _ddOut[0].dose === '2');
+  // AM and PM are distinct slots — both survive.
+  check('dedup slots: AM and PM are independent',
+    G._dedupInjectionSlots([
+      {compound_id:'hgh', time_of_day:'AM', dose:'3'},
+      {compound_id:'hgh', time_of_day:'PM', dose:'3'},
+    ]).length === 2);
+  // Different compounds in the same slot both survive; original order preserved.
+  var _ddOrder = G._dedupInjectionSlots([
+    {compound_id:'glow', time_of_day:'AM', dose:'0.1'},
+    {compound_id:'hgh',  time_of_day:'AM', dose:'3'},
+    {compound_id:'glow', time_of_day:'AM', dose:'0.1'},
+  ]);
+  check('dedup slots: distinct compounds kept, order preserved',
+    _ddOrder.length === 2 && _ddOrder[0].compound_id === 'glow' && _ddOrder[1].compound_id === 'hgh');
+  check('dedup slots: tolerates empty/null input',
+    G._dedupInjectionSlots([]).length === 0 && G._dedupInjectionSlots(null).length === 0);
+}
+
 // ── TRT tab: surface T-Calc-planned testosterone (the "two ways to plan TRT") ──
 if(typeof G._tcalcTrtSummary==='function'){
   var _ttSaved=G._injectionsCache;
