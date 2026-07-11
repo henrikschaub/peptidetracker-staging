@@ -4395,6 +4395,37 @@ if (typeof G._tcPkConc === 'function' && typeof G._tcKa === 'function') {
     _ssB.peak > _ssA.peak * 1.15, 'peakA=' + _ssA.peak.toFixed(3) + ' peakB=' + _ssB.peak.toFixed(3));
 }
 
+// The line averages the VISIBLE window, so it tracks the zoom instead of one global value.
+if (typeof G._tcDrawManualChart === 'function' && typeof G._tcFreeTSeries === 'function') {
+  var _awSaveTp = G._tcp, _awSaveBw = G._tcBwEntries, _awSaveGh = G._tcGhStack, _awSaveGE = G.document.getElementById;
+  var _awCap = null;
+  var _awCtx = { scale:noop,beginPath:noop,arc:noop,fill:noop,stroke:noop,fillText:noop,closePath:noop,save:noop,restore:noop,fillRect:noop,setLineDash:noop,strokeRect:noop,translate:noop,rotate:noop,moveTo:noop,lineTo:noop,measureText:function(){return{width:0};},createLinearGradient:function(){return{addColorStop:noop};} };
+  G.document.getElementById = function(id){ return id==='tc-main-chart' ? { style:{},classList:{add:noop,remove:noop,contains:function(){return false;}},offsetWidth:350,offsetHeight:250,_testAvgHook:function(v){_awCap=v;},getContext:function(){return _awCtx;} } : _awSaveGE(id); };
+  // A long single-ester ramp so the early window sits well below the settled plateau.
+  var _awLog = [];
+  for (var _awi=0; _awi<40; _awi++){ var _awd=new Date(new Date('2026-04-01').getTime()+_awi*3.5*86400000); _awLog.push({compId:'enanthate', doseMg:'100', date:_awd.getFullYear()+'-'+String(_awd.getMonth()+1).padStart(2,'0')+'-'+String(_awd.getDate()).padStart(2,'0')}); }
+  G._tcp = {measuredFT:'500', currentDoseMgWk:'', totalT:'', shbg:'', birthYear:'1985', manualLog:_awLog};
+  G._tcBwEntries = null; G._tcGhStack = [];
+  var _awS = G._tcFreeTSeries(_awLog.slice(), {});
+  function _awWinMean(a,b){ var s=0,n=0; for(var t=a;t<=b;t++){ s+=_awS.total[t]*(_awS.calFT_arr?_awS.calFT_arr[t]:_awS.scale); n++; } return n?s/n:0; }
+  try { localStorage.removeItem('tc-avg-line'); } catch(e){}
+  var _awThrew=false, _awWhole=null, _awMonth=null;
+  try {
+    _awCap=null; G._tcDrawManualChart('tc-main-chart', _awLog, 'whole'); _awWhole=_awCap;
+    _awCap=null; G._tcDrawManualChart('tc-main-chart', _awLog, 'month'); _awMonth=_awCap;
+  } catch(e){ _awThrew=true; console.error('  avg-window test threw:', e.message); }
+  check('avg window: hook fires with a window', !_awThrew && _awWhole && _awMonth);
+  if (_awWhole && _awMonth) {
+    check('avg window: reported average equals the mean of its own visible window',
+      Math.abs(_awWhole.avg - _awWinMean(_awWhole.xStart, _awWhole.xEnd)) < 0.5);
+    check('avg window: zoom changes the window (month narrower than whole)',
+      (_awMonth.xEnd - _awMonth.xStart) < (_awWhole.xEnd - _awWhole.xStart));
+    check('avg window: the two zooms yield different averages (not a stale global value)',
+      Math.abs(_awWhole.avg - _awMonth.avg) > 1);
+  }
+  G._tcp = _awSaveTp; G._tcBwEntries = _awSaveBw; G._tcGhStack = _awSaveGh; G.document.getElementById = _awSaveGE;
+}
+
 // ── Testosterone → SHBG dose-dependent free-T model (+ uncertainty band) ──
 console.log('\n── T-calc: testosterone→SHBG dose-dependent model + β band ──');
 if (typeof G._tcDrawManualChart === 'function') {

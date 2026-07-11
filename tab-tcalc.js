@@ -1750,17 +1750,16 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
   ctx.setLineDash([]);
 
-  // Steady-state AVERAGE reference line (teal, toggleable). The mean of the settled
-  // curve — F·(mg/day)/clearance — which is set by the daily dose, NOT the injection
-  // frequency. Drawing it makes the "peak differs, average doesn't" point obvious:
-  // an infrequent-large schedule peaks far above this line, a frequent one hugs it.
+  // AVERAGE reference line (teal, toggleable) — the mean level over the CURRENTLY
+  // VISIBLE window, so it tracks the zoom (day/week/month/whole) instead of sitting at
+  // one global value. In Whole it reads the whole-cycle average; zoom in and it reports
+  // the average of just what you're looking at. Still makes the "peak differs, average
+  // doesn't" point: an infrequent-large schedule peaks far above it, a frequent one hugs it.
   if (calFT && _tcShowAvg()) {
-    var _lastInj = 0;
-    sorted.forEach(function(e){ var _d = Math.round((new Date(e.date) - firstDate) / 86400000); if (_d > _lastInj) _lastInj = _d; });
-    _lastInj = Math.max(0, Math.min(totalDays, _lastInj));
-    var _avgFrom = Math.floor(_lastInj / 2), _avgSum = 0, _avgN = 0;   // 2nd half of the schedule = settled
-    for (var _ai = _avgFrom; _ai <= _lastInj; _ai++) { _avgSum += total[_ai] * (calFT_arr ? calFT_arr[_ai] : scale); _avgN++; }
+    var _avgSum = 0, _avgN = 0;
+    for (var _ai = xStart; _ai <= xEnd; _ai++) { _avgSum += total[_ai] * (calFT_arr ? calFT_arr[_ai] : scale); _avgN++; }
     var _avgLvl = _avgN > 0 ? _avgSum / _avgN : 0;
+    if (canvas._testAvgHook) canvas._testAvgHook({ avg: _avgLvl, xStart: xStart, xEnd: xEnd });
     if (_avgLvl > 0 && _avgLvl <= vMax) {
       var _avY = yOf(_avgLvl);
       ctx.strokeStyle = '#5ad1b0cc'; ctx.lineWidth = 1; ctx.setLineDash([1,3]);
