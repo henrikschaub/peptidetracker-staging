@@ -4938,6 +4938,32 @@ check('internal tab key still "blood"',   html.includes("switchTab('blood',this)
   check('T-Calc still consumes bloodwork (_tcBwEntries)', tcalcSrc.includes('_tcBwEntries'));
 }
 
+// ── Phase 4: cycle bloodwork folded into the unified store ────────────────────
+console.log('\n── Labs Phase 4: cycle checkpoints → one store ────────────');
+if (typeof G._cycleBwMatch === 'function') {
+  const _saveBw = G._tcBwEntries;
+  G._tcBwEntries = [{ id: 'a', date: '2026-07-01' }, { id: 'b', date: '2026-06-01' }];
+  const near = G._cycleBwMatch(new Date('2026-07-03T12:00:00'));
+  check('cycle bw match: entry within ±14d → nearest', !!near && near.id === 'a');
+  const far = G._cycleBwMatch(new Date('2026-05-01T12:00:00'));
+  check('cycle bw match: nothing within window → null', far === null);
+  G._tcBwEntries = null;
+  check('cycle bw match: no entries → null', G._cycleBwMatch(new Date('2026-07-01T12:00:00')) === null);
+  check('cycle bw match: bad date → null', G._cycleBwMatch(new Date('nope')) === null);
+  G._tcBwEntries = _saveBw;
+} else {
+  check('tab-cycles.js loaded (_cycleBwMatch present)', false, '_cycleBwMatch missing');
+}
+{
+  const cyc = fs.readFileSync(path.join(__dirname, '../tab-cycles.js'), 'utf8');
+  check('checkpoint "Log result" routes to unified sheet', cyc.includes('_cycleLogCheckpoint(') && cyc.includes('_labOpenAddSheet'));
+  check('checkpoint done derived from unified store',       cyc.includes('_cycleBwMatch(d)') && cyc.includes('var _done=bw.done||!!_uni'));
+  check('checkpoint no longer opens the separate inline form', !/onclick="cycleBwToggle\(/.test(cyc));
+  const labs = fs.readFileSync(path.join(__dirname, '../tab-labs.js'), 'utf8');
+  check('Labs add-sheet accepts a prefill date',   labs.includes('function _labOpenAddSheet(prefillDate)'));
+  check('Labs save refreshes the cycle view',      labs.includes('renderCyclesTab()'));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
