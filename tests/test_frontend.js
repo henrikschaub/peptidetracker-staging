@@ -4489,6 +4489,21 @@ if (typeof G._tcDrawManualChart === 'function' && typeof G._tcFreeTSeries === 'f
   G._tcp = _awSaveTp; G._tcBwEntries = _awSaveBw; G._tcGhStack = _awSaveGh; G.document.getElementById = _awSaveGE;
 }
 
+// ── Chart label de-collision (peak/today overlap in tight zooms) ──
+if (typeof G._tcNudgeLabelY === 'function') {
+  var _nlo = 10, _nhi = 200;
+  check('label nudge: no collision → unchanged (clamped)',
+    G._tcNudgeLabelY(100, [140], 11, _nlo, _nhi) === 100);
+  check('label nudge: clamps to bounds', G._tcNudgeLabelY(5, [], 11, _nlo, _nhi) === _nlo && G._tcNudgeLabelY(999, [], 11, _nlo, _nhi) === _nhi);
+  // a label landing on top of an existing one is pushed at least `gap` away
+  var _n1 = G._tcNudgeLabelY(102, [100], 11, _nlo, _nhi);
+  check('label nudge: overlapping label pushed ≥ gap away', Math.abs(_n1 - 100) >= 11 - 1e-9);
+  // clears two nearby occupied rows
+  var _n2 = G._tcNudgeLabelY(100, [100, 110], 11, _nlo, _nhi);
+  check('label nudge: clears every nearby label', Math.abs(_n2 - 100) >= 11 - 1e-9 && Math.abs(_n2 - 110) >= 11 - 1e-9);
+  check('label nudge: result stays within bounds', G._tcNudgeLabelY(100, [100,110,120,130], 11, _nlo, _nhi) >= _nlo);
+}
+
 // ── Testosterone → SHBG dose-dependent free-T model (+ uncertainty band) ──
 console.log('\n── T-calc: testosterone→SHBG dose-dependent model + β band ──');
 if (typeof G._tcDrawManualChart === 'function') {

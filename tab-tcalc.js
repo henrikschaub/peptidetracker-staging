@@ -417,6 +417,26 @@ function _tcShbgBaselineForAge(age) {
   return b.bands[b.bands.length - 1].value;
 }
 
+// Nudge a chart label's y so it stays at least `gap` px clear of any already-placed
+// label y, moving away from the collision and clamping to [lo,hi]. Keeps the peak /
+// today / average axis labels readable when the curve is flat (tight zooms) and their
+// values land on top of each other. Pure + testable.
+function _tcNudgeLabelY(y, used, gap, lo, hi) {
+  y = Math.max(lo, Math.min(hi, y));
+  var moved = true, guard = 0;
+  while (moved && guard++ < 50) {
+    moved = false;
+    for (var i = 0; i < (used || []).length; i++) {
+      if (Math.abs(y - used[i]) < gap) {
+        y = (y <= used[i]) ? (used[i] - gap) : (used[i] + gap);
+        y = Math.max(lo, Math.min(hi, y));
+        moved = true;
+      }
+    }
+  }
+  return y;
+}
+
 // ── PK helpers ────────────────────────────────────────────────────────────────
 
 function _tcKa(halfLifeDays) {
@@ -1797,14 +1817,21 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     ctx.fill();
   }
 
+  // Today's level y — computed early so the peak label (same left-axis lane) can dodge it.
+  var _tdClamp = Math.max(0, Math.min(totalDays, nowDay));
+  var _tdLvl = calFT ? (total[_tdClamp] * (calFT_arr ? calFT_arr[_tdClamp] : scale)) : 0;
+  var _todayLabelY = (calFT && _tdLvl > 0 && nowDay >= xStart && nowDay <= xEnd) ? yOf(_tdLvl) : null;
+
   // Peak highlight line + y-axis label
   if (calFT && peakV > 0 && peakV > (_mftNum || 0) * 1.05) {
     var _pkY = yOf(peakV);
     ctx.strokeStyle = lineColor + 'aa'; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
     ctx.beginPath(); ctx.moveTo(PAD.left, _pkY); ctx.lineTo(PAD.left + cW, _pkY); ctx.stroke();
     ctx.setLineDash([]);
+    // Keep the peak number clear of today's boxed number when the two sit at the same height.
+    var _pkTextY = (_todayLabelY != null) ? _tcNudgeLabelY(_pkY, [_todayLabelY], 11, PAD.top + 6, PAD.top + cH - 2) : _pkY;
     ctx.fillStyle = lineColor; ctx.font = 'bold 8px DM Sans,sans-serif'; ctx.textAlign = 'right';
-    ctx.fillText(Math.round(peakV), PAD.left - 4, _pkY + 3);
+    ctx.fillText(Math.round(peakV), PAD.left - 4, _pkTextY + 3);
   }
 
   var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
