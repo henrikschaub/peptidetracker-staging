@@ -88,6 +88,14 @@ G._tcFtBaseline = {
     {max_age:54, value:280}, {max_age:64, value:220}, {max_age:200, value:180},
   ],
 };
+// Population SHBG baseline (age→nmol/L), also served by /systemic-interactions.
+G._tcShbgBaseline = {
+  unit: 'nmol/L',
+  bands: [
+    {max_age:24, value:30}, {max_age:34, value:32}, {max_age:44, value:35},
+    {max_age:54, value:38}, {max_age:64, value:42}, {max_age:200, value:48},
+  ],
+};
 
 let passed=0, failed=0;
 function check(name, condition, detail) {
@@ -3280,6 +3288,39 @@ if (typeof G._tcFreeTSeries === 'function') {
     !!_t3ms.calFThi && !!_t3ms.calFTlo && _t3ms.calFThi[_t3ms.totalDays] > _t3ms.calFTlo[_t3ms.totalDays]);
 
   G._tcp = _t3p0; G._tcBwEntries = _t3Bw0; G._tcGhStack = _t3Gh0;
+}
+
+// SHBG suppression now runs WITHOUT bloodwork (population baselines): GH/Boron move the
+// curve for people who don't test, and for partial/mid-cycle tests.
+if (typeof G._tcFreeTSeries === 'function') {
+  var _psTp = G._tcp, _psBw = G._tcBwEntries, _psGh = G._tcGhStack, _psBase = G._tcShbgBaseline;
+  var _psLog = [];
+  for (var _pi=0; _pi<30; _pi++){ var _pd=new Date(new Date('2026-05-01').getTime()+_pi*3.5*86400000); _psLog.push({compId:'enanthate', doseMg:'100', date:_pd.getFullYear()+'-'+String(_pd.getMonth()+1).padStart(2,'0')+'-'+String(_pd.getDate()).padStart(2,'0')}); }
+  var _psGhI = {shbg:{direction:'suppress', maxSuppression:0.40, halfTimeDays:25, doseResponse:{unit:'IU/day', ed50:2, emax:0.56, typicalDose:5}}};
+  function _psSpread(s){ var mn=1e9,mx=-1e9; for(var t=0;t<=s.totalDays;t++){ var v=s.calFT_arr?s.calFT_arr[t]:s.scale; if(v<mn)mn=v; if(v>mx)mx=v; } return mx/(mn||1); }
+  function _psFt(s,t){ return s.total[t]*(s.calFT_arr?s.calFT_arr[t]:s.scale); }
+  // estimate tier: no measured FT / SHBG / TT, but age present → population baselines
+  G._tcp = {measuredFT:'', currentDoseMgWk:'', totalT:'', shbg:'', birthYear:'1985', manualLog:_psLog};
+  G._tcBwEntries = null;
+  G._tcGhStack = [];
+  var _psFlat = G._tcFreeTSeries(_psLog.slice(), {});
+  check('no-bloodwork SHBG: model runs in the estimate tier (calibrated pmol/L)',
+    _psFlat.tier === 'estimate' && _psFlat.calFT > 0 && !!_psFlat.calFT_arr);
+  check('no-bloodwork SHBG: with no suppressors the curve is flat (no invented T-driven swing)',
+    _psSpread(_psFlat) < 1.01);
+  // add a GH suppressor → the curve must bend (suppression shows without any bloodwork)
+  G._tcGhStack = [{pepId:'hgh', startDateStr:'2026-05-01', interactions:_psGhI, dailyDose:5}];
+  var _psSupp = G._tcFreeTSeries(_psLog.slice(), {});
+  check('no-bloodwork SHBG: a GH suppressor bends the free-T curve (population SHBG baseline used)',
+    _psSpread(_psSupp) > 1.03, 'spread=' + _psSpread(_psSupp).toFixed(3));
+  check('no-bloodwork SHBG: GH raises free T later in the cycle vs the same schedule with no GH',
+    _psFt(_psSupp, _psSupp.totalDays - 5) > _psFt(_psFlat, _psFlat.totalDays - 5));
+  // without the population SHBG baseline (e.g. table not loaded) → safe flat fallback
+  G._tcShbgBaseline = null;
+  check('no-bloodwork SHBG: no population baseline → falls back to a flat estimate',
+    _psSpread(G._tcFreeTSeries(_psLog.slice(), {})) < 1.01);
+  G._tcShbgBaseline = _psBase;
+  G._tcp = _psTp; G._tcBwEntries = _psBw; G._tcGhStack = _psGh;
 }
 
 // Regression: warm-start ke for curDose=0 must use slowest compound ke (not weighted avg).
