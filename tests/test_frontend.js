@@ -4922,6 +4922,22 @@ check('lab-markers catalogue synced on init', html.includes('syncLabMarkersFromA
   check('tab-labs.js does not hardcode reference ranges (backend-driven)', labsSrc.includes('/lab-markers'));
 }
 
+// ── Phase 3: "Blood Levels" → "Levels" rename + entry moved to Labs ───────────
+console.log('\n── Labs Phase 3: rename + single front door ───────────────');
+// tab renamed (display only) — internal key 'blood' unchanged so prefs survive
+check('nav tab labelled "Levels"',        /switchTab\('blood',this\)">Levels</.test(html));
+check('no "Blood Levels" nav label left', !/switchTab\('blood',this\)">Blood Levels</.test(html));
+check('TAB_LABELS blood → "Levels"',      /blood:'Levels'/.test(html));
+check('internal tab key still "blood"',   html.includes("switchTab('blood',this)") && html.includes('id="tab-btn-blood"'));
+{
+  const tcalcSrc = fs.readFileSync(path.join(__dirname, '../tab-tcalc.js'), 'utf8');
+  // entry moved out of T-Calc → single front door in Labs
+  check('T-Calc no longer shows "+ ADD ENTRY"',      !tcalcSrc.includes('+ ADD ENTRY'));
+  check('T-Calc add button routes to Labs',           tcalcSrc.includes('MANAGE IN LABS') && tcalcSrc.includes('tab-btn-labs'));
+  check('T-Calc entry list has no inline delete',    !tcalcSrc.includes('event.stopPropagation();_tcBwDeleteEntry('));
+  check('T-Calc still consumes bloodwork (_tcBwEntries)', tcalcSrc.includes('_tcBwEntries'));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
