@@ -323,15 +323,32 @@ function _tcComputeGhStack() {
   });
   }
   // Over-the-counter supplements that affect SHBG (e.g. Boron). Uses the same
-  // systemic-interaction model as compounds — each active supplement whose id has
-  // an SHBG interaction is added to the free-T model at its own start date.
+  // systemic-interaction model as compounds. The SHBG-model start date is the day the
+  // supplement was FIRST CHECKED in the today view (from the supplement log), so it
+  // counts from when you actually started taking it — falling back to any explicit
+  // start_date. No manual start date needed for a supplement to move the free-T curve.
   var _supps = (typeof _supplements !== 'undefined' && _supplements) ? _supplements : [];
   _supps.forEach(function(s) {
     if (!s || !s.supp_id) return;
     var inter = _tcSysInter[s.supp_id];
     if (!inter || !inter.shbg || inter.shbg.direction !== 'suppress') return;
-    _tcGhStack.push({pepId: 'supp_' + s.supp_id, startDateStr: s.start_date || '', interactions: inter, dailyDose: _tcSuppDailyDose(inter, 'supp', s)});
+    var _start = _tcSuppFirstTaken(s.supp_id) || s.start_date || '';
+    _tcGhStack.push({pepId: 'supp_' + s.supp_id, startDateStr: _start, interactions: inter, dailyDose: _tcSuppDailyDose(inter, 'supp', s)});
   });
+}
+
+// Earliest date a supplement was checked ("taken") in the today view, read from the
+// supplement log (_suppLog keys are "suppId|YYYY-MM-DD|slot"). '' if never taken.
+function _tcSuppFirstTaken(suppId) {
+  if (typeof _suppLog === 'undefined' || !_suppLog) return '';
+  var best = '';
+  Object.keys(_suppLog).forEach(function(k) {
+    if (!_suppLog[k]) return;
+    var p = k.split('|');
+    if (p[0] !== suppId || !p[1]) return;
+    if (!best || p[1] < best) best = p[1];
+  });
+  return best;
 }
 
 // ── Compound helpers ──────────────────────────────────────────────────────────

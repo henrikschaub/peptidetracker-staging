@@ -4243,6 +4243,28 @@ if (typeof G.SUPPLEMENT_CAT !== 'undefined') {
     G._tcComputeGhStack();
     check('SHBG model ignores supplements with no interaction',
       G._tcGhStack.every(function(e){ return e.pepId !== 'supp_vitc'; }));
+
+    // Start date comes from the FIRST checked date in the today view (supplement log),
+    // not the stored start_date — so a supplement counts from when it was first taken.
+    var _savedLog2 = G._suppLog;
+    G._supplements = [{id:'b', supp_id:'boron', name:'Boron', dose:'6 mg', freq:'daily', start_date:'2026-06-20'}];
+    G._suppLog = {};
+    G._suppLog[G._suppLogKey('boron','2026-06-05','AM')] = true;
+    G._suppLog[G._suppLogKey('boron','2026-06-11','AM')] = true;   // later — must not win
+    G._tcGhStack = [];
+    G._tcComputeGhStack();
+    var _bEntry = G._tcGhStack.find(function(e){ return e.pepId==='supp_boron'; });
+    check('supplement start = earliest checked date (2026-06-05), not stored start_date',
+      _bEntry && _bEntry.startDateStr === '2026-06-05', _bEntry && _bEntry.startDateStr);
+    // never checked → falls back to the explicit start_date
+    G._suppLog = {};
+    G._tcGhStack = [];
+    G._tcComputeGhStack();
+    var _bEntry2 = G._tcGhStack.find(function(e){ return e.pepId==='supp_boron'; });
+    check('supplement start falls back to start_date when never checked',
+      _bEntry2 && _bEntry2.startDateStr === '2026-06-20', _bEntry2 && _bEntry2.startDateStr);
+    G._suppLog = _savedLog2 || {};
+
     G._tcSysInter = _savedSys; G._tcActiveStacks = _savedStacks; G._supplements = _savedSupp || []; G._tcGhStack = _savedGh || [];
   }
 } else {

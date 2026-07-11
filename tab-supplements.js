@@ -222,6 +222,9 @@ async function syncSupplementLogFromAgent(){
       _suppLog = m;
       _suppSaveLogCache();
       if(typeof renderTodaySupplements==='function') renderTodaySupplements(_suppViewDate||NOW);
+      // The free-T model derives each supplement's start from its first-checked date,
+      // so refresh the suppressor stack once the log lands.
+      if(typeof _tcComputeGhStack==='function') _tcComputeGhStack();
     }
   }catch(e){ _logErr('syncSuppLog', e); }
 }
