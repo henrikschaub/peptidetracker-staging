@@ -891,6 +891,20 @@ function _tcSetChartZoom(z) {
   });
 }
 
+// Steady-state average reference line — shown by default, hideable via the chart
+// checkbox. Read the raw flag (getData's `|| default` would turn a stored false
+// back into true, so check the string directly). Default = shown.
+function _tcShowAvg() {
+  try { return localStorage.getItem('tc-avg-line') !== 'false'; } catch (e) { return true; }
+}
+function _tcToggleAvgLine(el) {
+  var v = el ? !!el.checked : !_tcShowAvg();
+  setData('tc-avg-line', v);
+  if (typeof pushPepSettingsToAgent === 'function') pushPepSettingsToAgent({ 'tc-avg-line': v });
+  var validLog = (_tcp && _tcp.manualLog) ? _tcp.manualLog.filter(function(e){ return e.date && e.doseMg && parseDec(e.doseMg) > 0; }) : [];
+  _tcDrawManualChart('tc-main-chart', validLog, _tcChartZoom);
+}
+
 function _tcAttachPanListeners(canvas) {
   if (!canvas) return;
   if (canvas._tcTouchStart) {
@@ -1736,6 +1750,27 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   ctx.strokeStyle = lineColor; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
   ctx.setLineDash([]);
 
+  // Steady-state AVERAGE reference line (teal, toggleable). The mean of the settled
+  // curve — F·(mg/day)/clearance — which is set by the daily dose, NOT the injection
+  // frequency. Drawing it makes the "peak differs, average doesn't" point obvious:
+  // an infrequent-large schedule peaks far above this line, a frequent one hugs it.
+  if (calFT && _tcShowAvg()) {
+    var _lastInj = 0;
+    sorted.forEach(function(e){ var _d = Math.round((new Date(e.date) - firstDate) / 86400000); if (_d > _lastInj) _lastInj = _d; });
+    _lastInj = Math.max(0, Math.min(totalDays, _lastInj));
+    var _avgFrom = Math.floor(_lastInj / 2), _avgSum = 0, _avgN = 0;   // 2nd half of the schedule = settled
+    for (var _ai = _avgFrom; _ai <= _lastInj; _ai++) { _avgSum += total[_ai] * (calFT_arr ? calFT_arr[_ai] : scale); _avgN++; }
+    var _avgLvl = _avgN > 0 ? _avgSum / _avgN : 0;
+    if (_avgLvl > 0 && _avgLvl <= vMax) {
+      var _avY = yOf(_avgLvl);
+      ctx.strokeStyle = '#5ad1b0cc'; ctx.lineWidth = 1; ctx.setLineDash([1,3]);
+      ctx.beginPath(); ctx.moveTo(PAD.left, _avY); ctx.lineTo(PAD.left + cW, _avY); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#5ad1b0'; ctx.font = 'bold 8px DM Sans,sans-serif'; ctx.textAlign = 'right';
+      ctx.fillText('avg ' + Math.round(_avgLvl), PAD.left + cW, _avY - 3);
+    }
+  }
+
   // Warning badge for estimate tiers — a pill top-left of the plot so the user never
   // mistakes an age-default / no-SHBG curve for a bloodwork-calibrated result.
   if (_tier && _tier !== 'measured' && calFT) {
@@ -2334,6 +2369,10 @@ function buildTCalc() {
       html += '<button id="tc-zoom-' + z + '" onclick="_tcSetChartZoom(\'' + z + '\')" style="flex:1;background:' + (isA ? 'rgba(102,136,204,0.25)' : 'none') + ';border:1px solid ' + (isA ? '#6688cc66' : 'var(--border)') + ';border-radius:6px;color:' + (isA ? '#6688cc' : 'var(--muted2)') + ';font-size:9px;font-weight:700;letter-spacing:0.8px;cursor:pointer;padding:5px 2px;font-family:inherit">' + z.toUpperCase() + '</button>';
     });
     html += '</div>';
+    html += '<label style="display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:0.6px;color:var(--muted2);cursor:pointer;margin-bottom:8px;user-select:none">' +
+      '<input type="checkbox" ' + (_tcShowAvg() ? 'checked' : '') + ' onchange="_tcToggleAvgLine(this)" style="accent-color:#5ad1b0;width:13px;height:13px;cursor:pointer;margin:0"> ' +
+      '<span style="color:#5ad1b0">■</span> STEADY-STATE AVERAGE' +
+      '</label>';
     html += '<canvas id="tc-main-chart" style="width:100%;display:block;"></canvas>';
     html += '</div>';
   } else {

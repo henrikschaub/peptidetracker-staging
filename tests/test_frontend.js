@@ -4332,6 +4332,41 @@ if (typeof G._tcFreeTSeries === 'function') {
   G._tcp = _snSaveTp; G._tcBwEntries = _snSaveBw; G._tcGhStack = _snSaveGh;
 }
 
+// ── Steady-state AVERAGE line: toggle + the pharmacology it communicates ──
+console.log('\n── T-calc: steady-state average line ──');
+if (typeof G._tcShowAvg === 'function' && typeof G._tcToggleAvgLine === 'function') {
+  var _avSaved = null; try { _avSaved = localStorage.getItem('tc-avg-line'); } catch(e){}
+  var _avSaveTp = G._tcp; G._tcp = { manualLog: [] };   // make the toggle's redraw a no-op
+  try { localStorage.removeItem('tc-avg-line'); } catch(e){}
+  check('avg line: shown by default', G._tcShowAvg() === true);
+  G._tcToggleAvgLine({ checked: false });
+  check('avg line: hiding it persists (survives getData\'s ||-default trap)', G._tcShowAvg() === false);
+  G._tcToggleAvgLine({ checked: true });
+  check('avg line: re-showing it persists', G._tcShowAvg() === true);
+  G._tcp = _avSaveTp;
+  try { if (_avSaved === null) localStorage.removeItem('tc-avg-line'); else localStorage.setItem('tc-avg-line', _avSaved); } catch(e){}
+}
+
+// The line's premise: at steady state the MEAN is set by mg/day (dose ÷ interval),
+// independent of injection frequency, while the PEAK grows with dose-per-shot.
+// Proven directly from the PK primitive so it can't drift from the model.
+if (typeof G._tcPkConc === 'function' && typeof G._tcKa === 'function') {
+  var _ssHl = 7, _ssKe = Math.LN2 / _ssHl, _ssKa = G._tcKa(_ssHl);
+  function _ssMeanPeak(dose, interval) {
+    var N = 360, c = new Float64Array(N + 1);
+    for (var inj = 0; inj <= N; inj += interval) { for (var t = inj; t <= N; t++) c[t] += G._tcPkConc(dose, _ssKa, _ssKe, t - inj); }
+    var from = N - 60, sum = 0, n = 0, pk = 0;
+    for (var t2 = from; t2 <= N; t2++) { sum += c[t2]; if (c[t2] > pk) pk = c[t2]; n++; }
+    return { mean: sum / n, peak: pk };
+  }
+  var _ssA = _ssMeanPeak(100, 2);   // 50 mg/day, frequent small shots
+  var _ssB = _ssMeanPeak(300, 6);   // 50 mg/day, infrequent larger shots
+  check('avg line: steady-state MEAN is ~equal across injection frequency (same mg/day)',
+    Math.abs(_ssA.mean - _ssB.mean) / _ssA.mean < 0.02, 'meanA=' + _ssA.mean.toFixed(3) + ' meanB=' + _ssB.mean.toFixed(3));
+  check('avg line: PEAK is markedly higher for the infrequent larger dose',
+    _ssB.peak > _ssA.peak * 1.15, 'peakA=' + _ssA.peak.toFixed(3) + ' peakB=' + _ssB.peak.toFixed(3));
+}
+
 // ── Testosterone → SHBG dose-dependent free-T model (+ uncertainty band) ──
 console.log('\n── T-calc: testosterone→SHBG dose-dependent model + β band ──');
 if (typeof G._tcDrawManualChart === 'function') {
