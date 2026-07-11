@@ -1621,8 +1621,11 @@ function _tcFreeTSeries(sorted, hooks) {
       var _betaC  = _betaFit ? _betaFit.beta : TCALC_TSHBG_BETA;
       var _betaLo = _betaFit ? _betaFit.lo   : TCALC_TSHBG_BETA_LO;
       var _betaHi = _betaFit ? _betaFit.hi   : TCALC_TSHBG_BETA_HI;
+      // β is testosterone's own SHBG-suppression exponent. Fitting it needs ≥2 (total-T,
+      // SHBG) labs at different T levels, so with one draw we show the population value and
+      // tell the user what unlocks a personal fit — it does NOT mean their bloodwork is unused.
       _betaAnnot = _betaFit ? ('β ' + _betaC.toFixed(2) + ' · ' + _betaFit.n + ' labs')
-                            : ('β ' + TCALC_TSHBG_BETA.toFixed(2) + ' · population');
+                            : ('β ' + TCALC_TSHBG_BETA.toFixed(2) + ' · population · add a 2nd lab');
 
       calFT_arr = _mkArr(_betaC);
       if (_tier === 'measured') {
