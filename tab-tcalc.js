@@ -2617,16 +2617,17 @@ function buildTCalc() {
       html += '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:#f59e0b;">⚠ Age not set — go to Body Comp → Age to enable age-stratified reference ranges.</div>';
     }
 
-    // ADD ENTRY button
+    // Bloodwork entry lives in the Labs tab now — this panel is read-only context
+    // for the free-T model. Route add/edit/delete to the single front door.
     html += '<div style="display:flex;justify-content:flex-end">';
-    html += '<button onclick="event.stopPropagation();_tcBwOpenAddSheet()" style="background:linear-gradient(135deg,#cc8844,#aa6622);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;letter-spacing:0.8px;cursor:pointer;padding:7px 14px;font-family:inherit">+ ADD ENTRY</button>';
+    html += '<button onclick="event.stopPropagation();switchTab(\'labs\',document.getElementById(\'tab-btn-labs\'))" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;font-weight:800;letter-spacing:0.8px;cursor:pointer;padding:7px 14px;font-family:inherit">MANAGE IN LABS →</button>';
     html += '</div>';
 
     // Entry list
     if (_tcBwEntries === null) {
       html += '<div style="text-align:center;padding:16px 0;color:var(--muted2);font-size:13px">Loading…</div>';
     } else if (_tcBwEntries.length === 0) {
-      html += '<div style="text-align:center;padding:16px 0;color:var(--muted2);font-size:13px">No blood test entries yet.<br><span style="font-size:12px;opacity:0.6">Tap + ADD ENTRY to log your first result.</span></div>';
+      html += '<div style="text-align:center;padding:16px 0;color:var(--muted2);font-size:13px">No blood test entries yet.<br><span style="font-size:12px;opacity:0.6">Add your first result in the Labs tab.</span></div>';
     } else {
       var _fmtBwDate = function(iso) {
         if (!iso) return '';
@@ -2650,7 +2651,6 @@ function buildTCalc() {
         html += '</div>';
         if (parts.length) html += '<div style="font-size:12px;color:var(--muted2);line-height:1.6">' + _esc(parts.join(' · ')) + '</div>';
         html += '</div>';
-        html += '<button onclick="event.stopPropagation();_tcBwDeleteEntry(\'' + _esc(entry.id) + '\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:18px;line-height:1;cursor:pointer;padding:4px 9px;flex-shrink:0">×</button>';
         html += '</div>';
       });
     }
