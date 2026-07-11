@@ -4964,6 +4964,50 @@ if (typeof G._cycleBwMatch === 'function') {
   check('Labs save refreshes the cycle view',      labs.includes('renderCyclesTab()'));
 }
 
+// ── Phase 5: analysis polish (safety summary, sparklines, tier) ───────────────
+console.log('\n── Labs Phase 5: safety summary + sparklines + tier ───────');
+if (typeof G._labSafetyFindings === 'function') {
+  G._labSetCatalogue({
+    version: 't5',
+    panels: [{key:'cbc',label:'Blood count'},{key:'hormones',label:'Hormones'}],
+    markers: [
+      {key:'hematocrit',label:'Hematocrit',unit:'%',panel:'cbc',direction:'band',safety:true,
+       ranges:{male:{low:40,high:54},female:{low:36,high:48}},altUnits:[],meaning:'hct-mean',note:'hct-note'},
+      {key:'total_t',label:'Total T',unit:'nmol/L',panel:'hormones',direction:'band',safety:false,
+       ranges:{male:{low:8.6,high:29},female:{low:0.3,high:2.4}},altUnits:[],meaning:'tt-mean'},
+    ],
+  });
+  const entries = [
+    {date:'2026-07-01', markers:{hematocrit:{value:50}}},
+    {date:'2026-06-01', markers:{hematocrit:{value:45}}},
+  ];
+  // tier
+  check('_labTier default is 1',        G._labTier() === 1);
+  const _st = G._userTier; G._userTier = 4;
+  check('_labTier reflects _userTier',  G._labTier() === 4);
+  G._userTier = _st;
+  // series + sparkline
+  const ser = G._labSeries(entries, 'hematocrit');
+  check('series oldest→newest',         ser.length === 2 && ser[0].value === 45 && ser[1].value === 50);
+  check('sparkline empty when <2 pts',  G._labSparkline([entries[0]], 'hematocrit') === '');
+  const spk = G._labSparkline(entries, 'hematocrit');
+  check('sparkline is an SVG path',      /<svg/.test(spk) && /<path/.test(spk));
+  // derived safety findings
+  const fHigh = G._labSafetyFindings({markers:{hematocrit:{value:58}}});
+  check('safety finding on out-of-range safety marker', fHigh.length === 1 && fHigh[0].key === 'hematocrit' && fHigh[0].flag === 'high');
+  check('safety finding prefers backend note',          fHigh[0].text === 'hct-note');
+  check('no safety finding when in range',              G._labSafetyFindings({markers:{hematocrit:{value:48}}}).length === 0);
+  check('no safety finding for non-safety marker',      G._labSafetyFindings({markers:{total_t:{value:40}}}).length === 0);
+} else {
+  check('tab-labs.js Phase 5 helpers present', false, '_labSafetyFindings missing');
+}
+{
+  const labs = fs.readFileSync(path.join(__dirname, '../tab-labs.js'), 'utf8');
+  check('Labs renders a derived safety card',   labs.includes('_labSafetyCard(entries[0])'));
+  check('Labs marker rows include a sparkline',  labs.includes('_labSparkline(entries, key)'));
+  check('safety guidance uses backend note→meaning', labs.includes('m.note || m.meaning'));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
