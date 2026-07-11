@@ -34,6 +34,7 @@ var _tcChartPanOffset = 0;   // horizontal pan in days (float, only used in zoom
 var _tcGhStack = [];          // [{pepId, startDateStr, interactions, dailyDose}] — SHBG suppressors from active stacks (dailyDose in the compound's doseResponse unit)
 var _tcSysInter = null;       // compounds map from /systemic-interactions
 var _tcFtBaseline = null;      // age→free-T population baseline (pmol/L) from /systemic-interactions
+var _tcShbgBaseline = null;    // age→SHBG population baseline (nmol/L) from /systemic-interactions
 var _tcActiveStacks = null;   // raw response from /protocol/stacks
 
 // Testosterone → SHBG dose-response model. Exogenous androgens suppress hepatic
@@ -200,6 +201,7 @@ function _tcLoadProfile() {
       if (!d || !d.compounds) return;
       _tcSysInter = d.compounds;
       if (d.ftBaseline) _tcFtBaseline = d.ftBaseline;
+      if (d.shbgBaseline) _tcShbgBaseline = d.shbgBaseline;
       _tcComputeGhStack();
       buildTCalc();
     })
@@ -391,6 +393,28 @@ function _tcVermeulenFT(totalT, shbg) {
   var alb    = 4.3 / 66500 * 10;
   var denom  = 1 + K_SHBG * (shbg * 1e-9) + K_ALB * alb;
   return (totalT * 1e-9 / denom) * 1e12;
+}
+
+// Inverse of the (linear-in-TT) Vermeulen equation: given free T (pmol/L) and SHBG
+// (nmol/L), return the total T (nmol/L) that produces it. Used to infer a plausible
+// total T for users without a measured value, so the SHBG model can still run.
+function _tcInvVermeulenTT(freeFT, shbg) {
+  if (!(freeFT > 0) || !(shbg > 0)) return 0;
+  var K_SHBG = 5.97e8, K_ALB = 3.6e4;
+  var alb    = 4.3 / 66500 * 10;
+  var denom  = 1 + K_SHBG * (shbg * 1e-9) + K_ALB * alb;
+  return freeFT * denom / 1000;
+}
+
+// Population SHBG baseline (nmol/L) for an age, from the backend age→SHBG table.
+// 0 when the table isn't loaded or the age is unknown (model then can't run).
+function _tcShbgBaselineForAge(age) {
+  var b = _tcShbgBaseline;
+  if (!b || !b.bands || !(age > 0)) return 0;
+  for (var i = 0; i < b.bands.length; i++) {
+    if (age <= b.bands[i].max_age) return b.bands[i].value;
+  }
+  return b.bands[b.bands.length - 1].value;
 }
 
 // ── PK helpers ────────────────────────────────────────────────────────────────
@@ -1473,11 +1497,19 @@ function _tcFreeTSeries(sorted, hooks) {
   var calFT_arr = null, _calFTlo = null, _calFThi = null;
   var _ghAnnot  = '';
   var _betaAnnot = '';
-  var _ttNum  = parseDec(_tcp.totalT) || 0;
-  var _shbgBw = parseDec(_tcp.shbg)   || 0;
-  if (calFT && _ttNum > 0 && _shbgBw > 0) {
-    var _vermBw = _tcVermeulenFT(_ttNum, _shbgBw);
-    if (_vermBw) {
+  var _shbgMeas = parseDec(_tcp.shbg)   || 0;
+  var _ttMeas   = parseDec(_tcp.totalT) || 0;
+  var _tcAge    = (parseInt(_tcp.birthYear, 10) > 0) ? (new Date().getFullYear() - parseInt(_tcp.birthYear, 10)) : 0;
+  // Confidence tier from DATA availability (not from whether the model ran):
+  //   measured : total-T + SHBG bloodwork    → full model incl. T-driven β, β-band
+  //   partial  : only a measured free T        → GH/Boron suppression on a population SHBG base
+  //   estimate : no bloodwork (age-default FT) → same, wide band
+  var _tier = (_shbgMeas > 0 && _ttMeas > 0) ? 'measured' : (_ftIsDefault ? 'estimate' : 'partial');
+  // Baseline SHBG: measured when present, else a population value for the user's age. The
+  // SHBG suppression model runs whenever we have one — so GH/Boron move the curve even with
+  // no bloodwork (population averages) or only a partial / mid-cycle test.
+  var _popShbg = (_shbgMeas > 0) ? 0 : _tcShbgBaselineForAge(_tcAge);
+  if (calFT && (_shbgMeas > 0 || _popShbg > 0)) {
       // SHBG anchor day: the bloodwork draw if entered, else the free-T calibration anchor.
       var _bwEntry = (_tcBwEntries && _tcBwEntries[0]) ? _tcBwEntries[0] : null;
       var _bwDate = _bwEntry ? _bwEntry.date : null;
@@ -1541,11 +1573,22 @@ function _tcFreeTSeries(sorted, hooks) {
         _ghParams.forEach(function(gp) { p *= (1 - _suppAt(gp, day)); });
         return p;
       };
-      // Back-calculate the unsuppressed SHBG base from the compound product at the anchor.
-      // With a draw snapshot _ghProd(drawDay) uses asymSnap, so the base is fixed against
-      // later dose edits (the whole point of this fix).
       var _prodRef = _ghProd(_shbgRefDay);
-      var _shbgBase = (_prodRef > 0.05) ? _shbgBw / _prodRef : _shbgBw;
+      // Unsuppressed baseline SHBG + the SHBG value at the anchor.
+      //  • measured : back it out of the measured draw (fixed by the snapshot).
+      //  • population: the age baseline IS the unsuppressed value; suppress it to get the anchor.
+      var _shbgBase, _shbgBw;
+      if (_shbgMeas > 0) {
+        _shbgBw = _shbgMeas;
+        _shbgBase = (_prodRef > 0.05) ? _shbgBw / _prodRef : _shbgBw;
+      } else {
+        _shbgBase = _popShbg;
+        _shbgBw = _shbgBase * _prodRef;
+      }
+      // Total T: measured, else inferred from the free-T anchor + baseline SHBG (Vermeulen inverse).
+      var _ttNum = _ttMeas > 0 ? _ttMeas : _tcInvVermeulenTT(_mftNum, _shbgBw);
+      var _vermBw = (_ttNum > 0 && _shbgBw > 0) ? _tcVermeulenFT(_ttNum, _shbgBw) : null;
+      if (_vermBw) {
       // Lagged testosterone level: EMA of the modelled accumulation (SHBG responds over weeks).
       var _tlag = new Float64Array(totalDays + 1);
       var _alpha = 1 - Math.exp(-1 / TCALC_TSHBG_LAG_DAYS);
@@ -1558,10 +1601,16 @@ function _tcFreeTSeries(sorted, hooks) {
         var f = Math.pow(r, -beta);
         return Math.max(0.35, Math.min(1.30, f));  // physiological clamp: ≤65% drop, ≤30% rise
       };
+      // Testosterone's OWN dose-dependent SHBG suppression (the β power-law) is only trustworthy
+      // with a MEASURED total T. In the population tiers we apply the GH/Boron (dose-driven)
+      // suppression alone — so with no suppressors the curve stays flat at the anchor, and with
+      // GH/Boron it shows their effect, without inventing a T-driven swing we can't support.
+      var _useBeta = (_tier === 'measured');
       var _mkArr = function(beta) {
         var arr = new Float64Array(totalDays + 1);
         for (var t = 0; t <= totalDays; t++) {
-          var _shbgT = Math.max(1, _shbgBase * _ghProd(t) * _tFactor(t, beta));
+          var _tf = _useBeta ? _tFactor(t, beta) : 1;
+          var _shbgT = Math.max(1, _shbgBase * _ghProd(t) * _tf);
           var _vermT = _tcVermeulenFT(_ttNum, _shbgT);
           arr[t] = _vermT ? calFT * (_vermT / _vermBw) : calFT;
         }
@@ -1576,27 +1625,33 @@ function _tcFreeTSeries(sorted, hooks) {
                             : ('β ' + TCALC_TSHBG_BETA.toFixed(2) + ' · population');
 
       calFT_arr = _mkArr(_betaC);
-      _calFTlo  = _mkArr(_betaLo);
-      _calFThi  = _mkArr(_betaHi);
-      if (hooks.shbg) hooks.shbg({ calFT: calFT, arr: calFT_arr, lo: _calFTlo, hi: _calFThi, refDay: _shbgRefDay, total: total, beta: _betaC, personalized: !!_betaFit });
+      if (_tier === 'measured') {
+        _calFTlo = _mkArr(_betaLo);
+        _calFThi = _mkArr(_betaHi);
+      } else {
+        // Population tiers: a wide symmetric band reflecting the estimate's uncertainty,
+        // drawn around the (suppression-aware) central curve.
+        var _frac = (_tier === 'estimate') ? 0.35 : 0.20;
+        _calFTlo = new Float64Array(totalDays + 1);
+        _calFThi = new Float64Array(totalDays + 1);
+        for (var _bi = 0; _bi <= totalDays; _bi++) {
+          _calFTlo[_bi] = calFT_arr[_bi] * (1 - _frac);
+          _calFThi[_bi] = calFT_arr[_bi] * (1 + _frac);
+        }
+      }
+      if (hooks.shbg) hooks.shbg({ calFT: calFT, arr: calFT_arr, lo: _calFTlo, hi: _calFThi, refDay: _shbgRefDay, total: total, beta: _betaC, personalized: !!_betaFit, tier: _tier });
 
-      // Modelled SHBG change at "now" vs the bloodwork value, for the chart annotation.
+      // Modelled SHBG change at "now" vs the anchor, for the chart annotation.
       var _nowDay = Math.max(0, Math.min(totalDays, Math.round((Date.now() - firstDate.getTime()) / 86400000)));
-      var _shbgNow = _shbgBase * _ghProd(_nowDay) * _tFactor(_nowDay, _betaC);
-      var _shbgDelta = _shbgBw > 0 ? (_shbgNow / _shbgBw - 1) : 0;
+      var _shbgNow = _shbgBase * _ghProd(_nowDay) * (_useBeta ? _tFactor(_nowDay, _betaC) : 1);
+      var _shbgAnchor = _shbgBase * _ghProd(_shbgRefDay);
+      var _shbgDelta = _shbgAnchor > 0 ? (_shbgNow / _shbgAnchor - 1) : 0;
       if (Math.abs(_shbgDelta) > 0.01) _ghAnnot = 'SHBG ' + (_shbgDelta < 0 ? '−' : '+') + Math.round(Math.abs(_shbgDelta) * 100) + '%';
-    }
+      }
   }
 
-  // Confidence tier + always-visible uncertainty band.
-  //   measured : the SHBG model ran off real bloodwork (β-band already built above)
-  //   partial  : the user gave a measured free T but no SHBG/total-T, so there are no
-  //              SHBG dynamics — medium band, no dose-driven swing
-  //   estimate : no bloodwork at all — free T is an age-based population default (wide band)
-  // For the two non-measured tiers we synthesise a symmetric relative band so the chart
-  // never implies false precision; the draw path renders these dashed with a warning badge.
-  // This is what lets users who can't test regularly still see an honest estimate.
-  var _tier = calFT_arr ? 'measured' : (_ftIsDefault ? 'estimate' : 'partial');
+  // If the SHBG model could not run (no measured SHBG and no population baseline — e.g. no
+  // age on file), still render the estimate with a synthetic wide band so it's never blank.
   if (!calFT_arr && calFT) {
     var _estFrac = (_tier === 'estimate') ? 0.35 : 0.20;
     calFT_arr = new Float64Array(totalDays + 1);
