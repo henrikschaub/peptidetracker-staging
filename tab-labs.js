@@ -255,10 +255,12 @@ function _labRender() {
 
 var LAB_QUICK_KEYS = ['total_t', 'free_t', 'shbg', 'estradiol'];
 
-function _labOpenAddSheet() {
-  if (!_labMarkers) { syncLabMarkersFromAgent().then(_labOpenAddSheet); return; }
+function _labOpenAddSheet(prefillDate) {
+  if (!_labMarkers) { syncLabMarkersFromAgent().then(function () { _labOpenAddSheet(prefillDate); }); return; }
   var today = new Date().toISOString().slice(0, 10);
-  _labAdd = { date: today, dose: '', values: {} };
+  // Optional pre-filled date (e.g. opened from a cycle bloodwork checkpoint); never future.
+  var d0 = (typeof prefillDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(prefillDate) && prefillDate <= today) ? prefillDate : today;
+  _labAdd = { date: d0, dose: '', values: {} };
   _labMoreOpen = false;
   var ol = document.createElement('div');
   ol.id = 'lab-add-overlay';
@@ -396,6 +398,11 @@ async function _labConfirmAdd() {
   if (typeof _tcBwLoading !== 'undefined') _tcBwLoading = true;
   await _tcFetchBwEntries();   // refresh shared store (also re-syncs the T-Calc)
   buildLabs();
+  // If logged from a cycle bloodwork checkpoint, refresh that view so the
+  // checkpoint reflects the new entry from the unified store.
+  if (typeof renderCyclesTab === 'function' && typeof _currentTab !== 'undefined' && _currentTab === 'stacks') {
+    try { renderCyclesTab(); } catch (_e) {}
+  }
 }
 
 async function _labDeleteEntry(id) {
