@@ -66,7 +66,7 @@ const sandbox = vm.createContext({
 vm.runInContext(patchedScript, sandbox);
 // Load tab files so their functions/vars are available in the same sandbox
 const tabFiles = ['tab-cycles.js','tab-macros.js','tab-stack.js','tab-today.js',
-                  'tab-schedule.js','tab-timeline.js','tab-body.js','tab-recon.js','tab-blood.js','tab-tcalc.js','tab-supplements.js'];
+                  'tab-schedule.js','tab-timeline.js','tab-body.js','tab-recon.js','tab-blood.js','tab-tcalc.js','tab-labs.js','tab-supplements.js'];
 const dir = path.dirname(path.resolve(htmlPath));
 tabFiles.forEach(f => {
   const tabPath = path.join(dir, f);
@@ -4841,6 +4841,85 @@ check('body measurements parse via parseDec',  html.includes('var v=parseDec(inp
   check('tab-tcalc.js has no raw parseFloat left', !tcalcSrc.includes('parseFloat('));
   const stackSrc = fs.readFileSync(path.join(__dirname, '../tab-stack.js'), 'utf8');
   check('tab-stack.js has no raw parseFloat left', !stackSrc.includes('parseFloat('));
+}
+
+// ── Labs: catalogue-driven bloodwork flagging ─────────────────────────────────
+console.log('\n── Labs: flagging / conversion / trend ────────────────────');
+if (typeof G._labSetCatalogue === 'function') {
+  // seed a small catalogue (the real one comes from GET /lab-markers; fetch is stubbed)
+  G._labSetCatalogue({
+    version: 't',
+    panels: [{key:'hormones',label:'Hormones'},{key:'cbc',label:'Blood count'},{key:'lipids',label:'Lipids'}],
+    markers: [
+      {key:'total_t',label:'Total Testosterone',unit:'nmol/L',panel:'hormones',direction:'band',safety:false,
+       ranges:{male:{low:8.6,high:29.0},female:{low:0.3,high:2.4}},altUnits:[{unit:'ng/dL',factor:28.84}],meaning:'m1'},
+      {key:'hematocrit',label:'Hematocrit',unit:'%',panel:'cbc',direction:'band',safety:true,
+       ranges:{male:{low:40,high:54},female:{low:36,high:48}},altUnits:[],meaning:'m2'},
+      {key:'hdl',label:'HDL',unit:'mmol/L',panel:'lipids',direction:'higher',safety:true,
+       ranges:{male:{low:1.0,high:null},female:{low:1.3,high:null}},altUnits:[],meaning:'m3'},
+      {key:'ldl',label:'LDL',unit:'mmol/L',panel:'lipids',direction:'lower',safety:true,
+       ranges:{male:{low:0,high:3.0},female:{low:0,high:3.0}},altUnits:[],meaning:'m4'},
+    ],
+  });
+  const M = k => G._labMarkerIndex[k];
+
+  // band: below/above/in
+  check('lab flag band: below range → low',  G._labFlag(M('total_t'), 6, 'male') === 'low');
+  check('lab flag band: above range → high', G._labFlag(M('total_t'), 40, 'male') === 'high');
+  check('lab flag band: within → in',        G._labFlag(M('total_t'), 18, 'male') === 'in');
+  // sex-specific range applied
+  check('lab flag uses female range',        G._labFlag(M('total_t'), 1.5, 'female') === 'in' && G._labFlag(M('total_t'), 1.5, 'male') === 'low');
+  // direction: lower (only flags high), higher (only flags low)
+  check('lab flag lower: high LDL flagged',  G._labFlag(M('ldl'), 4.0, 'male') === 'high');
+  check('lab flag lower: low LDL is in',     G._labFlag(M('ldl'), 0.5, 'male') === 'in');
+  check('lab flag higher: low HDL flagged',  G._labFlag(M('hdl'), 0.8, 'male') === 'low');
+  check('lab flag higher: open top is in',   G._labFlag(M('hdl'), 3.0, 'male') === 'in');   // high bound null
+  check('lab flag: null value → null',       G._labFlag(M('total_t'), null, 'male') === null);
+
+  // unit conversion: entered ng/dL → canonical nmol/L (alt = canonical*factor ⇒ canonical = alt/factor)
+  const conv = G._labConvert(M('total_t'), 577, 'ng/dL');
+  check('lab convert ng/dL→nmol/L ≈ 20', Math.abs(conv - 20) < 0.2, `got ${conv}`);
+  check('lab convert: canonical unit passthrough', G._labConvert(M('total_t'), 20, 'nmol/L') === 20);
+  check('lab convert: empty unit passthrough',     G._labConvert(M('total_t'), 20, '') === 20);
+
+  // entry value resolution: unified markers map preferred, legacy mirror fallback
+  check('lab entry value: from markers map', G._labEntryValue({markers:{hematocrit:{value:52,unit:'%'}}}, 'hematocrit').value === 52);
+  check('lab entry value: legacy mirror',    G._labEntryValue({total_t:22}, 'total_t').value === 22);
+  check('lab entry value: missing → null',   G._labEntryValue({markers:{}}, 'shbg') === null);
+
+  // trend vs previous older entry (entries sorted date-desc)
+  const entries = [
+    {date:'2026-07-01', markers:{total_t:{value:22,unit:''}}},
+    {date:'2026-06-01', markers:{total_t:{value:18,unit:''}}},
+  ];
+  check('lab trend: rising vs previous', (G._labTrend(entries,0,'total_t')||{}).dir === 'up');
+  check('lab trend: none when no prior', G._labTrend(entries,1,'total_t') === null);
+
+  // safety flag colouring: out-of-range safety marker uses danger
+  check('lab flag meta: safety high → danger', G._labFlagMeta('high', true).color === 'var(--danger)');
+  check('lab flag meta: non-safety high → warning', G._labFlagMeta('high', false).color === 'var(--warning)');
+  check('lab flag meta: in → ok colour', G._labFlagMeta('in', true).label === 'In range');
+
+  // entry key ordering follows catalogue order, includes legacy mirrors
+  const ek = G._labEntryKeys({markers:{hdl:{value:1.2}}, total_t:20});
+  check('lab entry keys: catalogue-ordered', ek.indexOf('total_t') < ek.indexOf('hdl'));
+} else {
+  check('tab-labs.js loaded (_labSetCatalogue present)', false, 'tab-labs.js not loaded in harness');
+}
+
+// wiring: the Labs tab is registered end-to-end in index.html
+check('Labs tab button present',        html.includes("switchTab('labs',this)"));
+check('Labs content pane present',      html.includes('id="tab-labs"'));
+check('Labs in TAB_DEFAULTS',           /TAB_DEFAULTS=[^;]*labs:true/.test(html));
+check('Labs dispatched in switchTab',   html.includes("if(id==='labs')buildLabs()"));
+check('tab-labs.js script included',    html.includes('tab-labs.js'));
+check('lab-markers catalogue synced on init', html.includes('syncLabMarkersFromAgent()'));
+{
+  const labsSrc = fs.readFileSync(path.join(__dirname, '../tab-labs.js'), 'utf8');
+  check('tab-labs.js has no raw parseFloat', !labsSrc.includes('parseFloat('));
+  check('tab-labs.js writes structured markers to /bloodwork', labsSrc.includes("markers: markers") && labsSrc.includes("'/bloodwork'"));
+  check('tab-labs.js keeps total_t/shbg/free_t mirrors', labsSrc.includes("total_t: mirror('total_t')"));
+  check('tab-labs.js does not hardcode reference ranges (backend-driven)', labsSrc.includes('/lab-markers'));
 }
 
 console.log('\n───────────────────────────────────────────────────────────');
