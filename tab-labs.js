@@ -135,6 +135,80 @@ function _labEntryKeys(entry) {
   return keys;
 }
 
+// ── analysis: series, sparklines, derived safety (Phase 5) ────────────────────
+
+function _labTier() {
+  return (typeof _userTier === 'number' && _userTier > 0) ? _userTier : 1;
+}
+
+// canonical value series for a marker, oldest → newest (for sparkline + trend).
+function _labSeries(entries, key) {
+  var out = [];
+  (entries || []).forEach(function (e) {
+    var v = _labCanonical(e, key);
+    if (v != null && e && e.date) out.push({ date: e.date, value: v });
+  });
+  out.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  return out;
+}
+
+// tiny inline sparkline of a marker's history; '' when fewer than 2 points.
+function _labSparkline(entries, key) {
+  var s = _labSeries(entries, key);
+  if (s.length < 2) return '';
+  var w = 52, h = 16, pad = 2;
+  var vals = s.map(function (p) { return p.value; });
+  var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+  var rng = (mx - mn) || 1;
+  var d = s.map(function (p, i) {
+    var x = pad + (w - 2 * pad) * (i / (s.length - 1));
+    var y = pad + (h - 2 * pad) * (1 - (p.value - mn) / rng);
+    return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+  }).join(' ');
+  var lx = pad + (w - 2 * pad);
+  var ly = pad + (h - 2 * pad) * (1 - (vals[vals.length - 1] - mn) / rng);
+  return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" style="flex-shrink:0;opacity:.85" aria-hidden="true">' +
+    '<path d="' + d + '" fill="none" stroke="var(--muted2)" stroke-width="1.2"/>' +
+    '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="1.7" fill="var(--accent)"/></svg>';
+}
+
+// derived safety findings on an entry: safety-flagged markers out of range, with
+// the backend's own guidance text (note, else meaning). Never invents medical copy.
+function _labSafetyFindings(entry) {
+  if (!entry) return [];
+  var sex = _labSex(), out = [];
+  _labEntryKeys(entry).forEach(function (k) {
+    var m = _labMarkerIndex[k];
+    if (!m || !m.safety) return;
+    var f = _labFlag(m, _labCanonical(entry, k), sex);
+    if (f === 'high' || f === 'low') out.push({ key: k, label: m.label, flag: f, text: (m.note || m.meaning || '') });
+  });
+  return out;
+}
+
+function _labSafetyCard(entry) {
+  var f = _labSafetyFindings(entry);
+  if (f.length) {
+    var rows = f.map(function (x) {
+      var meta = _labFlagMeta(x.flag, true);
+      return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:12.5px;font-weight:700;color:var(--text)">' + _esc(x.label) + '</span>' +
+        '<span style="font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + meta.color + ';border:1px solid ' + meta.color + ';border-radius:5px;padding:2px 6px">' + meta.label + '</span></div>' +
+        (x.text ? '<div style="font-size:10.5px;color:var(--muted2);line-height:1.45;margin-top:4px">' + _esc(x.text) + '</div>' : '') + '</div>';
+    }).join('');
+    return '<div class="card" style="border-color:var(--danger)"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--danger)"></div><div class="card-title">WORTH ATTENTION</div></div></div>' +
+      '<div style="padding:2px 16px 12px">' + rows +
+      '<div style="font-size:10px;color:var(--muted2);margin-top:8px;line-height:1.4">Not medical advice — discuss anything out of range with your doctor.</div></div></div>';
+  }
+  var anySafety = _labEntryKeys(entry).some(function (k) { var m = _labMarkerIndex[k]; return m && m.safety; });
+  if (anySafety) {
+    return '<div class="card" style="border-color:var(--accent3)"><div style="padding:14px 16px;display:flex;align-items:center;gap:10px">' +
+      '<span style="color:var(--accent3);font-size:16px">✓</span>' +
+      '<span style="font-size:12.5px;color:var(--text)">Safety markers in range as of ' + _esc(entry.date || '') + '.</span></div></div>';
+  }
+  return '';
+}
+
 // ── render ────────────────────────────────────────────────────────────────────
 
 function _labSignedIn() {
@@ -193,12 +267,15 @@ function _labMarkerRow(entry, entries, idx, key) {
   var meta = _labFlagMeta(flag, m && m.safety);
   var tr = _labTrend(entries, idx, key);
   var arrow = tr ? (tr.dir === 'up' ? '▲' : tr.dir === 'down' ? '▼' : '–') : '';
+  var spark = (idx === 0) ? _labSparkline(entries, key) : '';   // history sparkline on the latest draw
   var pill = flag ? '<span style="font-size:9px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:' + meta.color + ';border:1px solid ' + meta.color + ';border-radius:5px;padding:2px 6px;flex-shrink:0">' + meta.label + '</span>' : '';
-  var showMeaning = m && m.meaning && (flag === 'high' || flag === 'low' || (m.safety && flag));
+  // Beginners (tier ≤ 2) get the plain-language line on every marker; pros only on the notable ones.
+  var showMeaning = m && m.meaning && (_labTier() <= 2 || flag === 'high' || flag === 'low' || (m.safety && flag));
   var meaning = showMeaning ? '<div style="font-size:10.5px;color:var(--muted2);line-height:1.45;margin-top:5px">' + _esc(m.meaning) + '</div>' : '';
   return '<div style="padding:10px 2px;border-bottom:1px solid var(--border)">' +
     '<div style="display:flex;align-items:center;gap:8px">' +
       '<div style="font-size:13px;font-weight:600;color:var(--text)">' + _esc(label) + (m && m.safety ? ' <span style="color:var(--warning);font-size:10px">◆</span>' : '') + '</div>' +
+      spark +
       '<div style="margin-left:auto;font-size:13px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums">' + _esc(String(raw.value)) + ' <span style="font-size:10px;color:var(--muted2);font-weight:500">' + _esc(unit) + '</span></div>' +
       (arrow ? '<span style="font-size:10px;color:var(--muted2);flex-shrink:0" title="vs previous draw">' + arrow + '</span>' : '') +
       pill +
@@ -247,6 +324,7 @@ function _labRender() {
       '</div></div>';
     return html;
   }
+  html += _labSafetyCard(entries[0]);   // derived safety summary, all tiers
   entries.forEach(function (e, i) { html += _labEntryCard(e, entries, i, !!_labExpanded[i]); });
   return html;
 }
