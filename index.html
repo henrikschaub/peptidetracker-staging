@@ -676,10 +676,15 @@ async function refreshInjectionsCache(){
   var _todayKey=dateKey(today0);
   var _orphanBulkDel={};
   entries.forEach(function(e){
-    // T-calc entries always pass through — no orphan check, no cycle_id filter
-    if(e.cycle_id==='tcalc'){
-      if(!_injectionsCache[e.date])_injectionsCache[e.date]=[];
-      _injectionsCache[e.date].push(e);
+    var _cyc=e.cycle_id||'';
+    // T-Calc testosterone: unassigned ('tcalc') is global and always shows;
+    // assigned ('tcalc:<stackId>') shows only while its stack is active. Either
+    // way it bypasses the orphan-compound check.
+    if(_cyc==='tcalc'||_cyc.indexOf('tcalc:')===0){
+      if(_tcalcEntryVisible(e,activeCycleIds)){
+        if(!_injectionsCache[e.date])_injectionsCache[e.date]=[];
+        _injectionsCache[e.date].push(e);
+      }
       return;
     }
     if(!activeCycleIds.has(e.cycle_id))return;
@@ -882,6 +887,7 @@ async function toggleStack(idx){
   }
   updateWEEKLY();
   await saveStacksToBackend();
+  if(typeof refreshInjectionsCache==='function')await refreshInjectionsCache();
   buildWeekStrip();
   buildToday();
   buildSchedule();
@@ -893,6 +899,7 @@ async function useStack(idx){
     _activeStackIndices=[idx];
     updateWEEKLY();
     await saveStacksToBackend();
+    if(typeof refreshInjectionsCache==='function')await refreshInjectionsCache();
     buildWeekStrip();
     buildToday();
     buildSchedule();
@@ -919,6 +926,15 @@ async function deleteStack(idx){
 function _injOwnerStackId(e){
   var c=(e&&e.cycle_id)||'';
   return (c.indexOf('tcalc:')===0)?c.slice(6):c;
+}
+// A 'tcalc'-family injection is visible when unassigned (global 'tcalc') or when
+// assigned ('tcalc:<id>') to a currently-active stack. activeCycleIds is the Set
+// of active stacks' cycle ids (== their stable ids).
+function _tcalcEntryVisible(e, activeCycleIds){
+  var cyc=(e&&e.cycle_id)||'';
+  if(cyc==='tcalc')return true;
+  if(cyc.indexOf('tcalc:')===0)return !!(activeCycleIds&&activeCycleIds.has(_injOwnerStackId(e)));
+  return false;
 }
 // Does a stack have any testosterone (tier 'trt') injection scheduled — whether
 // generated from a configured TRT compound or assigned from the T-Calc planner?
