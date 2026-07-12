@@ -5008,6 +5008,21 @@ if (typeof G._labSafetyFindings === 'function') {
   check('safety guidance uses backend note→meaning', labs.includes('m.note || m.meaning'));
 }
 
+// ── Blood Levels: "Day" zoom is a 24h window, not several days ────────────────
+console.log('\n── Blood Levels: Day zoom = 24h window ────────────────────');
+{
+  const blSrc = fs.readFileSync(path.join(__dirname, '../tab-blood.js'), 'utf8');
+  const m = blSrc.match(/_blZoom==='today'\)\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/);
+  check("'today' zoom branch found", !!m);
+  if (m) {
+    const body = m[1];
+    // window must be a single day: start ≈ now-0.5, end = start+1 (24h), not nowDay±2
+    check("Day zoom spans 24h (xStart+1)",     body.includes('xStart+1'));
+    check("Day zoom centred on now (-0.5)",    body.includes('nowDay-0.5'));
+    check("Day zoom no longer ±2 days",        !body.includes('nowDay-2') && !body.includes('nowDay+2'));
+  }
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
