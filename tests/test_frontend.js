@@ -5037,6 +5037,25 @@ if (Array.isArray(G.TRT_CAT)) {
   check("Today recolours TRT doses red at render", todaySrc.includes("dose.tier==='trt'?'#e05050'"));
 }
 
+// ── Stack cards: tier badges (peptide / TRT / enhanced), option B ─────────────
+console.log('\n── Stack tier badges (detect from what the stack runs) ────');
+if (typeof G._stackTierFlags === 'function') {
+  const f = G._stackTierFlags;
+  check('tier: configured TRT compound → TRT',   f({peptides:[1,2],trt:{compounds:[{id:'nebido'}]}}, false, false).trt === true);
+  check('tier: active + T-Calc testosterone → TRT', f({peptides:[1,2],trt:{}}, true, true).trt === true);
+  check('tier: inactive + T-Calc testosterone → no TRT', f({peptides:[1,2],trt:{}}, false, true).trt === false);
+  check('tier: enhanced compounds → Enhanced',   f({peptides:[],enhanced:{compounds:[{id:'tren'}]}}, false, false).enhanced === true);
+  check('tier: peptide count + flag',            f({peptides:[1,2,3]}, false, false).pCount === 3 && f({peptides:[1,2,3]}, false, false).peptide === true);
+  check('tier: empty stack → no tiers', (function(){ var t=f({peptides:[],trt:{},enhanced:{compounds:[]}}, false, false); return !t.peptide && !t.trt && !t.enhanced; })());
+} else {
+  check('_stackTierFlags present', false);
+}
+{
+  const idxSrc = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  check('stack card renders TRT + Enhanced chips', idxSrc.includes("_stackTierChip('TRT','#e05050')") && idxSrc.includes("_stackTierChip('ENHANCED'"));
+  check('stack card uses tcalc-aware tier flags',  idxSrc.includes('_stackTierFlags(st,isActive,hasTcalcTrt)'));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);

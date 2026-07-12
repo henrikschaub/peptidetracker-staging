@@ -910,6 +910,20 @@ async function deleteStack(idx){
   }
 }
 // ── Build stack store view ───────────────────────────────────────────────────
+// Which tiers a stack represents, for the stack-card badges. Detects the tier
+// from what the stack actually runs — NOT only from where it was configured:
+// TRT counts whether it's a configured TRT compound on the stack OR (for the
+// active stack) testosterone planned in the T-Calc planner (cycle_id 'tcalc').
+function _stackTierFlags(st, isActive, hasTcalcTrt){
+  var pCount=(st&&st.peptides)?st.peptides.length:0;
+  var cfgTrt=!!(st&&st.trt&&(st.trt.compound||(st.trt.compounds&&st.trt.compounds.length)));
+  var hasTrt=cfgTrt||!!(isActive&&hasTcalcTrt);
+  var hasEnh=!!(st&&st.enhanced&&st.enhanced.compounds&&st.enhanced.compounds.length);
+  return {pCount:pCount, peptide:pCount>0, trt:hasTrt, enhanced:hasEnh};
+}
+function _stackTierChip(txt,col){
+  return '<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:0.4px;color:'+col+';border:1px solid '+col+';border-radius:5px;padding:2px 6px;margin:0 4px 4px 0">'+txt+'</span>';
+}
 function buildStackStore(){
   var body=document.getElementById('stack-body');
   if(!body)return;
@@ -918,12 +932,13 @@ function buildStackStore(){
     return;
   }
   var SLOTS=4;
+  var hasTcalcTrt=(typeof _tcalcTrtSummary==='function')&&!!_tcalcTrtSummary();
   var html='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
   for(var i=0;i<Math.min(_userStacks.length,SLOTS);i++){
     var st=_userStacks[i];
-    var pCount=st.peptides?st.peptides.length:0;
-    var hasTrt=st.trt&&(st.trt.compound||(st.trt.compounds&&st.trt.compounds.length));
     var isActive=_isActiveStack(i);
+    var _tf=_stackTierFlags(st,isActive,hasTcalcTrt);
+    var pCount=_tf.pCount;
     html+='<div class="stack-card'+(isActive?' active':'')+'" onclick="viewStack('+i+')">';
     html+='<div class="stack-card-header">';
     html+='<div style="flex:1;min-width:0;">';
@@ -934,8 +949,13 @@ function buildStackStore(){
     html+='</div>';
     html+='</div>';
     html+='<div class="stack-card-meta">';
-    html+='<div>'+pCount+' peptide'+(pCount===1?'':'s')+'</div>';
-    if(hasTrt)html+='<div style="color:var(--accent4);">+ TRT</div>';
+    var _chips='';
+    if(_tf.peptide)_chips+=_stackTierChip('PEPTIDES','var(--accent3)');
+    if(_tf.trt)_chips+=_stackTierChip('TRT','#e05050');
+    if(_tf.enhanced)_chips+=_stackTierChip('ENHANCED','var(--accent4)');
+    if(!_chips)_chips='<span style="font-size:10px;color:var(--muted2)">Empty</span>';
+    html+='<div style="display:flex;flex-wrap:wrap;margin-bottom:4px">'+_chips+'</div>';
+    if(_tf.peptide)html+='<div style="font-size:10px;color:var(--muted2);margin-bottom:4px">'+pCount+' peptide'+(pCount===1?'':'s')+'</div>';
     html+='<button onclick="event.stopPropagation();openCartModal('+i+')" style="margin-top:4px;background:transparent;border:1px solid var(--border);color:var(--muted2);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:0.3px">🛒 Shopping List</button>';
     html+='</div>';
     html+='</div>';
