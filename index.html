@@ -910,14 +910,14 @@ async function deleteStack(idx){
   }
 }
 // ── Build stack store view ───────────────────────────────────────────────────
-// Which tiers a stack represents, for the stack-card badges. Detects the tier
-// from what the stack actually runs — NOT only from where it was configured:
-// TRT counts whether it's a configured TRT compound on the stack OR (for the
-// active stack) testosterone planned in the T-Calc planner (cycle_id 'tcalc').
+// Which tiers a stack represents, for the stack-card badges. The TRT badge is
+// carried ONLY by an ACTIVE stack that actually has testosterone planned —
+// either a configured TRT compound on the stack OR testosterone planned in the
+// T-Calc planner (cycle_id 'tcalc'). An inactive stack never shows TRT.
 function _stackTierFlags(st, isActive, hasTcalcTrt){
   var pCount=(st&&st.peptides)?st.peptides.length:0;
   var cfgTrt=!!(st&&st.trt&&(st.trt.compound||(st.trt.compounds&&st.trt.compounds.length)));
-  var hasTrt=cfgTrt||!!(isActive&&hasTcalcTrt);
+  var hasTrt=!!(isActive&&(cfgTrt||hasTcalcTrt));
   var hasEnh=!!(st&&st.enhanced&&st.enhanced.compounds&&st.enhanced.compounds.length);
   return {pCount:pCount, peptide:pCount>0, trt:hasTrt, enhanced:hasEnh};
 }
