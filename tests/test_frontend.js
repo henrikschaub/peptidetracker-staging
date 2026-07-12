@@ -1557,6 +1557,12 @@ console.log('\n── dose dedup migration ────────────�
   check('getDosesForDate function defined',typeof G.getDosesForDate==='function');
   check('_findWeeklyItemInfo function defined',typeof G._findWeeklyItemInfo==='function');
 
+  // Empty-state coaching: a user with no active stack is offered a first action,
+  // not a dead "nothing scheduled"; a rest day on an active stack still reads calm.
+  check('Today empty state coaches first-timers to build a stack', todayJs.includes('Build your first stack') && todayJs.includes('createNewStack()'));
+  check('Today empty state keeps "Nothing scheduled today" for active-stack rest days', todayJs.includes('Nothing scheduled today'));
+  check('Today empty state branches on an active stack', todayJs.includes('_hasActive'));
+
   const cycleStack={name:'Cycle A',cycle_start:'2026-06-21',cycle_length:12,end_date:'2026-09-13',
     peptides:[{id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'3',unit_am:'mg',active:true}]};
   G._userStacks=[cycleStack];G._activeStackIndices=[0];
