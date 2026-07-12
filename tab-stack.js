@@ -101,6 +101,10 @@ async function wizSave(){
     if(_userStacks.length===1)_activeStackIndices=[0];
   }
   _userStacks=_userStacks.slice(0,4);
+  // Single-source guard: if this stack now has its own TRT config AND a T-Calc plan
+  // is assigned to it, warn and let the user keep one source (may clear proto.trt).
+  // Fast-path: only engage when this stack is the current T-Calc target.
+  if(typeof _reconcileStackTestoSource==='function'&&typeof _tcp!=='undefined'&&_tcp&&proto&&_tcp.targetStackId===proto.id)await _reconcileStackTestoSource(proto);
   var res=await saveStacksToBackend();
   updateWEEKLY();
   var _savedStack=_wiz.stackIndex>=0?_userStacks[_wiz.stackIndex]:null;
@@ -377,6 +381,10 @@ async function saveEditBuf(){
   });
   var _oldProtoCids=_getProtocolCompoundIds(_userStacks[_editIdx]||{});
   _userStacks[_editIdx]=_editBuf;
+  // Single-source guard: if this stack now has its own TRT config AND a T-Calc plan
+  // is assigned to it, warn and let the user keep one source (may clear _editBuf.trt).
+  // Fast-path: only engage when this stack is the current T-Calc target.
+  if(typeof _reconcileStackTestoSource==='function'&&typeof _tcp!=='undefined'&&_tcp&&_editBuf&&_tcp.targetStackId===_editBuf.id)await _reconcileStackTestoSource(_editBuf);
   updateWEEKLY();
   await saveStacksToBackend();
   if(_editBuf&&_editBuf.cycle_start){

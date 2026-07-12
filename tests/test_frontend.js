@@ -5150,6 +5150,76 @@ if (typeof G._tcalcEntryVisible === 'function') {
   check('useStack refreshes cache on active switch',    /async function useStack[\s\S]*?refreshInjectionsCache\(\)/.test(idx));
 }
 
+// ── Single testosterone source per stack (warn + let me choose) ───────────────
+console.log('\n── Single testo source per stack ──────────────────────────');
+if (typeof G._stackHasConfigTrt === 'function') {
+  check('configTrt: enabled with compounds → yes', G._stackHasConfigTrt({trt:{enabled:true,compounds:[{id:'testoviron'}]}}) === true);
+  check('configTrt: disabled with compounds → no', G._stackHasConfigTrt({trt:{enabled:false,compounds:[{id:'testoviron'}]}}) === false);
+  check('configTrt: enabled but empty → no',       G._stackHasConfigTrt({trt:{enabled:true,compounds:[]}}) === false);
+  check('configTrt: no trt → no',                  G._stackHasConfigTrt({trt:{}}) === false);
+} else {
+  check('_stackHasConfigTrt present', false);
+}
+
+if (typeof G._reconcileStackTestoSource === 'function') {
+  var _svTcp = G._tcp, _svConfirm = G.confirm, _svSetTarget = G._tcSetTargetStack;
+  // Conflict: stack has config testo AND is the current T-Calc target.
+  var _mkConflictStack = function(){ return {id:'s1', name:'S1', trt:{enabled:true,compounds:[{id:'testoviron'}]}}; };
+  G._tcp = { targetStackId:'s1' };
+
+  // (a) Cancel / keep-T-Calc → discard the config testosterone (trt cleared), no unassign.
+  var _unassigned = false;
+  G._tcSetTargetStack = function(v){ _unassigned = (v===''); return Promise.resolve(); };
+  G.confirm = function(){ return false; };
+  var _s = _mkConflictStack();
+  G._reconcileStackTestoSource(_s); // sync up to first await; Cancel branch has no await
+  check('reconcile: Cancel keeps T-Calc, drops config testo', _s.trt && !_s.trt.enabled && !_unassigned);
+
+  // (b) OK / switch-to-config → unassign the T-Calc plan, keep config testo.
+  _unassigned = false;
+  G.confirm = function(){ return true; };
+  var _s2 = _mkConflictStack();
+  G._reconcileStackTestoSource(_s2); // _tcSetTargetStack('') invoked synchronously before await
+  check('reconcile: OK switches to config, unassigns T-Calc', _unassigned === true && _s2.trt.enabled === true);
+
+  // (c) No conflict when the stack is not the T-Calc target → no prompt, no change.
+  G._tcp = { targetStackId:'other' };
+  var _confirmed = false; G.confirm = function(){ _confirmed = true; return true; };
+  var _s3 = _mkConflictStack();
+  G._reconcileStackTestoSource(_s3);
+  check('reconcile: not the target → no-op', _confirmed === false && _s3.trt.enabled === true);
+
+  // (d) No conflict when the target stack has no config testo → no prompt.
+  G._tcp = { targetStackId:'s1' };
+  _confirmed = false; G.confirm = function(){ _confirmed = true; return true; };
+  var _s4 = {id:'s1', name:'S1', trt:{}};
+  G._reconcileStackTestoSource(_s4);
+  check('reconcile: no config testo → no-op', _confirmed === false);
+
+  G._tcp = _svTcp; G.confirm = _svConfirm; G._tcSetTargetStack = _svSetTarget;
+} else {
+  check('_reconcileStackTestoSource present', false);
+}
+
+if (typeof G._tcClearStackConfigTrt === 'function') {
+  var _svSave = G.saveStacksToBackend, _svAuth = G.authHeaders;
+  G.saveStacksToBackend = function(){ return Promise.resolve(); };
+  G.authHeaders = function(){ return null; }; // null → skip the injection DELETE loop in tests
+  var _cs = {id:'s9', name:'S9', trt:{enabled:true,compounds:[{id:'testoviron'}]}, peptides:[{id:'cjc'}]};
+  G._tcClearStackConfigTrt(_cs); // stack.trt={} runs synchronously before the first await
+  check('clearStackConfigTrt: disables config testo, keeps peptides', _cs.trt && !_cs.trt.enabled && _cs.peptides.length === 1);
+  G.saveStacksToBackend = _svSave; G.authHeaders = _svAuth;
+} else {
+  check('_tcClearStackConfigTrt present', false);
+}
+
+{
+  const tc = fs.readFileSync(path.join(__dirname, '../tab-tcalc.js'), 'utf8');
+  check('T-Calc assign guards against config-testo conflict', tc.includes('_stackHasConfigTrt(_tgt)') && tc.includes('_tcClearStackConfigTrt(_tgt)'));
+  const stk = fs.readFileSync(path.join(__dirname, '../tab-stack.js'), 'utf8');
+  check('wizSave + editSave reconcile testo source', (stk.match(/_reconcileStackTestoSource\(/g) || []).length >= 2);
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
