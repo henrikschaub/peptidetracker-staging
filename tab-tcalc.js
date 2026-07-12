@@ -1570,13 +1570,13 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     ctx.beginPath(); ctx.moveTo(gx, PAD.top); ctx.lineTo(gx, PAD.top + cH); ctx.stroke();
   }
 
-  // Measured FT reference line
+  // Measured FT reference line — teal: this is calibrated to the user's own labs
   if (_mftNum && calFT) {
     var _refY = yOf(_mftNum);
-    ctx.strokeStyle = '#e8a02099'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+    ctx.strokeStyle = DATA_TEAL + '99'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
     ctx.beginPath(); ctx.moveTo(PAD.left, _refY); ctx.lineTo(PAD.left + cW, _refY); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#e8a020bb'; ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = DATA_TEAL + 'cc'; ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'left';
     ctx.fillText(Math.round(_mftNum), PAD.left + 3, _refY - 2);
   }
 
