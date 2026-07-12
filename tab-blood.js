@@ -559,7 +559,8 @@ function _blDrawChart(canvas){
     var yHi = yOf(ln.marker.ref[1]), yLo = yOf(ln.marker.ref[0]);
     ctx.fillStyle = ln.color + '14'; ctx.fillRect(PAD.left, yHi, cW, yLo - yHi);
     if(ln.marker.opt){ var yoHi = yOf(ln.marker.opt[1]), yoLo = yOf(ln.marker.opt[0]);
-      ctx.fillStyle = ln.color + '20'; ctx.fillRect(PAD.left, yoHi, cW, yoLo - yoHi); }
+      // Optimal zone → teal ("good") so an in-range level reads at a glance.
+      ctx.fillStyle = DATA_TEAL + '22'; ctx.fillRect(PAD.left, yoHi, cW, yoLo - yoHi); }
   });
 
   // Vertical date grid + labels
@@ -577,7 +578,7 @@ function _blDrawChart(canvas){
   // "Now" marker
   if(nowDay>=xStart && nowDay<=xEnd){
     var nx = xOf(nowDay);
-    ctx.strokeStyle = '#e8a02099'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+    ctx.strokeStyle = DATA_AMBER + '99'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
     ctx.beginPath(); ctx.moveTo(nx, PAD.top); ctx.lineTo(nx, PAD.top+cH); ctx.stroke(); ctx.setLineDash([]);
   }
 

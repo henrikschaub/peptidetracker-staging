@@ -4854,6 +4854,16 @@ if (typeof G._blBuildLines === 'function') {
     G._blLines = _svBl; G._tcp = _svTcp2;
   }
 
+  // Semantic chart palette — canvas hues mirror the CSS tokens.
+  {
+    const _bloodJs = fs.readFileSync(path.join(__dirname, '../tab-blood.js'), 'utf8');
+    const _tcalcJs = fs.readFileSync(path.join(__dirname, '../tab-tcalc.js'), 'utf8');
+    check('data hues defined (plasma/teal/amber)', rawScript.includes("DATA_PLASMA='#ff3b30'") && rawScript.includes("DATA_TEAL='#2fd4c4'") && rawScript.includes("DATA_AMBER='#ffb03c'"));
+    check('T-Calc measured-FT line is teal (calibrated)', _tcalcJs.includes("DATA_TEAL + '99'"));
+    check('Blood optimal zone is teal ("good")',          _bloodJs.includes("DATA_TEAL + '22'"));
+    check('Blood "now" marker uses the amber token',        _bloodJs.includes("DATA_AMBER + '99'"));
+  }
+
   // Phase 2: backend PK dataset → actual blood levels for compounds with an assay
   // (Vitamin D3 → 25-OH-D), reference ranges attached, no-assay compounds untouched.
   (function(){
