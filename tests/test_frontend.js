@@ -5059,6 +5059,30 @@ if (typeof G._stackTierFlags === 'function') {
   check('stack card uses tcalc-aware tier flags',  idxSrc.includes('_stackTierFlags(st,isActive,hasTcalcTrt)'));
 }
 
+// ── Option B / phase 1: stable stack ids (injections stop orphaning) ──────────
+console.log('\n── Stable stack ids ──────────────────────────────────────');
+if (typeof G._stackCycleId === 'function' && typeof G._ensureStackId === 'function') {
+  // legacy stack (no id) derives the old name_start cycle id → existing injections stay linked
+  check('derive: sanitised name_start', G._deriveStackCycleId({name:'Cycle 2 TRT+HGH', cycle_start:'2026-05-18'}) === 'cycle_2_trthgh_2026-05-18');
+  check('stackCycleId prefers a stored id', G._stackCycleId({id:'fixed_id', name:'X', cycle_start:'2026-01-01'}) === 'fixed_id');
+  check('legacy (no id) still derives', G._stackCycleId({name:'Cycle 2 TRT+HGH', cycle_start:'2026-05-18'}) === 'cycle_2_trthgh_2026-05-18');
+  // ensureStackId adopts the CURRENT derived id (keeps existing injections), then freezes it
+  var _leg = {name:'Cycle 2 TRT+HGH', cycle_start:'2026-05-18'};
+  check('ensureStackId adopts current derived id', G._ensureStackId(_leg) === 'cycle_2_trthgh_2026-05-18' && _leg.id === 'cycle_2_trthgh_2026-05-18');
+  // once assigned, a rename or start-date change must NOT change the id
+  var _s = {name:'A', cycle_start:'2026-01-01'}; G._ensureStackId(_s); var _id1 = _s.id;
+  _s.name = 'Renamed'; _s.cycle_start = '2026-02-02';
+  check('id stable across rename + start change', G._stackCycleId(_s) === _id1 && G._ensureStackId(_s) === _id1);
+} else {
+  check('_stackCycleId / _ensureStackId present', false);
+}
+{
+  const idx = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  check('loadUserStacks backfills + persists ids', idx.includes('_ensureStackId(stack)') && idx.includes('_needIdSave'));
+  const stk = fs.readFileSync(path.join(__dirname, '../tab-stack.js'), 'utf8');
+  check('wizSave preserves the stable id on edit', stk.includes('proto.id=_userStacks[_wiz.stackIndex].id') && stk.includes('_ensureStackId(proto)'));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);

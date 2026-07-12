@@ -570,7 +570,9 @@ async function loadUserStacks(){
     _userStacks[0].name='My Stack';
     _activeStackIndices=[0];
   }
+  var _needIdSave=_userStacks.some(function(s){return s&&!s.id;});
   _userStacks.forEach(function(stack){
+    _ensureStackId(stack);
     if(stack.cycle_start){var _csp=stack.cycle_start.split('-');stack.cycle_start=_csp[0]+'-'+(_csp[1]||'1').padStart(2,'0')+'-'+(_csp[2]||'1').padStart(2,'0');}
     if(stack.end_date){var _cep=stack.end_date.split('-');stack.end_date=_cep[0]+'-'+(_cep[1]||'1').padStart(2,'0')+'-'+(_cep[2]||'1').padStart(2,'0');}
     (stack.peptides||[]).forEach(function(pp){if(pp.start_date){var _psp=pp.start_date.split('-');pp.start_date=_psp[0]+'-'+(_psp[1]||'1').padStart(2,'0')+'-'+(_psp[2]||'1').padStart(2,'0');}});
@@ -591,6 +593,8 @@ async function loadUserStacks(){
       if((p.id==='glow'||p.id==='glow-1')&&(parseDec(p.dose_am)===0.2||(parseDec(p.dose_am)===0.09&&p.unit_am!=='ml'))){p.dose_am='0.09';p.unit_am='ml';}
     });
   });
+  // Persist any freshly-assigned stable stack ids (one-time backfill, idempotent).
+  if(_needIdSave&&typeof saveStacksToBackend==='function'){try{saveStacksToBackend();}catch(_e){}}
   updateWEEKLY();
   _stacksLoaded=true;
   buildStackStore();
