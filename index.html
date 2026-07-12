@@ -1290,7 +1290,10 @@ function saveWeightFromInput(){
     setTimeout(function(){inp.style.borderColor='var(--border)';},1500);
   }
 }
-var _obStep=0;var _obData={sex:null,height:'',weight:'',theme:3};
+var _obStep=0;var _obData={sex:null,height:'',weight:'',theme:3,experience:'',goals:[]};
+// Onboarding step order — experience + goals come first (the meaningful, tailoring
+// questions), then the cosmetic theme + stats. Renderer per step name below.
+var _OB_ORDER=['welcome','experience','goals','theme','stats'];
 function obInit(){
   var _hasHistory=Object.keys(localStorage).some(function(k){return k.startsWith('proto-chk-');});
   var savedTheme=getData('pep-theme',null);
@@ -1314,17 +1317,20 @@ function obRender(){
   var skipBtn=document.getElementById('ob-skip-btn');
   var dotsEl=document.getElementById('ob-dots');
   if(!body)return;
-  var total=3;
+  var total=_OB_ORDER.length;
   var dots='';for(var i=0;i<total;i++){dots+='<div class="ob-dot '+(i<_obStep?'done':i===_obStep?'active':'')+'"></div>';}
   dotsEl.innerHTML=dots;
   backBtn.style.display=_obStep===0?'none':'';
   skipBtn.style.display=_obStep===total-1?'none':'';
   nextBtn.textContent=_obStep===0?'Get Started':_obStep===total-1?"Let's go!":'Continue';
-  var html='';
-  if(_obStep===0)html=_obHtml0();
-  else if(_obStep===1)html=_obHtml1();
-  else html=_obHtml2();
-  body.innerHTML=html;
+  body.innerHTML=_obRenderStep(_OB_ORDER[_obStep]);
+}
+function _obRenderStep(name){
+  if(name==='experience')return _obHtmlExperience();
+  if(name==='goals')return _obHtmlGoals();
+  if(name==='theme')return _obHtml1();
+  if(name==='stats')return _obHtml2();
+  return _obHtml0();
 }
 function _obHtml0(){
   return '<div style="text-align:center;padding:40px 0 28px">'
@@ -1332,8 +1338,32 @@ function _obHtml0(){
     +'<div style="font-family:var(--font-display);font-size:54px;letter-spacing:3px;color:var(--accent);line-height:1">HENRIK\'S<br>PROTOCOL</div>'
     +'<div style="margin:18px auto 0;width:40px;height:2px;background:var(--accent);border-radius:1px;opacity:0.5"></div></div>'
     +'<p style="font-size:15px;color:var(--text);line-height:1.7;margin-bottom:14px">Your personalised peptide protocol tracker.</p>'
-    +'<p style="font-size:13px;color:var(--muted);line-height:1.6">We\'ll pick a colour theme and collect a few stats for body composition tracking.</p>';
+    +'<p style="font-size:13px;color:var(--muted);line-height:1.6">A couple of quick questions so we can tailor a starting point — then a colour theme and a few body-comp stats.</p>';
 }
+function _obHtmlExperience(){
+  var opts=[['curious','🌱','Just curious','Exploring — nothing started yet'],['first','💉','My first cycle','Starting soon or just began'],['experienced','📈','I run protocols','Comfortable, want to optimise'],['advanced','⚙️','Advanced','Multi-compound, full control']];
+  var html='<div style="margin-bottom:18px"><div style="font-family:var(--font-display);font-size:30px;letter-spacing:1px;color:var(--text)">How much have you done before?</div><div style="font-size:13px;color:var(--muted);margin-top:4px">So we can pitch things at the right level.</div></div>';
+  opts.forEach(function(o){var sel=_obData.experience===o[0];
+    html+='<div onclick="obSetExperience(\''+o[0]+'\')" style="display:flex;align-items:center;gap:12px;border:1px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'rgba(232,255,60,0.06)':'transparent')+';border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer">'
+      +'<div style="font-size:22px">'+o[1]+'</div>'
+      +'<div style="flex:1"><div style="font-size:15px;font-weight:600;color:var(--text)">'+o[2]+'</div><div style="font-size:12px;color:var(--muted)">'+o[3]+'</div></div>'
+      +(sel?'<div style="color:var(--accent);font-size:16px">✓</div>':'')+'</div>';
+  });
+  return html;
+}
+function obSetExperience(v){_obData.experience=v;obRender();}
+function _obHtmlGoals(){
+  var opts=[['hormone','🛡️','Hormone health / TRT','Steady levels, feel better'],['recovery','🩹','Recovery & healing','BPC-157, TB-500, joints'],['muscle','🏋️','Muscle & performance','GH axis, body composition'],['fatloss','🔥','Fat loss','GLP-1, metabolic']];
+  var html='<div style="margin-bottom:18px"><div style="font-family:var(--font-display);font-size:30px;letter-spacing:1px;color:var(--text)">What are you here to do?</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Pick any that apply — we\'ll suggest a starting point.</div></div>';
+  opts.forEach(function(o){var sel=(_obData.goals||[]).indexOf(o[0])>=0;
+    html+='<div onclick="obToggleGoal(\''+o[0]+'\')" style="display:flex;align-items:center;gap:12px;border:1px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'rgba(232,255,60,0.06)':'transparent')+';border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer">'
+      +'<div style="font-size:22px">'+o[1]+'</div>'
+      +'<div style="flex:1"><div style="font-size:15px;font-weight:600;color:var(--text)">'+o[2]+'</div><div style="font-size:12px;color:var(--muted)">'+o[3]+'</div></div>'
+      +'<div style="width:22px;height:22px;border-radius:6px;border:2px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'var(--accent)':'transparent')+';display:flex;align-items:center;justify-content:center;font-size:12px;color:#000">'+(sel?'✓':'')+'</div></div>';
+  });
+  return html;
+}
+function obToggleGoal(v){if(!Array.isArray(_obData.goals))_obData.goals=[];var i=_obData.goals.indexOf(v);if(i>=0)_obData.goals.splice(i,1);else _obData.goals.push(v);obRender();}
 function _obHtml1(){
   var html='<div style="margin-bottom:20px">'
     +'<div style="font-family:var(--font-display);font-size:30px;letter-spacing:1px;color:var(--text)">Choose Your Theme</div>'
@@ -1375,19 +1405,26 @@ function obSetSex(g){
     b.classList.toggle('ob-sel',(g==='male'&&b.textContent.indexOf('Male')>-1)||(g==='female'&&b.textContent.indexOf('Female')>-1));
   });
 }
-function obNext(){if(_obStep===2){obFinish();return;}_obStep++;obRender();}
+function obNext(){if(_obStep===_OB_ORDER.length-1){obFinish();return;}_obStep++;obRender();}
 function obBack(){if(_obStep===0)return;_obStep--;obRender();}
 function obSkip(){obFinish();}
 function obFinish(){
-  var profile={sex:_obData.sex,height:_obData.height?parseDec(_obData.height):null,weight:_obData.weight?parseDec(_obData.weight):null,onboarded:true};
+  var profile={sex:_obData.sex,height:_obData.height?parseDec(_obData.height):null,weight:_obData.weight?parseDec(_obData.weight):null,experience:_obData.experience||'',goals:(_obData.goals||[]).slice(),onboarded:true};
   setData('pep-profile',profile);
   if(_obData.sex)setBioSex(_obData.sex);
   if(profile.height){localStorage.setItem('user_height',String(profile.height));var hi=document.getElementById('bc-height-in');if(hi)hi.value=profile.height;}
   if(profile.weight){localStorage.setItem('user_weight',String(profile.weight));var wi=document.getElementById('bc-weight-in');if(wi)wi.value=profile.weight;}
   var kv={};if(_obData.sex)kv['user_sex']=_obData.sex;if(profile.height)kv['user_height']=profile.height;if(profile.weight)kv['user_weight']=profile.weight;
+  if(_obData.experience)kv['pep-experience']=_obData.experience;if((_obData.goals||[]).length)kv['pep-goals']=_obData.goals;
   if(Object.keys(kv).length)pushPepSettingsToAgent(kv);
   document.getElementById('onboarding-overlay').classList.add('hidden');
   buildAppearanceCard();buildCacheCard();
+  // Adaptive: if they have no protocol yet and templates are available, offer a
+  // starting point matched to the goals they picked.
+  if((!_userStacks||!_userStacks.length)&&typeof openTemplatePicker==='function'&&typeof _protocolTemplates!=='undefined'&&_protocolTemplates&&_protocolTemplates.length){
+    var _g=(_obData.goals||[]).slice();
+    setTimeout(function(){openTemplatePicker(_g);},250);
+  }
 }
 function buildAppearanceCard(){
   var card=document.getElementById('s-appearance-card');if(!card)return;

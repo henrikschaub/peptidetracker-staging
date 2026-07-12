@@ -127,9 +127,12 @@ async function wizSave(){
 // ── Updated buildStackStore to show cycle length ────────────────────────────
 function createNewStack(){initWizard();showWizard(false);}
 // ── Protocol templates (curated starter stacks served from the backend) ────────
-function openTemplatePicker(){
+function openTemplatePicker(preferGoals){
   var tpl=(typeof _protocolTemplates!=='undefined'&&_protocolTemplates)?_protocolTemplates:[];
   if(!tpl.length){createNewStack();return;}
+  var pref=Array.isArray(preferGoals)?preferGoals:[];
+  var _tplMatches=function(t){return pref.length&&(t.goals||[]).some(function(g){return pref.indexOf(g)>=0;});};
+  if(pref.length)tpl=tpl.slice().sort(function(a,b){return (_tplMatches(b)?1:0)-(_tplMatches(a)?1:0);}); // goal matches first
   var ov=document.createElement('div');ov.id='tpl-picker-overlay';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;align-items:flex-end;justify-content:center';
   ov.onclick=function(e){if(e.target===ov)_closeTemplatePicker();};
@@ -138,8 +141,9 @@ function openTemplatePicker(){
       ((t.trt&&t.trt.compounds)||[]).map(function(c){return {name:c.name,dot:c.dot,dose:(c.dose||'')+(c.unit?' '+c.unit:'')};}),
       ((t.enhanced&&t.enhanced.compounds)||[]).map(function(c){return {name:c.name,dot:c.dot,dose:(c.dose||'')+(c.unit?' '+c.unit:'')};}));
     var rows=comps.map(function(c){return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><span style="width:7px;height:7px;border-radius:50%;background:'+(c.dot||'#888')+';flex-shrink:0"></span><span style="font-size:13px;color:var(--text);flex:1">'+_esc(c.name)+'</span><span style="font-size:12px;color:var(--muted2);font-family:var(--font-mono)">'+_esc(c.dose)+'</span></div>';}).join('');
-    return '<div style="border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--surface2)">'+
-      '<div style="font-family:var(--font-display);font-size:19px;color:var(--text)">'+_esc(t.name)+'</div>'+
+    var _sug=_tplMatches(t)?'<span style="font-size:9px;font-weight:800;letter-spacing:0.4px;color:#000;background:var(--accent);border-radius:5px;padding:2px 6px;margin-left:8px;vertical-align:middle">SUGGESTED</span>':'';
+    return '<div style="border:1px solid '+(_tplMatches(t)?'var(--accent)':'var(--border)')+';border-radius:12px;padding:14px;margin-bottom:12px;background:var(--surface2)">'+
+      '<div style="font-family:var(--font-display);font-size:19px;color:var(--text)">'+_esc(t.name)+_sug+'</div>'+
       (t.tagline?'<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);margin-top:2px">'+_esc(t.tagline)+'</div>':'')+
       (t.description?'<div style="font-size:12px;color:var(--muted2);line-height:1.5;margin:8px 0 10px">'+_esc(t.description)+'</div>':'')+
       rows+
