@@ -4809,6 +4809,23 @@ if (typeof G._blBuildLines === 'function') {
     G._injectionsCache = _sInjA;
   }
 
+  // "What this means" card — a computed one-liner from the Free T model state.
+  if (typeof G._blFreetCard === 'function') {
+    var _svBl = G._blLines, _svTcp2 = G._tcp;
+    G._blLines = [{ kind:'freet', curve:[100,120,180] }]; G._tcp = { measuredFT:0 };
+    var _c1 = G._blFreetCard();
+    check('what-this-means: rising testo reads as above baseline', _c1.includes('trending above baseline'));
+    check('what-this-means: no bloodwork nudges to add a lab',     _c1.includes('population estimate'));
+    check('what-this-means: card is labelled',                     _c1.includes('What this means'));
+    G._blLines = [{ kind:'freet', curve:[200,200,200] }]; G._tcp = { measuredFT:'350' };
+    var _c2 = G._blFreetCard();
+    check('what-this-means: flat line reads as near baseline',      _c2.includes('near your baseline'));
+    check('what-this-means: measured FT shows calibrated note',     _c2.includes('Calibrated to your bloodwork'));
+    G._blLines = [{ kind:'peptide', curve:[1,2] }];
+    check('what-this-means: no Free T line → no card',              G._blFreetCard() === '');
+    G._blLines = _svBl; G._tcp = _svTcp2;
+  }
+
   // Phase 2: backend PK dataset → actual blood levels for compounds with an assay
   // (Vitamin D3 → 25-OH-D), reference ranges attached, no-assay compounds untouched.
   (function(){
