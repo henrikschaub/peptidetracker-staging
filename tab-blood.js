@@ -125,15 +125,19 @@ function _blTmax(halfLifeDays) {
   return (ka > ke) ? Math.log(ka / ke) / (ka - ke) : 1;
 }
 
-// T-Calc-planned testosterone (injections with cycle_id 'tcalc') — planned via
-// the T-Calc planner rather than configured as a stack TRT compound, so it is
-// otherwise absent from the chart. Gather its dated injections per compound.
+// T-Calc-planned testosterone — planned via the T-Calc planner rather than
+// configured as a stack TRT compound, so it is otherwise absent from the chart.
+// Covers both the unassigned plan (cycle_id 'tcalc') and a plan assigned to a
+// stack (cycle_id 'tcalc:<stackId>'). _injectionsCache is already filtered to
+// visible entries (unassigned + active-stack-owned), so any 'tcalc'-prefixed
+// entry here belongs on the aggregated Free T line. Gather dated doses per compound.
 function _blTcalcTestosterone() {
   if (typeof _injectionsCache === 'undefined' || !_injectionsCache) return [];
   var byComp = {};
   Object.keys(_injectionsCache).forEach(function(dk){
     (_injectionsCache[dk]||[]).forEach(function(e){
-      if (!e || e.cycle_id !== 'tcalc') return;
+      var cyc = (e && e.cycle_id) || '';
+      if (cyc !== 'tcalc' && cyc.indexOf('tcalc:') !== 0) return;
       if (e.tier && e.tier !== 'trt') return;
       if (e.active === false) return;
       var cid = e.compound_id || e.compound_name || 'testosterone';
