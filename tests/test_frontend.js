@@ -4781,6 +4781,25 @@ if (typeof G._blBuildLines === 'function') {
     G._injectionsCache = _saveInj; G._userStacks = _saveStacks2; G._activeStackIndices = _saveIdx2; G._supplements = _saveSupp2;
   })();
 
+  // Regression (Option B): T-Calc testosterone ASSIGNED to a stack has cycle_id
+  // 'tcalc:<stackId>' (not the bare 'tcalc'). _blTcalcTestosterone must still pick
+  // it up so the Blood Levels Free T curve stays as complete as the T-Calc tab.
+  // _injectionsCache is already visibility-filtered, so both forms belong on the line.
+  if (typeof G._blTcalcTestosterone === 'function') {
+    var _sInjA = G._injectionsCache;
+    G._injectionsCache = {
+      '2026-06-10':[{cycle_id:'tcalc',      compound_id:'nebido',  compound_name:'Nebido',       tier:'trt', date:'2026-06-10', dose:'1000', unit:'mg', active:true}],
+      '2026-06-12':[{cycle_id:'tcalc:mystack', compound_id:'test-e', compound_name:'Testosterone E', tier:'trt', date:'2026-06-12', dose:'50',  unit:'mg', active:true}]
+    };
+    var _tct = G._blTcalcTestosterone();
+    check('_blTcalcTestosterone: includes unassigned tcalc plan',      _tct.some(function(c){ return c.id==='nebido'; }));
+    check('_blTcalcTestosterone: includes stack-assigned tcalc:<id>',  _tct.some(function(c){ return c.id==='test-e'; }));
+    // a non-tcalc cycle_id (a stack's own config injections) must NOT be double-counted here
+    G._injectionsCache = { '2026-06-14':[{cycle_id:'mystack', compound_id:'test-c', compound_name:'Test C', tier:'trt', date:'2026-06-14', dose:'80', unit:'mg', active:true}] };
+    check('_blTcalcTestosterone: ignores non-tcalc (stack-config) cycle_ids', G._blTcalcTestosterone().every(function(c){ return c.id!=='test-c'; }));
+    G._injectionsCache = _sInjA;
+  }
+
   // Phase 2: backend PK dataset → actual blood levels for compounds with an assay
   // (Vitamin D3 → 25-OH-D), reference ranges attached, no-assay compounds untouched.
   (function(){
