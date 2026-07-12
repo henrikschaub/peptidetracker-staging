@@ -5023,6 +5023,20 @@ console.log('\n── Blood Levels: Day zoom = 24h window ───────�
   }
 }
 
+// ── Testosterone compounds render red ─────────────────────────────────────────
+console.log('\n── Testosterone compounds use the red dot ─────────────────');
+if (Array.isArray(G.TRT_CAT)) {
+  check('all TRT_CAT esters are red (#e05050)', G.TRT_CAT.every(c => c.dot === '#e05050'), JSON.stringify(G.TRT_CAT.map(c=>c.dot)));
+  check('TRT_CAT covers the esters', G.TRT_CAT.length >= 6);
+} else {
+  check('TRT_CAT present', false);
+}
+{
+  const todaySrc = fs.readFileSync(path.join(__dirname, '../tab-today.js'), 'utf8');
+  // existing (snapshot-dotted) TRT injections recolour to red at render
+  check("Today recolours TRT doses red at render", todaySrc.includes("dose.tier==='trt'?'#e05050'"));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
