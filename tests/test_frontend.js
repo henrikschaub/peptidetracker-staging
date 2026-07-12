@@ -1562,6 +1562,34 @@ console.log('\n── dose dedup migration ────────────�
   check('Today empty state coaches first-timers to build a stack', todayJs.includes('Build your first stack') && todayJs.includes('createNewStack()'));
   check('Today empty state keeps "Nothing scheduled today" for active-stack rest days', todayJs.includes('Nothing scheduled today'));
   check('Today empty state branches on an active stack', todayJs.includes('_hasActive'));
+  check('Today empty state offers a template when templates loaded', todayJs.includes('openTemplatePicker()') && todayJs.includes('_protocolTemplates'));
+
+  // Protocol templates — fetched from the backend, instantiated into a stack.
+  check('syncProtocolTemplates fetches the backend endpoint', rawScript.includes("'/protocol-templates'") && rawScript.includes('function syncProtocolTemplates'));
+  if (typeof G.useTemplate === 'function' && typeof G.openTemplatePicker === 'function') {
+    var _svS=G._userStacks,_svA=G._activeStackIndices,_svT=G._protocolTemplates,_svSave=G.saveStacksToBackend,_svGen=G.generateAndPushInjections,_svRef=G.refreshInjectionsCache,_svNew=G.createNewStack;
+    G._protocolTemplates=[{id:'tpl-x',name:'Test Plan',cycle_length:8,
+      peptides:[{id:'bpc157',name:'BPC-157',dot:'#3b9eff',times:['AM'],days:[0,1,2,3,4,5,6],dose_am:'250',unit_am:'mcg'}],
+      trt:{compounds:[{id:'enanthate',name:'Testosterone Enanthate',dot:'#e05050',dose:'125',unit:'mg',freqVal:1,freqUnit:'weeks',days:[1]}]},
+      enhanced:null}];
+    G._userStacks=[]; G._activeStackIndices=[];
+    G.saveStacksToBackend=async function(){return true;}; G.generateAndPushInjections=async function(){}; G.refreshInjectionsCache=async function(){};
+    G.useTemplate('tpl-x'); // synchronous portion runs before the first await
+    var _st=G._userStacks[G._userStacks.length-1];
+    check('useTemplate: creates a stack from the template', !!_st && _st.name==='Test Plan' && _st.cycle_length===8);
+    check('useTemplate: stack starts today so doses schedule immediately', !!(_st && _st.cycle_start));
+    check('useTemplate: maps peptides into the stack model', !!_st && _st.peptides.length===1 && _st.peptides[0].id==='bpc157' && _st.peptides[0].dose_am==='250' && _st.peptides[0].active===true);
+    check('useTemplate: maps TRT compounds with frequency', !!_st && _st.trt && _st.trt.enabled===true && _st.trt.compounds[0].id==='enanthate' && _st.trt.compounds[0].freqVal===1);
+    check('useTemplate: activates the new stack', G._activeStackIndices.indexOf(G._userStacks.length-1)>=0);
+    check('useTemplate: assigns a stable stack id', !!(_st && _st.id));
+    // picker falls back to the wizard when no templates exist
+    G._protocolTemplates=[]; var _newCalled=false; G.createNewStack=function(){_newCalled=true;};
+    G.openTemplatePicker();
+    check('openTemplatePicker: no templates → falls back to the wizard', _newCalled===true);
+    G._userStacks=_svS;G._activeStackIndices=_svA;G._protocolTemplates=_svT;G.saveStacksToBackend=_svSave;G.generateAndPushInjections=_svGen;G.refreshInjectionsCache=_svRef;G.createNewStack=_svNew;
+  } else {
+    check('useTemplate / openTemplatePicker present', false);
+  }
 
   const cycleStack={name:'Cycle A',cycle_start:'2026-06-21',cycle_length:12,end_date:'2026-09-13',
     peptides:[{id:'retatrutide',name:'Retatrutide',dot:'#e8ff3c',days:[0,1,2,3,4,5,6],times:['AM'],dose_am:'3',unit_am:'mg',active:true}]};

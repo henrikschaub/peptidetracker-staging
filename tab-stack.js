@@ -126,6 +126,64 @@ async function wizSave(){
 }
 // ── Updated buildStackStore to show cycle length ────────────────────────────
 function createNewStack(){initWizard();showWizard(false);}
+// ── Protocol templates (curated starter stacks served from the backend) ────────
+function openTemplatePicker(){
+  var tpl=(typeof _protocolTemplates!=='undefined'&&_protocolTemplates)?_protocolTemplates:[];
+  if(!tpl.length){createNewStack();return;}
+  var ov=document.createElement('div');ov.id='tpl-picker-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;align-items:flex-end;justify-content:center';
+  ov.onclick=function(e){if(e.target===ov)_closeTemplatePicker();};
+  var cards=tpl.map(function(t){
+    var comps=[].concat((t.peptides||[]).map(function(p){return {name:p.name,dot:p.dot,dose:(p.dose_am||'')+(p.unit_am?' '+p.unit_am:'')};}),
+      ((t.trt&&t.trt.compounds)||[]).map(function(c){return {name:c.name,dot:c.dot,dose:(c.dose||'')+(c.unit?' '+c.unit:'')};}),
+      ((t.enhanced&&t.enhanced.compounds)||[]).map(function(c){return {name:c.name,dot:c.dot,dose:(c.dose||'')+(c.unit?' '+c.unit:'')};}));
+    var rows=comps.map(function(c){return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><span style="width:7px;height:7px;border-radius:50%;background:'+(c.dot||'#888')+';flex-shrink:0"></span><span style="font-size:13px;color:var(--text);flex:1">'+_esc(c.name)+'</span><span style="font-size:12px;color:var(--muted2);font-family:var(--font-mono)">'+_esc(c.dose)+'</span></div>';}).join('');
+    return '<div style="border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--surface2)">'+
+      '<div style="font-family:var(--font-display);font-size:19px;color:var(--text)">'+_esc(t.name)+'</div>'+
+      (t.tagline?'<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);margin-top:2px">'+_esc(t.tagline)+'</div>':'')+
+      (t.description?'<div style="font-size:12px;color:var(--muted2);line-height:1.5;margin:8px 0 10px">'+_esc(t.description)+'</div>':'')+
+      rows+
+      '<button onclick="useTemplate(\''+_esc(t.id)+'\')" style="margin-top:12px;width:100%;background:var(--accent);color:#000;border:none;border-radius:20px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Use this plan</button>'+
+    '</div>';
+  }).join('');
+  var sheet=document.createElement('div');
+  sheet.style.cssText='background:var(--surface);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:18px 18px 28px;max-height:85vh;overflow-y:auto';
+  sheet.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-family:var(--font-display);font-size:22px;color:var(--accent)">Starter protocols</div><button onclick="_closeTemplatePicker()" style="background:none;border:none;color:var(--muted2);font-size:24px;cursor:pointer;line-height:1">&times;</button></div>'+
+    '<div style="font-size:12px;color:var(--muted2);line-height:1.5;margin-bottom:14px">Vetted starting points. You can edit doses, timing and the start date any time.</div>'+
+    cards+
+    '<button onclick="_closeTemplatePicker();createNewStack()" style="width:100%;background:var(--surface2);color:var(--muted2);border:1px solid var(--border);border-radius:20px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:4px">Start from scratch instead</button>';
+  ov.appendChild(sheet);document.body.appendChild(ov);
+}
+function _closeTemplatePicker(){var ov=document.getElementById('tpl-picker-overlay');if(ov&&ov.parentNode)ov.parentNode.removeChild(ov);}
+// Instantiate a stack from a template: starts today (so doses schedule immediately),
+// activates it, persists to the backend and regenerates injections. Fully editable after.
+async function useTemplate(tid){
+  var t=((typeof _protocolTemplates!=='undefined'&&_protocolTemplates)||[]).find(function(x){return x.id===tid;});
+  if(!t)return;
+  if(!Array.isArray(_userStacks))_userStacks=[];
+  if(_userStacks.length>=4){alert('You already have 4 stacks — remove one first.');return;}
+  var _t0=new Date(NOW);_t0.setHours(0,0,0,0);
+  var proto={name:t.name,cycle_length:t.cycle_length||12,cycle_start:dateKey(_t0),
+    peptides:(t.peptides||[]).map(function(p){return {id:p.id,name:p.name,dot:p.dot,times:(p.times||['AM']).slice(),days:(p.days||[0,1,2,3,4,5,6]).slice(),dose_am:p.dose_am||'',dose_pm:p.dose_pm||'',unit_am:p.unit_am||'',unit_pm:p.unit_pm||'',active:true};}),
+    trt:(t.trt&&t.trt.compounds&&t.trt.compounds.length)?{enabled:true,compounds:t.trt.compounds.map(function(c){return {id:c.id,name:c.name,dot:c.dot,dose:c.dose,unit:c.unit,freqVal:c.freqVal,freqUnit:c.freqUnit,days:(c.days||[1]).slice()};})}:{},
+    enhanced:(t.enhanced&&t.enhanced.compounds&&t.enhanced.compounds.length)?{enabled:true,compounds:t.enhanced.compounds.map(function(c){return {id:c.id,name:c.name,dot:c.dot,dose:c.dose,unit:c.unit,days:(c.days||[0,1,2,3,4,5,6]).slice()};})}:{}
+  };
+  if(typeof _ensureStackId==='function')_ensureStackId(proto);
+  _userStacks.push(proto);_userStacks=_userStacks.slice(0,4);
+  var _idx=_userStacks.length-1;
+  if(!Array.isArray(_activeStackIndices))_activeStackIndices=[];
+  if(_activeStackIndices.indexOf(_idx)<0)_activeStackIndices.push(_idx);
+  _closeTemplatePicker();
+  await saveStacksToBackend();
+  if(typeof updateWEEKLY==='function')updateWEEKLY();
+  await generateAndPushInjections(proto,_t0);
+  if(typeof refreshInjectionsCache==='function')await refreshInjectionsCache();
+  if(typeof buildWeekStrip==='function')buildWeekStrip();
+  if(typeof buildToday==='function')buildToday();
+  if(typeof buildSchedule==='function')buildSchedule();
+  if(typeof buildStackStore==='function')buildStackStore();
+  if(typeof switchPrimary==='function')switchPrimary('today');
+}
 
 function viewStack(idx){_editReadOnly=true;showStackEditor(idx);}
 function editStack(idx){_editReadOnly=false;showStackEditor(idx);}
