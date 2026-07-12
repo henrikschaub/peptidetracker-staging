@@ -17,7 +17,8 @@ var _tcp = {
   overrideIntervalDays: '',
   planCompId:          '',  // kept for backward-compat with saved profiles; ignored
   backboneStartDay:    0,   // days into cycle before first backbone injection (default 0)
-  manualLog:           []   // [{compId, doseMg, date}, ...] — manual injection history
+  manualLog:           [],  // [{compId, doseMg, date}, ...] — manual injection history
+  targetStackId:       ''   // stack this T-Calc testosterone is assigned to ('' = unassigned/global)
 };
 
 var _tcpSessionLoaded = false;
@@ -2169,9 +2170,52 @@ function _tcDrawChart(canvasId, total, stats, plan, sched, calFT, measuredFT) {
 
 // ── Push log to schedule (writes dated injection entries directly to backend) ──
 
+// Where T-Calc testosterone is written in the schedule. Unassigned → the global
+// 'tcalc'; assigned to a stack → the 'tcalc:<stackId>' namespace. The namespace
+// never collides with the stack's own injections, so the delete/re-post cycle
+// below stays scoped to T-Calc testosterone only.
+function _tcTargetCycleId(){
+  var tid=_tcp&&_tcp.targetStackId;
+  if(tid&&typeof _userStacks!=='undefined'&&_userStacks&&_userStacks.some(function(s){return s&&s.id===tid;}))return 'tcalc:'+tid;
+  return 'tcalc';
+}
+// Assign (copy) the T-Calc testosterone to a stack — active OR inactive. Clears the
+// previous home so it never duplicates, then re-syncs into the new one.
+async function _tcSetTargetStack(stackId){
+  var oldCid=_tcTargetCycleId();
+  _tcp.targetStackId=stackId||'';
+  _tcSaveProfile();
+  var newCid=_tcTargetCycleId();
+  if(oldCid!==newCid){
+    var h=(typeof authHeaders==='function')?authHeaders():null;
+    if(h){
+      var _n=new Date();_n.setHours(0,0,0,0);
+      var _td=_n.getFullYear()+'-'+String(_n.getMonth()+1).padStart(2,'0')+'-'+String(_n.getDate()).padStart(2,'0');
+      try{await fetch(AGENT_URL+'/injections?cycle_id='+encodeURIComponent(oldCid)+'&from_date='+_td,{method:'DELETE',headers:h});}catch(_e){}
+    }
+  }
+  await _tcSyncLogToBackend();
+  if(typeof buildTCalc==='function')buildTCalc();
+  if(typeof buildStackStore==='function')buildStackStore();
+}
+// "Copy to stack" picker — lists every stack (active ● or inactive) so testosterone
+// can be assigned to any of them, not just the active one.
+function _tcStackPickerHtml(){
+  var stacks=(typeof _userStacks!=='undefined'&&_userStacks)?_userStacks:[];
+  var cur=(_tcp&&_tcp.targetStackId)||'';
+  var opts='<option value=""'+(cur?'':' selected')+'>Unassigned</option>';
+  stacks.forEach(function(s,i){
+    if(!s)return;
+    var act=(typeof _isActiveStack==='function'&&_isActiveStack(i))?' ●':'';
+    opts+='<option value="'+_esc(s.id||'')+'"'+((cur&&cur===s.id)?' selected':'')+'>'+_esc(s.name||('Stack '+(i+1)))+act+'</option>';
+  });
+  return '<select onchange="_tcSetTargetStack(this.value)" title="Assign this testosterone to a stack (● = active)" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:10px;padding:5px 7px;font-family:inherit;max-width:132px">'+opts+'</select>';
+}
+
 async function _tcSyncLogToBackend() {
   var h=(typeof authHeaders==='function')?authHeaders():null;
   if(!h)return;
+  var _cid=_tcTargetCycleId();
   var _now=new Date();_now.setHours(0,0,0,0);
   var todayStr=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0')+'-'+String(_now.getDate()).padStart(2,'0');
 
@@ -2187,7 +2231,7 @@ async function _tcSyncLogToBackend() {
   // Clear all unlogged tcalc entries from today onwards (covers removed compounds too),
   // then re-post each compound's future entries via batch upsert.
   try{
-    await fetch(AGENT_URL+'/injections?cycle_id=tcalc&from_date='+todayStr,{method:'DELETE',headers:h});
+    await fetch(AGENT_URL+'/injections?cycle_id='+encodeURIComponent(_cid)+'&from_date='+todayStr,{method:'DELETE',headers:h});
   }catch(_e){}
 
   var compIds=Object.keys(byComp);
@@ -2196,7 +2240,7 @@ async function _tcSyncLogToBackend() {
     var cd=_tcCompInfo(cid);
     var entries=byComp[cid].map(function(e){
       return {
-        cycle_id:'tcalc',compound_id:cid,
+        cycle_id:_cid,compound_id:cid,
         compound_name:cd.name||cid,tier:'trt',
         date:e.date,
         dose:String(Math.round(parseDec(e.doseMg)*10)/10),
@@ -2208,7 +2252,7 @@ async function _tcSyncLogToBackend() {
       await fetch(AGENT_URL+'/injections/batch',{
         method:'POST',
         headers:Object.assign({'Content-Type':'application/json'},h),
-        body:JSON.stringify({cycle_id:'tcalc',compound_id:cid,from_date:todayStr,entries:entries})
+        body:JSON.stringify({cycle_id:_cid,compound_id:cid,from_date:todayStr,entries:entries})
       });
     }catch(_e){}
   }
@@ -2291,6 +2335,7 @@ function buildTCalc() {
   html += '<div class="card-dot" style="background:#6688cc"></div>';
   html += '<div class="card-title">INJECTION SCHEDULE</div></div>';
   html += '<div style="display:flex;align-items:center;gap:6px">';
+  html += _tcStackPickerHtml();
   if (log.length > 0) {
     html += '<button onclick="_tcPushLogToSchedule()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:10px;font-weight:700;letter-spacing:0.5px;cursor:pointer;padding:5px 10px;font-family:inherit">PUSH TO SCHEDULE</button>';
   }
