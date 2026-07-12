@@ -527,7 +527,7 @@ function _blDrawChart(canvas){
   var totalDays = _blTimeline.totalDays, nowDay = _blTimeline.nowDay;
   var pan = _blZoom!=='whole' ? Math.round(_blPanOffset||0) : 0;
   var xStart = 0, xEnd = totalDays;
-  if(_blZoom==='today')      { xStart=Math.max(0,nowDay-2+pan); xEnd=Math.min(totalDays,nowDay+2+pan); }
+  if(_blZoom==='today')      { xStart=Math.max(0,nowDay-0.5+pan); xEnd=xStart+1; if(xEnd>totalDays){ xEnd=totalDays; xStart=Math.max(0,totalDays-1); } }
   else if(_blZoom==='week')  { xStart=Math.max(0,nowDay-3+pan); xEnd=Math.min(totalDays,nowDay+4+pan); }
   else if(_blZoom==='month') { xStart=Math.max(0,nowDay-15+pan); xEnd=Math.min(totalDays,nowDay+15+pan); }
   if(xEnd <= xStart) xEnd = Math.min(totalDays, xStart+7);
