@@ -89,6 +89,10 @@ async function wizSave(){
   var btn=document.querySelector('.wiz-footer .btn.btn-primary');
   if(btn){btn.disabled=true;btn.textContent='Saving...';}
   var proto={name:_wiz.stackName,cycle_length:_wiz.cycle_length,peptides:_wiz.peptides,trt:(_wiz.trt&&_wiz.trt.enabled)?_wiz.trt:{},enhanced:((_wiz.goals||[]).includes('enhanced')&&_wiz.enhanced&&_wiz.enhanced.compounds&&_wiz.enhanced.compounds.length)?_wiz.enhanced:{}};
+  // Preserve the stable id when editing (proto is rebuilt from the wizard state);
+  // assign one for a brand-new stack. Keeps this stack's injections linked.
+  if(_wiz.stackIndex>=0&&_wiz.stackIndex<_userStacks.length&&_userStacks[_wiz.stackIndex]&&_userStacks[_wiz.stackIndex].id)proto.id=_userStacks[_wiz.stackIndex].id;
+  _ensureStackId(proto);
   if(_wiz.stackIndex>=0&&_wiz.stackIndex<_userStacks.length){
     _userStacks[_wiz.stackIndex]=proto;
   } else {
@@ -1532,9 +1536,19 @@ function showWizard(editModeUnused){
 
 // ── Injection generation ──────────────────────────────────────────────────────
 
+function _deriveStackCycleId(stack){
+  var name=((stack&&stack.name)||'stack').replace(/\s+/g,'_').toLowerCase().replace(/[^a-z0-9_]/g,'');
+  return name+'_'+((stack&&stack.cycle_start)||'nostart');
+}
+// Stable per-stack id, frozen so renaming a stack or moving its cycle start no
+// longer orphans the stack's scheduled injections. Legacy stacks (no id) adopt
+// their CURRENT derived cycle_id, which keeps their existing injections linked.
+function _ensureStackId(stack){
+  if(stack&&!stack.id)stack.id=_deriveStackCycleId(stack);
+  return stack?stack.id:'';
+}
 function _stackCycleId(stack){
-  var name=(stack.name||'stack').replace(/\s+/g,'_').toLowerCase().replace(/[^a-z0-9_]/g,'');
-  return name+'_'+(stack.cycle_start||'nostart');
+  return (stack&&stack.id)?stack.id:_deriveStackCycleId(stack);
 }
 
 function _getProtocolCompoundIds(stack){
