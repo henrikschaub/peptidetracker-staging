@@ -29,6 +29,8 @@ const patchedScript = rawScript
   .replace('let _userWeight=',        'var _userWeight=')
   .replace('var _wizOverlay=',        'var _wizOverlay=')
   .replace('const RECON_DB=',         'var RECON_DB=')
+  .replace("let _tabVis={};let _currentTab='today';let _currentPrimary='today';let _lastSub={};",
+           "var _tabVis={};var _currentTab='today';var _currentPrimary='today';var _lastSub={};")
   .replace('let _viewDate=',          'var _viewDate=')
   .replace('let _reconStackIdx=',     'var _reconStackIdx=')
   .replace('let _reconState=',        'var _reconState=')
@@ -1765,8 +1767,9 @@ console.log('\n── dose dedup migration ────────────�
     rawScript.includes("IS_STAGING?{storage:true}:{}"));
   check('tab-btn-storage exists in HTML (hidden by default)',
     html.includes('id="tab-btn-storage"'));
-  check('storage tab controlled by applyTabVis via TAB_LABELS (no manual show override in init)',
-    rawScript.includes("Object.keys(TAB_LABELS).forEach") &&
+  check('storage tab visibility gated by TAB_LABELS membership (no manual show override in init)',
+    rawScript.includes('function _subVisible(id)') &&
+    rawScript.includes('id in TAB_LABELS') &&
     !rawScript.includes("tab-btn-storage').style.display=''"));
   check('initTabVis called in init() without manual storage override after it',
     (function(){
@@ -5218,6 +5221,40 @@ if (typeof G._tcClearStackConfigTrt === 'function') {
   check('T-Calc assign guards against config-testo conflict', tc.includes('_stackHasConfigTrt(_tgt)') && tc.includes('_tcClearStackConfigTrt(_tgt)'));
   const stk = fs.readFileSync(path.join(__dirname, '../tab-stack.js'), 'utf8');
   check('wizSave + editSave reconcile testo source', (stk.match(/_reconcileStackTestoSource\(/g) || []).length >= 2);
+}
+
+// ── Two-tier navigation: 5 primary tabs + nested sub-tabs ─────────────────────
+console.log('\n── 5-tab bottom nav + sub-nav ─────────────────────────────');
+if (typeof G.switchPrimary === 'function' && typeof G.primaryOf === 'function') {
+  // Every legacy destination maps to exactly one primary group (primaryOf reads the internal map).
+  var _dests = ['today','stacks','blood','tcalc','labs','supplements','recon','schedule','macros','timeline','body','settings','storage'];
+  check('nav: every destination maps to a primary group', _dests.every(function(id){ return G.primaryOf(id) !== ''; }));
+  check('primaryOf: tcalc → levels',   G.primaryOf('tcalc') === 'levels');
+  check('primaryOf: recon → plan',     G.primaryOf('recon') === 'plan');
+  check('primaryOf: settings → more',  G.primaryOf('settings') === 'more');
+  check('primaryOf: unknown → ""',     G.primaryOf('nope') === '');
+  // Human sub-tab renames present (jargon → plain language)
+  check('sub-labels: T-Calc → Testosterone',  rawScript.includes("tcalc:'Testosterone'"));
+  check('sub-labels: Recon → Reconstitution', rawScript.includes("recon:'Reconstitution'"));
+  check('sub-labels: blood → Blood Levels',   rawScript.includes("blood:'Blood Levels'"));
+  // switchPrimary opens the first visible sub-tab, or the remembered one (_tabVis/_lastSub exposed as vars)
+  var _origSwitch = G.switchTab, _cap = null; G.switchTab = function(id){ _cap = id; };
+  G._tabVis = {}; G._lastSub = {};
+  G.switchPrimary('levels'); check('switchPrimary: opens first visible sub-tab (levels → blood)', _cap === 'blood');
+  G._lastSub = { levels:'tcalc' }; _cap = null; G.switchPrimary('levels'); check('switchPrimary: reopens the remembered sub-tab (tcalc)', _cap === 'tcalc');
+  G.switchTab = _origSwitch;
+  // switchTab records the active primary + its last sub-tab (bookkeeping runs before any builder)
+  G._lastSub = {}; try { G.switchTab('timeline', G.document.getElementById('tab-btn-timeline')); } catch(e){}
+  check('switchTab: sets _currentPrimary from the tab', G._currentPrimary === 'plan');
+  check('switchTab: remembers the last sub for that primary', G._lastSub['plan'] === 'timeline');
+} else {
+  check('switchPrimary / primaryOf present', false);
+}
+{
+  check('bottom nav has all 5 primary buttons', ['today','plan','levels','labs','more'].every(function(p){ return html.includes('id="navbtn-'+p+'"'); }));
+  const _navcss = fs.readFileSync(path.join(__dirname, '../css/main.css'), 'utf8');
+  check('.navbar is fixed to the bottom',        /\.navbar\{[^}]*position:fixed[^}]*bottom:0/.test(_navcss));
+  check('content clears the fixed bottom bar',   /\.content\{[^}]*padding:[^;]*96px/.test(_navcss));
 }
 
 console.log('\n───────────────────────────────────────────────────────────');
