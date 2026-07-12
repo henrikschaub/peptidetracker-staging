@@ -2179,9 +2179,40 @@ function _tcTargetCycleId(){
   if(tid&&typeof _userStacks!=='undefined'&&_userStacks&&_userStacks.some(function(s){return s&&s.id===tid;}))return 'tcalc:'+tid;
   return 'tcalc';
 }
+// Disable a stack's OWN TRT-config testosterone and delete the injections it
+// generated (cycle_id '<stackId>', per testo compound, from today). Leaves the
+// stack's peptides/enhanced injections untouched. Used when the user switches a
+// stack's testosterone source to the T-Calc plan.
+async function _tcClearStackConfigTrt(stack){
+  if(!stack)return;
+  var _cyc=(typeof _stackCycleId==='function')?_stackCycleId(stack):(stack.id||'');
+  var _cids=((stack.trt&&stack.trt.compounds)||[]).map(function(c){return c.id;});
+  stack.trt={};
+  if(typeof saveStacksToBackend==='function'){try{await saveStacksToBackend();}catch(_e){}}
+  var h=(typeof authHeaders==='function')?authHeaders():null;
+  if(h&&_cyc){
+    var _n=new Date();_n.setHours(0,0,0,0);
+    var _td=_n.getFullYear()+'-'+String(_n.getMonth()+1).padStart(2,'0')+'-'+String(_n.getDate()).padStart(2,'0');
+    for(var _i=0;_i<_cids.length;_i++){
+      try{await fetch(AGENT_URL+'/injections?cycle_id='+encodeURIComponent(_cyc)+'&compound_id='+encodeURIComponent(_cids[_i])+'&from_date='+_td,{method:'DELETE',headers:h});}catch(_e){}
+    }
+  }
+}
 // Assign (copy) the T-Calc testosterone to a stack — active OR inactive. Clears the
 // previous home so it never duplicates, then re-syncs into the new one.
 async function _tcSetTargetStack(stackId){
+  // Single-source guard: a stack gets testosterone from ONE source. If the chosen
+  // stack already has its own TRT config, warn and let the user choose — OK replaces
+  // the config with the T-Calc source (clears it), Cancel keeps the config (aborts).
+  if(stackId){
+    var _tgt=(typeof _userStacks!=='undefined'&&_userStacks)?_userStacks.find(function(s){return s&&s.id===stackId;}):null;
+    if(_tgt&&typeof _stackHasConfigTrt==='function'&&_stackHasConfigTrt(_tgt)){
+      var _ok=(typeof confirm!=='function')?true
+        :confirm('“'+(_tgt.name||'This stack')+'” already has testosterone from its TRT config. Replace it with the T-Calc source?');
+      if(!_ok){ if(typeof buildTCalc==='function')buildTCalc(); return; } // keep config; revert picker
+      await _tcClearStackConfigTrt(_tgt);
+    }
+  }
   var oldCid=_tcTargetCycleId();
   _tcp.targetStackId=stackId||'';
   _tcSaveProfile();

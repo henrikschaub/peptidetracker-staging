@@ -951,6 +951,31 @@ function _stackHasScheduledTrt(stackId, cache){
   }
   return false;
 }
+// Does a stack carry testosterone from its OWN TRT config (esters configured in
+// the stack, generating injections under cycle_id '<stackId>') — as opposed to a
+// T-Calc plan assigned to it ('tcalc:<stackId>'). Requires the tier enabled with
+// at least one compound, matching what actually generates injections.
+function _stackHasConfigTrt(st){
+  return !!(st&&st.trt&&st.trt.enabled&&st.trt.compounds&&st.trt.compounds.length);
+}
+// Single-source guard, stack-save side. A stack must get testosterone from ONE
+// source only. If the stack being saved has BOTH its own TRT config AND a T-Calc
+// plan assigned to it ('tcalc:<stackId>'), warn and let the user choose:
+//   • OK    → switch to the TRT config: unassign the T-Calc plan (back to global).
+//   • Cancel→ keep T-Calc: drop the just-added config testosterone from the stack.
+// No-op when there is no conflict. Mutates `stack.trt` in the Cancel branch.
+async function _reconcileStackTestoSource(stack){
+  if(!stack||!stack.id)return;
+  if(typeof _tcp==='undefined'||!_tcp||_tcp.targetStackId!==stack.id)return; // not the T-Calc target
+  if(!_stackHasConfigTrt(stack))return;                                      // no config testo → no conflict
+  var _switch=(typeof confirm!=='function')?true
+    :confirm('“'+(stack.name||'This stack')+'” already gets testosterone from T-Calc. Replace it with this TRT config?');
+  if(_switch){
+    if(typeof _tcSetTargetStack==='function')await _tcSetTargetStack(''); // unassign T-Calc → config wins
+  }else{
+    stack.trt={}; // keep T-Calc → discard the config testosterone the user just added
+  }
+}
 // Which tiers a stack represents, for the stack-card badges. The TRT badge is
 // carried ONLY by an ACTIVE stack that actually has testosterone planned —
 // a configured TRT compound OR testosterone scheduled for it (incl. T-Calc-assigned).
