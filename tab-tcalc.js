@@ -697,7 +697,7 @@ function _tcShowAddSheet() {
   ol.innerHTML =
     '<div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 20px 36px;max-height:85vh;overflow-y:auto">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">' +
-    '<div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--text)">ADD INJECTION</div>' +
+    '<div style="font-family:var(--font-display);font-size:20px;letter-spacing:1px;color:var(--text)">ADD INJECTION</div>' +
     '<button onclick="_tcCloseAddSheet()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button>' +
     '</div>' +
     '<div style="margin-bottom:14px"><label style="'+lSty+'">COMPOUND</label>' +
@@ -844,7 +844,7 @@ function _tcOpenEditSeriesSheet(sid) {
   ol.innerHTML =
     '<div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 20px 36px;max-height:85vh;overflow-y:auto">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">' +
-    '<div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--text)">EDIT SERIES</div>' +
+    '<div style="font-family:var(--font-display);font-size:20px;letter-spacing:1px;color:var(--text)">EDIT SERIES</div>' +
     '<button onclick="_tcCloseEditSeriesSheet()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button>' +
     '</div>' +
     '<div style="margin-bottom:14px"><label style="'+lSty+'">COMPOUND</label>' +
@@ -892,7 +892,7 @@ function _tcShowSeriesDetail(sid) {
   ol.innerHTML =
     '<div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 20px 36px;max-height:80vh;overflow-y:auto">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
-    '<div><div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--text)">SERIES INJECTIONS</div>' +
+    '<div><div style="font-family:var(--font-display);font-size:20px;letter-spacing:1px;color:var(--text)">SERIES INJECTIONS</div>' +
     '<div style="font-size:11px;color:var(--muted2);margin-top:2px">' + _esc(mcd.name) + ' · ' + entries.length + ' injections</div></div>' +
     '<button onclick="document.getElementById(\'tc-series-detail-overlay\').remove()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button>' +
     '</div>' + listHtml + '</div>';

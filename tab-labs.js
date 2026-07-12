@@ -395,7 +395,7 @@ function _labRenderAddSheet() {
   var lSty = 'font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--muted);text-transform:uppercase;margin-bottom:6px;display:block';
   var iSty = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:15px;font-family:inherit;outline:none;width:100%;box-sizing:border-box';
   var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">' +
-    '<div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--text)">ADD BLOODWORK</div>' +
+    '<div style="font-family:var(--font-display);font-size:20px;letter-spacing:1px;color:var(--text)">ADD BLOODWORK</div>' +
     '<button onclick="_labCloseAddSheet()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button></div>';
   h += '<div style="margin-bottom:14px"><label style="' + lSty + '">DATE</label>' +
     '<input id="lab-date" type="date" value="' + _esc(_labAdd.date) + '" max="' + today + '" oninput="_labSetDate(this.value)" style="' + iSty + '"></div>';

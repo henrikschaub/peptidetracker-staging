@@ -121,7 +121,7 @@ function cycleWizRender(){
   var inner=document.getElementById('cycle-wiz-inner');
   if(!inner)return;
   var h='<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">';
-  h+='<div style="font-family:Bebas Neue,sans-serif;font-size:18px;letter-spacing:2px;color:var(--accent)">NEW CYCLE</div>';
+  h+='<div style="font-family:var(--font-display);font-size:18px;letter-spacing:2px;color:var(--accent)">NEW CYCLE</div>';
   h+='<div style="display:flex;align-items:center;gap:6px">';
   for(var i=1;i<=3;i++){var active=_cwiz.step===i,done=_cwiz.step>i;h+='<div style="width:26px;height:26px;border-radius:50%;background:'+(active?'var(--accent)':done?'var(--accent3)':'var(--surface2)')+';color:'+(active||done?'#000':'var(--muted2)')+';font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">'+(done?'✓':i)+'</div>';}
   h+='</div>';
@@ -255,7 +255,7 @@ function _cwizStep3(){
   h+='<div style="font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px">Step 3 of 3 &#x2014; Review &amp; Confirm</div>';
   h+='<div style="background:var(--surface2);border-radius:12px;overflow:hidden;margin-bottom:12px">';
   h+='<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">';
-  h+='<div style="font-family:Bebas Neue,sans-serif;font-size:17px;letter-spacing:1.5px">'+t.name+'</div>';
+  h+='<div style="font-family:var(--font-display);font-size:17px;letter-spacing:1.5px">'+t.name+'</div>';
   h+='<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:'+t.badgeColor+'22;color:'+t.badgeColor+';border:1px solid '+t.badgeColor+'44">'+t.badge+'</span>';
   h+='</div>';
   var endD=new Date(startD.getTime());endD.setDate(endD.getDate()+_cwiz.weeks*7);

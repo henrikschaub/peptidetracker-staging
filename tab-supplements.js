@@ -338,7 +338,7 @@ function buildSupplements(){
   var list = (_supplements||[]).slice().sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
   var header =
     '<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 16px">' +
-    '<div style="font-family:Bebas Neue,sans-serif;font-size:22px;letter-spacing:1px;color:var(--text)">SUPPLEMENTS</div>' +
+    '<div style="font-family:var(--font-display);font-size:22px;letter-spacing:1px;color:var(--text)">SUPPLEMENTS</div>' +
     '<button onclick="_suppOpenAddSheet()" style="background:var(--accent);color:#000;border:none;border-radius:10px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ Add</button>' +
     '</div>';
   var body;
@@ -380,7 +380,7 @@ function _suppOpenAddSheet(editId){
   ol.innerHTML =
     '<div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 20px 36px;max-height:88vh;overflow-y:auto">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">' +
-      '<div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--text)">' + (editing?'EDIT SUPPLEMENT':'ADD SUPPLEMENT') + '</div>' +
+      '<div style="font-family:var(--font-display);font-size:20px;letter-spacing:1px;color:var(--text)">' + (editing?'EDIT SUPPLEMENT':'ADD SUPPLEMENT') + '</div>' +
       '<button onclick="_suppCloseAddSheet()" style="background:none;border:none;color:var(--muted2);font-size:22px;cursor:pointer;line-height:1">×</button>' +
     '</div>' +
     '<div style="margin-bottom:14px"><label style="'+lSty+'">Supplement</label>' +
