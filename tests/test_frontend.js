@@ -5113,6 +5113,24 @@ if (typeof G._tcTargetCycleId === 'function') {
   check('badge detects testo from stack injections', idx.includes('_stackHasScheduledTrt(st.id)'));
 }
 
+// ── Option B / phase 3: active = stack property; schedule surfaces its testo ───
+console.log('\n── Active = stack property (schedule filtering) ───────────');
+if (typeof G._tcalcEntryVisible === 'function') {
+  var _act = new Set(['cyc_b']);
+  check('visible: unassigned tcalc → always',            G._tcalcEntryVisible({cycle_id:'tcalc'}, _act) === true);
+  check('visible: assigned to an ACTIVE stack',          G._tcalcEntryVisible({cycle_id:'tcalc:cyc_b'}, _act) === true);
+  check('hidden: assigned to an INACTIVE stack',         G._tcalcEntryVisible({cycle_id:'tcalc:cyc_a'}, _act) === false);
+  check('n/a: own-stack row not a tcalc-family entry',   G._tcalcEntryVisible({cycle_id:'cyc_b'}, _act) === false);
+} else {
+  check('_tcalcEntryVisible present', false);
+}
+{
+  const idx = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  check('cache surfaces active assigned testo',       idx.includes('_tcalcEntryVisible(e,activeCycleIds)'));
+  check('toggleStack refreshes cache on active switch', /async function toggleStack[\s\S]*?refreshInjectionsCache\(\)/.test(idx));
+  check('useStack refreshes cache on active switch',    /async function useStack[\s\S]*?refreshInjectionsCache\(\)/.test(idx));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
