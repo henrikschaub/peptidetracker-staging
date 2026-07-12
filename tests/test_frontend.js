@@ -5056,7 +5056,7 @@ if (typeof G._stackTierFlags === 'function') {
 {
   const idxSrc = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
   check('stack card renders TRT + Enhanced chips', idxSrc.includes("_stackTierChip('TRT','#e05050')") && idxSrc.includes("_stackTierChip('ENHANCED'"));
-  check('stack card uses tcalc-aware tier flags',  idxSrc.includes('_stackTierFlags(st,isActive,hasTcalcTrt)'));
+  check('stack card uses injection-aware tier flags',  idxSrc.includes('_stackTierFlags(st,isActive,_stackHasScheduledTrt(st.id))'));
 }
 
 // ── Option B / phase 1: stable stack ids (injections stop orphaning) ──────────
@@ -5081,6 +5081,36 @@ if (typeof G._stackCycleId === 'function' && typeof G._ensureStackId === 'functi
   check('loadUserStacks backfills + persists ids', idx.includes('_ensureStackId(stack)') && idx.includes('_needIdSave'));
   const stk = fs.readFileSync(path.join(__dirname, '../tab-stack.js'), 'utf8');
   check('wizSave preserves the stable id on edit', stk.includes('proto.id=_userStacks[_wiz.stackIndex].id') && stk.includes('_ensureStackId(proto)'));
+}
+
+// ── Option B / phase 2: copy T-Calc testosterone to any stack ─────────────────
+console.log('\n── T-Calc → copy testosterone to any stack ────────────────');
+if (typeof G._injOwnerStackId === 'function' && typeof G._stackHasScheduledTrt === 'function') {
+  check('owner: tcalc namespace → stack id', G._injOwnerStackId({cycle_id:'tcalc:cycle_2_2026'}) === 'cycle_2_2026');
+  check('owner: plain stack cycle_id → itself', G._injOwnerStackId({cycle_id:'my_stack_2026'}) === 'my_stack_2026');
+  check('owner: unassigned tcalc → tcalc', G._injOwnerStackId({cycle_id:'tcalc'}) === 'tcalc');
+  var _cache = { '2026-07-20':[ {tier:'peptide',cycle_id:'s1'}, {tier:'trt',cycle_id:'tcalc:s2'} ], '2026-07-22':[ {tier:'trt',cycle_id:'s3'} ] };
+  check('scheduledTrt: via tcalc:<id> namespace', G._stackHasScheduledTrt('s2', _cache) === true);
+  check('scheduledTrt: via own cycle_id',         G._stackHasScheduledTrt('s3', _cache) === true);
+  check('scheduledTrt: peptide-only stack → no',  G._stackHasScheduledTrt('s1', _cache) === false);
+  check('scheduledTrt: unknown stack → no',       G._stackHasScheduledTrt('nope', _cache) === false);
+} else {
+  check('_injOwnerStackId / _stackHasScheduledTrt present', false);
+}
+if (typeof G._tcTargetCycleId === 'function') {
+  var _svT = G._tcp.targetStackId, _svS = G._userStacks;
+  G._userStacks = [{id:'cyc_a'},{id:'cyc_b'}];
+  G._tcp.targetStackId = '';       check('targetCycleId: unassigned → tcalc',        G._tcTargetCycleId() === 'tcalc');
+  G._tcp.targetStackId = 'cyc_b';  check('targetCycleId: assigned → tcalc:<id>',     G._tcTargetCycleId() === 'tcalc:cyc_b');
+  G._tcp.targetStackId = 'ghost';  check('targetCycleId: unknown stack → tcalc',     G._tcTargetCycleId() === 'tcalc');
+  G._tcp.targetStackId = _svT; G._userStacks = _svS;
+}
+{
+  const tc = fs.readFileSync(path.join(__dirname, '../tab-tcalc.js'), 'utf8');
+  check('T-Calc sync writes the target cycle id', tc.includes('var _cid=_tcTargetCycleId();') && tc.includes('cycle_id:_cid'));
+  check('T-Calc copy-to-stack picker present',    tc.includes('_tcStackPickerHtml()') && tc.includes('onchange="_tcSetTargetStack(this.value)"'));
+  const idx = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  check('badge detects testo from stack injections', idx.includes('_stackHasScheduledTrt(st.id)'));
 }
 
 console.log('\n───────────────────────────────────────────────────────────');

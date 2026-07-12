@@ -914,14 +914,35 @@ async function deleteStack(idx){
   }
 }
 // ── Build stack store view ───────────────────────────────────────────────────
+// The stack that owns a scheduled injection: its own cycle_id (== stack id), or
+// the 'tcalc:<stackId>' namespace when T-Calc testosterone is assigned to a stack.
+function _injOwnerStackId(e){
+  var c=(e&&e.cycle_id)||'';
+  return (c.indexOf('tcalc:')===0)?c.slice(6):c;
+}
+// Does a stack have any testosterone (tier 'trt') injection scheduled — whether
+// generated from a configured TRT compound or assigned from the T-Calc planner?
+function _stackHasScheduledTrt(stackId, cache){
+  cache=cache||(typeof _injectionsCache!=='undefined'?_injectionsCache:null);
+  if(!stackId||!cache)return false;
+  var ks=Object.keys(cache);
+  for(var i=0;i<ks.length;i++){
+    var arr=cache[ks[i]]||[];
+    for(var j=0;j<arr.length;j++){
+      var e=arr[j];
+      if(e&&e.tier==='trt'&&_injOwnerStackId(e)===stackId)return true;
+    }
+  }
+  return false;
+}
 // Which tiers a stack represents, for the stack-card badges. The TRT badge is
 // carried ONLY by an ACTIVE stack that actually has testosterone planned —
-// either a configured TRT compound on the stack OR testosterone planned in the
-// T-Calc planner (cycle_id 'tcalc'). An inactive stack never shows TRT.
-function _stackTierFlags(st, isActive, hasTcalcTrt){
+// a configured TRT compound OR testosterone scheduled for it (incl. T-Calc-assigned).
+// An inactive stack never shows TRT.
+function _stackTierFlags(st, isActive, hasTrtScheduled){
   var pCount=(st&&st.peptides)?st.peptides.length:0;
   var cfgTrt=!!(st&&st.trt&&(st.trt.compound||(st.trt.compounds&&st.trt.compounds.length)));
-  var hasTrt=!!(isActive&&(cfgTrt||hasTcalcTrt));
+  var hasTrt=!!(isActive&&(cfgTrt||hasTrtScheduled));
   var hasEnh=!!(st&&st.enhanced&&st.enhanced.compounds&&st.enhanced.compounds.length);
   return {pCount:pCount, peptide:pCount>0, trt:hasTrt, enhanced:hasEnh};
 }
@@ -936,12 +957,11 @@ function buildStackStore(){
     return;
   }
   var SLOTS=4;
-  var hasTcalcTrt=(typeof _tcalcTrtSummary==='function')&&!!_tcalcTrtSummary();
   var html='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
   for(var i=0;i<Math.min(_userStacks.length,SLOTS);i++){
     var st=_userStacks[i];
     var isActive=_isActiveStack(i);
-    var _tf=_stackTierFlags(st,isActive,hasTcalcTrt);
+    var _tf=_stackTierFlags(st,isActive,_stackHasScheduledTrt(st.id));
     var pCount=_tf.pCount;
     html+='<div class="stack-card'+(isActive?' active':'')+'" onclick="viewStack('+i+')">';
     html+='<div class="stack-card-header">';
