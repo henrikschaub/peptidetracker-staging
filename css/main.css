@@ -36,7 +36,11 @@
   .tabs::-webkit-scrollbar{display:none;}
   .tab{font-size:13px;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;padding:8px 14px 12px;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all 0.15s;}
   .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-  .content{flex:1;padding:20px;display:flex;flex-direction:column;gap:14px;}
+  /* Bottom primary navigation (5 tabs) — thumb-reachable, per usability study */
+  .navbar{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--surface);border-top:1px solid var(--border);z-index:100;padding-bottom:env(safe-area-inset-bottom,0);}
+  .navbtn{flex:1;background:none;border:none;color:var(--muted2);font-family:var(--font-ui);font-size:11px;font-weight:600;letter-spacing:0.3px;padding:11px 4px 13px;cursor:pointer;transition:color 0.15s;}
+  .navbtn.active{color:var(--accent);}
+  .content{flex:1;padding:20px 20px 96px;display:flex;flex-direction:column;gap:14px;}
   .content.hidden{display:none;}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
   .card-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 12px;border-bottom:1px solid var(--border);}
