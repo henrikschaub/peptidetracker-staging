@@ -5041,9 +5041,12 @@ if (Array.isArray(G.TRT_CAT)) {
 console.log('\n── Stack tier badges (detect from what the stack runs) ────');
 if (typeof G._stackTierFlags === 'function') {
   const f = G._stackTierFlags;
-  check('tier: configured TRT compound → TRT',   f({peptides:[1,2],trt:{compounds:[{id:'nebido'}]}}, false, false).trt === true);
-  check('tier: active + T-Calc testosterone → TRT', f({peptides:[1,2],trt:{}}, true, true).trt === true);
+  // TRT badge only when the stack is ACTIVE and has testosterone planned
+  check('tier: active + configured TRT → TRT',       f({peptides:[1,2],trt:{compounds:[{id:'nebido'}]}}, true, false).trt === true);
+  check('tier: inactive + configured TRT → no TRT',  f({peptides:[1,2],trt:{compounds:[{id:'nebido'}]}}, false, false).trt === false);
+  check('tier: active + T-Calc testosterone → TRT',  f({peptides:[1,2],trt:{}}, true, true).trt === true);
   check('tier: inactive + T-Calc testosterone → no TRT', f({peptides:[1,2],trt:{}}, false, true).trt === false);
+  check('tier: active but no testosterone → no TRT', f({peptides:[1,2],trt:{}}, true, false).trt === false);
   check('tier: enhanced compounds → Enhanced',   f({peptides:[],enhanced:{compounds:[{id:'tren'}]}}, false, false).enhanced === true);
   check('tier: peptide count + flag',            f({peptides:[1,2,3]}, false, false).pCount === 3 && f({peptides:[1,2,3]}, false, false).peptide === true);
   check('tier: empty stack → no tiers', (function(){ var t=f({peptides:[],trt:{},enhanced:{compounds:[]}}, false, false); return !t.peptide && !t.trt && !t.enhanced; })());
