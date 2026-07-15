@@ -5324,7 +5324,7 @@ if (typeof G.switchPrimary === 'function' && typeof G.primaryOf === 'function') 
   check('bottom nav has all 5 primary buttons', ['today','plan','levels','labs','more'].every(function(p){ return html.includes('id="navbtn-'+p+'"'); }));
   const _navcss = fs.readFileSync(path.join(__dirname, '../css/main.css'), 'utf8');
   check('.navbar is fixed to the bottom',        /\.navbar\{[^}]*position:fixed[^}]*bottom:0/.test(_navcss));
-  check('content clears the fixed bottom bar',   /\.content\{[^}]*padding:[^;]*108px/.test(_navcss));
+  check('content clears the fixed bottom bar',   /\.content\{[^}]*padding:[^;]*116px/.test(_navcss));
 }
 
 // ── Adaptive onboarding: experience + goals → suggested template ──────────────
