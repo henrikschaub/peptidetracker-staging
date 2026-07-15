@@ -5318,6 +5318,25 @@ if (typeof G.switchPrimary === 'function' && typeof G.primaryOf === 'function') 
   check('content clears the fixed bottom bar',   /\.content\{[^}]*padding:[^;]*96px/.test(_navcss));
 }
 
+// ── Adaptive onboarding: experience + goals → suggested template ──────────────
+console.log('\n── Adaptive onboarding ────────────────────────────────────');
+if (Array.isArray(G._OB_ORDER) && typeof G.obToggleGoal === 'function' && typeof G.obSetExperience === 'function') {
+  check('onboarding asks experience before the cosmetic steps', G._OB_ORDER.indexOf('experience') >= 0 && G._OB_ORDER.indexOf('experience') < G._OB_ORDER.indexOf('theme'));
+  check('onboarding asks goals before the cosmetic steps',      G._OB_ORDER.indexOf('goals') >= 0 && G._OB_ORDER.indexOf('goals') < G._OB_ORDER.indexOf('stats'));
+  var _svOb = G._obData;
+  G._obData = { sex:null, height:'', weight:'', theme:3, experience:'', goals:[] };
+  G.obSetExperience('advanced'); check('obSetExperience records the level', G._obData.experience === 'advanced');
+  G.obToggleGoal('recovery');    check('obToggleGoal adds a goal',            G._obData.goals.indexOf('recovery') >= 0);
+  G.obToggleGoal('recovery');    check('obToggleGoal removes on second tap',  G._obData.goals.indexOf('recovery') < 0);
+  G._obData = _svOb;
+  check('obFinish persists experience + goals to the backend', rawScript.includes("kv['pep-experience']") && rawScript.includes("kv['pep-goals']"));
+  check('obFinish offers a goal-matched template when empty',  rawScript.includes('openTemplatePicker(_g)'));
+  const _stkJs = fs.readFileSync(path.join(__dirname, '../tab-stack.js'), 'utf8');
+  check('template picker accepts goal preferences + marks suggested', _stkJs.includes('function openTemplatePicker(preferGoals)') && _stkJs.includes('SUGGESTED'));
+} else {
+  check('_OB_ORDER / obToggleGoal / obSetExperience present', false);
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
