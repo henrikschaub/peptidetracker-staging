@@ -5303,6 +5303,15 @@ if (typeof G.switchPrimary === 'function' && typeof G.primaryOf === 'function') 
   G._tabVis = {}; G._lastSub = {};
   G.switchPrimary('levels'); check('switchPrimary: opens first visible sub-tab (levels → blood)', _cap === 'blood');
   G._lastSub = { levels:'tcalc' }; _cap = null; G.switchPrimary('levels'); check('switchPrimary: reopens the remembered sub-tab (tcalc)', _cap === 'tcalc');
+  // Regression: legacy per-tab settings that hid EVERY sub-tab in a group must not
+  // leave the primary empty/unreachable — it falls back to the whole group.
+  var _svVis = G._tabVis;
+  G._tabVis = { blood:false, tcalc:false }; _cap = null; G._lastSub = {};
+  G.switchPrimary('levels'); check('switchPrimary: all sub-tabs hidden → still opens the group (fallback)', _cap === 'blood');
+  if (typeof G._groupVisibleSubs === 'function') {
+    check('_groupVisibleSubs: falls back to full group when all hidden', G._groupVisibleSubs('levels').length === 2);
+  }
+  G._tabVis = _svVis;
   G.switchTab = _origSwitch;
   // switchTab records the active primary + its last sub-tab (bookkeeping runs before any builder)
   G._lastSub = {}; try { G.switchTab('timeline', G.document.getElementById('tab-btn-timeline')); } catch(e){}
