@@ -789,6 +789,23 @@ function wizStepCheck(body,footer){
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
 }
+// Contextual safety note for a compound tier (peptide / trt / enhanced) — a short,
+// dismissible watch/test/stop card shown in every tier's dose-guidance view.
+// Un-gated: safety always surfaces. Content is served from the backend.
+function _renderSafetyNote(tier){
+  if(typeof _safetyDismissed!=='undefined'&&_safetyDismissed[tier])return '';
+  var n=(typeof _safetyNotes!=='undefined'&&_safetyNotes)?_safetyNotes[tier]:null;
+  if(!n)return '';
+  return '<div data-safety="'+tier+'" style="margin-top:8px;background:rgba(255,176,60,0.06);border:1px solid rgba(255,176,60,0.25);border-radius:8px;padding:9px 11px">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px"><span style="display:flex;align-items:center;gap:6px"><span style="font-size:12px">⚠️</span><span style="font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--warning)">Safety'+(n.label?' — '+_esc(n.label):'')+'</span></span>'+
+    '<button onclick="dismissSafety(\''+tier+'\',this)" style="background:none;border:none;color:var(--muted2);font-size:15px;line-height:1;cursor:pointer;padding:0 2px">&times;</button></div>'+
+    '<div style="font-size:11px;color:var(--text);line-height:1.5">'+
+      (n.watch?'<div><b style="color:var(--muted2)">Watch:</b> '+_esc(n.watch)+'</div>':'')+
+      (n.test?'<div style="margin-top:2px"><b style="color:var(--muted2)">Test:</b> '+_esc(n.test)+'</div>':'')+
+      (n.stop?'<div style="margin-top:2px"><b style="color:var(--muted2)">Stop:</b> '+_esc(n.stop)+'</div>':'')+
+    '</div></div>';
+}
+function dismissSafety(tier,el){if(typeof _safetyDismissed!=='undefined')_safetyDismissed[tier]=1;var c=(el&&el.closest)?el.closest('[data-safety]'):null;if(c&&c.parentNode)c.parentNode.removeChild(c);}
 function _renderDoseGuide(pepId,currentDose){
   var tiers=DOSE_GUIDE&&DOSE_GUIDE[pepId];
   if(!tiers||!tiers.length)return'';
@@ -815,7 +832,7 @@ function _renderDoseGuide(pepId,currentDose){
   var mods=_dosePersonalization(pepId,profile);
   var modHtml='';
   if(mods.length){var colorMap={adj:'#3b9eff',ok:'#3cffa0',warn:'#f59e0b',info:'#c084fc'};modHtml='<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">'+mods.map(function(m){var c=colorMap[m.type]||'#3b9eff';return'<div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:4px"><span style="color:'+c+';font-size:12px;line-height:1.4;margin-top:1px">●</span><span style="font-size:11px;color:var(--text);line-height:1.4">'+m.text+'</span></div>';}).join('')+'</div>';}else if(!hasProfile){modHtml='<div style="margin-top:6px;font-size:11px;color:var(--muted2);font-style:italic">Add age & weight in Body tab for personalized dosing</div>';}
-  return'<div class="cfg-row" style="display:block"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px">Recommended Doses</div>'+rows.join('')+modHtml+'</div>';
+  return'<div class="cfg-row" style="display:block"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px">Recommended Doses</div>'+rows.join('')+modHtml+'</div>'+_renderSafetyNote('peptide');
 }
 function _renderRampSection(p,pi){
   var hasRamp=!!(p.dose_phases&&p.dose_phases.length);
@@ -1179,7 +1196,7 @@ function _renderEnhancedGuide(cat,activeDose){
   if(tiers&&tiers.length){var rows=tiers.map(function(t){var _isActive=(activeDose&&activeDose>0)?(function(){var _ns=(t.d||'').match(/[\d.]+/g);if(_ns&&_ns.length>=2){var _mn=parseDec(_ns[0]),_mx=parseDec(_ns[_ns.length-1]);return activeDose>=_mn&&activeDose<=_mx;}return!!t.b;})():!!t.b;var bg=_isActive?'background:rgba(var(--accent-rgb,60,255,160),0.08);border:1px solid rgba(var(--accent-rgb,60,255,160),0.3);':'background:var(--surface2);border:1px solid var(--border);';var doseHtml=t.d?('<span style="font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap">'+t.d+'</span>'):'';var note=t.n?('<div style="font-size:11px;color:var(--muted2);margin-top:2px;">'+t.n+'</div>'):'';var risk=t.r?('<div style="font-size:11px;color:#f59e0b;padding:2px 0 0 0">⚠ '+t.r+'</div>'):'';return'<div style="'+bg+'border-radius:6px;padding:5px 8px;margin-bottom:3px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;font-weight:700;color:'+(_isActive?'var(--accent)':'var(--muted2)')+';text-transform:uppercase;min-width:62px">'+t.l+'</span>'+doseHtml+'</div>'+note+risk+'</div>';}).join('');html+='<div style="display:block;margin-top:8px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px">Recommended Doses</div>'+rows+'</div>';}
   if(cat.interaction)html+='<div style="display:block;margin-top:8px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:4px">How it works</div><div style="font-size:12px;color:var(--text);line-height:1.5;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;">'+cat.interaction+'</div></div>';
   if(cat.sides)html+='<div style="display:block;margin-top:8px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:4px">Side effects</div><div style="font-size:12px;color:var(--text);line-height:1.5;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;">'+cat.sides+'</div></div>';
-  return html;
+  return html+_renderSafetyNote('enhanced');
 }
 function stackAASAutoFill(id){
   var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===id;});
@@ -1315,7 +1332,7 @@ function _renderTRTGuide(cId,weeklyDoseMg){
   if(weeklyDoseMg>250){supraHtml='<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:6px;padding:7px 10px;margin-bottom:5px"><div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:2px">⚠ Supraphysiological dose</div><div style="font-size:11px;color:var(--muted2);line-height:1.5;">'+Math.round(weeklyDoseMg)+' mg/week exceeds the TRT range (100–200 mg/wk). At this dose you are running a blast, not a TRT protocol. Consider tracking this compound in the Enhanced tab instead and running TRT-range Test here.</div></div>';}
   return'<div class="cfg-row" style="display:block;margin-top:10px">'
     +'<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px">TRT Guide</div>'
-    +supraHtml+cadHtml+tiersHtml+modHtml+'</div>';
+    +supraHtml+cadHtml+tiersHtml+modHtml+'</div>'+_renderSafetyNote('trt');
 }
 function _refreshTRTGuide(id,freqVal,freqUnit,dose){var el=document.getElementById('trt-guide-'+id);if(!el)return;var doseNum=parseDec(dose)||0;var freqDays=(freqUnit||'weeks')==='weeks'?(freqVal||1)*7:(freqVal||1);var weeklyDoseMg=freqDays>0?doseNum*7/freqDays:0;el.innerHTML=_renderTRTGuide(id,weeklyDoseMg);}
 function wizStepTRT(body,footer){

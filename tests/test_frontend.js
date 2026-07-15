@@ -5346,6 +5346,26 @@ if (Array.isArray(G._OB_ORDER) && typeof G.obToggleGoal === 'function' && typeof
   check('_OB_ORDER / obToggleGoal / obSetExperience present', false);
 }
 
+// ── Contextual safety notes (watch/test/stop, all tiers) ─────────────────────
+console.log('\n── Contextual safety notes ────────────────────────────────');
+if (typeof G._renderSafetyNote === 'function') {
+  var _svSN = G._safetyNotes, _svSD = G._safetyDismissed;
+  G._safetyNotes = { trt:{ label:'TRT', watch:'hematocrit', test:'6 weeks', stop:'see a doctor' } };
+  G._safetyDismissed = {};
+  var _sc = G._renderSafetyNote('trt');
+  check('safety note renders watch/test/stop', _sc.includes('Watch:') && _sc.includes('Test:') && _sc.includes('Stop:') && _sc.includes('hematocrit'));
+  check('safety note shows the tier label',    _sc.includes('TRT'));
+  check('safety note: unknown tier → empty',   G._renderSafetyNote('nope') === '');
+  G._safetyDismissed = { trt:1 };
+  check('safety note: dismissed tier → empty', G._renderSafetyNote('trt') === '');
+  G._safetyNotes = _svSN; G._safetyDismissed = _svSD;
+  const _stkSN = fs.readFileSync(path.join(__dirname, '../tab-stack.js'), 'utf8');
+  check('safety note shown in ALL three tiers (parity)', _stkSN.includes("_renderSafetyNote('peptide')") && _stkSN.includes("_renderSafetyNote('trt')") && _stkSN.includes("_renderSafetyNote('enhanced')"));
+  check('syncSafetyNotes fetches the backend endpoint', rawScript.includes("'/safety-notes'") && rawScript.includes('function syncSafetyNotes'));
+} else {
+  check('_renderSafetyNote present', false);
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
