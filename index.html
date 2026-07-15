@@ -1454,16 +1454,20 @@ async function syncPepSettingsFromAgent(){try{const r=await fetch(AGENT_URL+'/us
 // A sub-tab is visible unless the user toggled it off. Settings is always on;
 // a tab absent from TAB_LABELS (e.g. Storage on prod) stays hidden as before.
 function _subVisible(id){if(id==='settings')return true;if(!(id in TAB_LABELS))return false;return _tabVis[id]!==false;}
-// Show only the active primary's sub-tabs in the strip; hide the strip if the
+// Sub-tabs visible in a group. If the user turned EVERY one off (e.g. legacy
+// per-tab settings that predate the grouped nav), fall back to the whole group so
+// the section — and its primary — is never left empty or unreachable.
+function _groupVisibleSubs(p){var ids=PRIMARY_GROUPS[p]||[];var vis=ids.filter(_subVisible);return vis.length?vis:ids.slice();}
+// Show only the active primary's sub-tabs in the strip; hide the strip when the
 // group has fewer than two visible sub-tabs (nothing to switch between).
-function _applySubtabVis(p){document.querySelectorAll('.tabs .tab').forEach(function(t){var tid=(t.id||'').replace('tab-btn-','');t.style.display=(primaryOf(tid)===p&&_subVisible(tid))?'':'none';});var strip=document.querySelector('.tabs');if(strip){var vis=(PRIMARY_GROUPS[p]||[]).filter(_subVisible);strip.style.display=vis.length>1?'':'none';}}
-// Apply per-tab visibility: hide a primary whose every sub-tab is off, then
-// refresh the active group's sub-tab strip.
-function applyTabVis(){PRIMARY_ORDER.forEach(function(p){var anyVis=(PRIMARY_GROUPS[p]||[]).some(_subVisible);var nb=document.getElementById('navbtn-'+p);if(nb)nb.style.display=anyVis?'':'none';});if(_currentPrimary)_applySubtabVis(_currentPrimary);}
+function _applySubtabVis(p){var vis=_groupVisibleSubs(p);document.querySelectorAll('.tabs .tab').forEach(function(t){var tid=(t.id||'').replace('tab-btn-','');t.style.display=(primaryOf(tid)===p&&vis.indexOf(tid)>=0)?'':'none';});var strip=document.querySelector('.tabs');if(strip)strip.style.display=vis.length>1?'':'none';}
+// The five primary tabs are ALWAYS visible — per-tab visibility only affects the
+// sub-tab strip within a group, never whether a primary shows. Refresh the strip.
+function applyTabVis(){if(_currentPrimary)_applySubtabVis(_currentPrimary);}
 // Give the sub-tab buttons their human labels (once, at startup).
 function applySubtabLabels(){Object.keys(SUBTAB_LABELS).forEach(function(id){var b=document.getElementById('tab-btn-'+id);if(b)b.textContent=SUBTAB_LABELS[id];});}
 // Switch primary tab: reveal its sub-tabs and open the remembered (or first) one.
-function switchPrimary(p){if(!PRIMARY_GROUPS[p])return;_currentPrimary=p;_setPrimaryActive(p);_applySubtabVis(p);var vis=(PRIMARY_GROUPS[p]||[]).filter(_subVisible);if(!vis.length)return;var want=_lastSub[p];var target=(want&&vis.indexOf(want)>=0)?want:vis[0];var btn=document.getElementById('tab-btn-'+target);if(btn)switchTab(target,btn);}
+function switchPrimary(p){if(!PRIMARY_GROUPS[p])return;_currentPrimary=p;_setPrimaryActive(p);_applySubtabVis(p);var vis=_groupVisibleSubs(p);if(!vis.length)return;var want=_lastSub[p];var target=(want&&vis.indexOf(want)>=0)?want:vis[0];var btn=document.getElementById('tab-btn-'+target);if(btn)switchTab(target,btn);}
 function _userProfile(){return{sex:localStorage.getItem('user_sex')||'male',age:parseInt(localStorage.getItem('user_age')||'0')||0,weight_kg:parseDec(localStorage.getItem('user_weight')||'0')||0};}
 // ── IGF-1 → GH-axis dose direction ───────────────────────────────────────────
 // GH-axis peptides/hGH are titrated to IGF-1 in the upper-normal range for age.
