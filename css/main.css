@@ -1,9 +1,11 @@
 
-  /* Typography: Apple system stacks (no external webfont — renders as true New York / SF Pro / SF Mono on iOS, graceful fallback elsewhere).
-     --font-display: editorial titles · --font-ui: interface body · --font-mono: data & units */
+  /* Typography: Apple's own system family (San Francisco) — no external webfont.
+     Renders as SF Pro Display / SF Pro Text / SF Mono on Apple devices, graceful
+     sans/mono fallback elsewhere.
+     --font-display: titles (SF Pro Display) · --font-ui: interface (SF Pro Text) · --font-mono: data & units (SF Mono) */
   :root{
     --font-ui:-apple-system,'SF Pro Text',system-ui,'Segoe UI',Roboto,sans-serif;
-    --font-display:ui-serif,'New York',Georgia,'Times New Roman',serif;
+    --font-display:-apple-system,'SF Pro Display',system-ui,'Segoe UI',Roboto,sans-serif;
     --font-mono:ui-monospace,'SF Mono',Menlo,'Roboto Mono',monospace;
     /* Neutrals: warm amber bias (vial-glass of the subject) rather than pure grey */
     --bg:#0b0a08;--surface:#141311;--surface2:#1d1b18;--border:#2b2723;
