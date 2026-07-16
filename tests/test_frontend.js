@@ -5387,6 +5387,26 @@ console.log('\n── PLASMA theme tokens ────────────�
   check('non-default themes untouched',                  (G.THEMES || []).length >= 4 && G.THEMES[1].vars.surface === '#150c10');
 }
 
+// ── PLASMA nav icons + strong boundaries ──────────────────────────────────────
+console.log('\n── PLASMA nav + boundaries ────────────────────────────────');
+{
+  const _css = fs.readFileSync(path.join(__dirname, '../css/main.css'), 'utf8');
+  check('all 5 nav buttons carry a glyph icon', ['today','plan','levels','labs','more'].every(function(p){
+    return new RegExp('id="navbtn-'+p+'"[^>]*>\\s*<span class="navic">.+?</span>').test(html);
+  }));
+  check('nav icon is 23px block above an 11px label', /\.navic\{[^}]*display:block[^}]*font-size:23px/.test(_css) && /\.navbtn\{[^}]*font-size:11px/.test(_css));
+  check('active nav tab gets a lime top indicator (color is not the only cue)', /\.navbtn\.active::before\{[^}]*background:var\(--accent\)/.test(_css));
+  check('checkboxes use --border-strong', /\.check-box\{[^}]*border:2px solid var\(--border-strong\)/.test(_css) && /\.pep-chk\{[^}]*border:2px solid var\(--border-strong\)/.test(_css));
+  check('toggle off-track uses --border-strong', /\.toggle-sw\{[^}]*background:var\(--border-strong\)/.test(_css));
+  check('selection chips use --border-strong', ['day-chip','time-chip','goal-chip'].every(function(c){
+    return new RegExp('\\.'+c+'\\{[^}]*border:1px solid var\\(--border-strong\\)').test(_css);
+  }));
+  check('text inputs use --border-strong', ['input\\.dose-in','select\\.unit-sel','input\\.note-in','input\\.trt-in'].every(function(c){
+    return new RegExp(c+'\\{[^}]*border:1px solid var\\(--border-strong\\)').test(_css);
+  }));
+  check('decorative hairlines still use --border (cards, dividers)', /\.card\{[^}]*border:1px solid var\(--border\)/.test(_css) && /\.divider\{[^}]*background:var\(--border\)/.test(_css));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
