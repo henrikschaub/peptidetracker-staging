@@ -34,6 +34,7 @@ const patchedScript = rawScript
            "var _tabVis={};var _currentTab='today';var _currentPrimary='today';var _lastSub={};")
   .replace('let _viewDate=',          'var _viewDate=')
   .replace('let _reconStackIdx=',     'var _reconStackIdx=')
+.replace('let _reconStackPicked=',  'var _reconStackPicked=')
   .replace('let _reconState=',        'var _reconState=')
   .replace('let weights=',            'var weights=')
   .replace('var _bcWeightWindow=',    'var _bcWeightWindow=')
@@ -5480,6 +5481,31 @@ if (typeof G._bcAgeLabel === 'function') {
   check('bcRender sets the age chip from the latest entry', _bodyJs.includes("_ra.textContent=_bcAgeLabel(latest.date)"));
 } else {
   check('_bcAgeLabel present', false);
+}
+
+// ── Recon tab defaults to the ACTIVE stack ─────────────────────────────────────
+console.log('\n── Recon: active stack default ────────────────────────────');
+if (typeof G.renderRecon === 'function' && typeof G.selectReconStack === 'function') {
+  const _svStacks = G._userStacks, _svIdx = G._activeStackIndices,
+        _svRIdx = G._reconStackIdx, _svPicked = G._reconStackPicked;
+  G._userStacks = [{ name: 'Old stack', peptides: [] }, { name: 'Active stack', peptides: [] }];
+  G._activeStackIndices = [1];
+  G._reconStackPicked = false; G._reconStackIdx = 0;
+  G.renderRecon();
+  check('recon defaults to the active stack, not index 0', G._reconStackIdx === 1, 'idx=' + G._reconStackIdx);
+  // explicit user choice wins and sticks across re-renders
+  G.selectReconStack(0);
+  check('manual selection sticks (picked flag set)', G._reconStackPicked === true && G._reconStackIdx === 0);
+  G.renderRecon();
+  check('re-render does not override a manual selection', G._reconStackIdx === 0, 'idx=' + G._reconStackIdx);
+  // out-of-range active index is ignored safely
+  G._reconStackPicked = false; G._reconStackIdx = 0; G._activeStackIndices = [9];
+  G.renderRecon();
+  check('out-of-range active index falls back safely', G._reconStackIdx === 0, 'idx=' + G._reconStackIdx);
+  G._userStacks = _svStacks; G._activeStackIndices = _svIdx;
+  G._reconStackIdx = _svRIdx; G._reconStackPicked = _svPicked;
+} else {
+  check('renderRecon/selectReconStack present', false);
 }
 
 console.log('\n───────────────────────────────────────────────────────────');

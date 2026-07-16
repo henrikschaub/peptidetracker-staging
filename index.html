@@ -282,7 +282,7 @@ var _safetyNotes=getData('proto-safety-notes',null); // per-tier watch/test/stop
 var _safetyDismissed={}; // session-only dismiss set (safety re-surfaces on a fresh load)
 function _isActiveStack(i){return _activeStackIndices.indexOf(i)>=0;}
 let _stackViewTab='peptides';let _editInnerTab='peptides';
-let _reconStackIdx=0;let _reconState={};
+let _reconStackIdx=0;let _reconStackPicked=false;let _reconState={};
 const TAB_LABELS=Object.assign({today:'Today',stacks:'Stacks',blood:'Levels',tcalc:'T-Calc',labs:'Labs',supplements:'Supplements',recon:'Recon',schedule:'Schedule',macros:'Macros',timeline:'Timeline',body:'Body Comp'},IS_STAGING?{storage:'Storage'}:{});
 const TAB_DEFAULTS=Object.assign({today:true,stacks:true,blood:true,tcalc:true,labs:true,supplements:true,recon:true,schedule:false,macros:false,timeline:true,body:true},IS_STAGING?{storage:true}:{});
 // Two-tier navigation (usability study): 5 bottom "primary" tabs, each grouping
