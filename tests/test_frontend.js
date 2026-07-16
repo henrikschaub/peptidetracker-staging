@@ -5407,6 +5407,80 @@ console.log('\n── PLASMA nav + boundaries ───────────�
   check('decorative hairlines still use --border (cards, dividers)', /\.card\{[^}]*border:1px solid var\(--border\)/.test(_css) && /\.divider\{[^}]*background:var\(--border\)/.test(_css));
 }
 
+// ── PLASMA Today rings + streak + freshness ────────────────────────────────────
+console.log('\n── PLASMA Today rings ─────────────────────────────────────');
+if (typeof G._ringStats === 'function' && typeof G._calcDoseStreak === 'function') {
+  const _svCache = G._injectionsCache, _svSupps = G._supplements, _svLog = G.window._peptideLog;
+  const _rd = new Date(2026, 5, 10); // Wed 10 Jun 2026
+  const _k = d => G.dateKey ? G.dateKey(d) : d.toISOString().split('T')[0];
+  const day = off => { const d = new Date(_rd); d.setDate(d.getDate() + off); return _k(d); };
+  const dose = (id, logged) => ({ id, compound_id: id, time_of_day: 'AM', active: true, logged });
+  G._supplements = [];
+  G.window._peptideLog = [];
+
+  // ring stats: 1 of 2 doses logged today; yesterday 1/1 → week 2/3
+  G._injectionsCache = {};
+  G._injectionsCache[day(0)]  = [dose('a', true), dose('b', false)];
+  G._injectionsCache[day(-1)] = [dose('a1', true)];
+  let st = G._ringStats(_rd);
+  check('_ringStats: today doses 1/2', st.dDone === 1 && st.dTot === 2, JSON.stringify(st));
+  check('_ringStats: 7-day window 2/3', st.wDone === 2 && st.wTot === 3, JSON.stringify(st));
+  check('_ringStats: no supplements → 0/0', st.sDone === 0 && st.sTot === 0);
+
+  // streak: incomplete today is skipped; d-1 complete, d-2 empty (gap), d-3 complete → 2
+  G._injectionsCache = {};
+  G._injectionsCache[day(0)]  = [dose('a', true), dose('b', false)];
+  G._injectionsCache[day(-1)] = [dose('c', true)];
+  G._injectionsCache[day(-3)] = [dose('d', true)];
+  check('streak: skips incomplete today, bridges a rest day', G._calcDoseStreak(_rd) === 2, 'got ' + G._calcDoseStreak(_rd));
+
+  // streak: complete today counts; a partially-logged past day breaks it
+  G._injectionsCache = {};
+  G._injectionsCache[day(0)]  = [dose('a', true)];
+  G._injectionsCache[day(-1)] = [dose('b', true), dose('c', false)];
+  check('streak: complete today counts, partial past day breaks', G._calcDoseStreak(_rd) === 1, 'got ' + G._calcDoseStreak(_rd));
+
+  // streak: 3 consecutive empty days end the walk
+  G._injectionsCache = {};
+  G._injectionsCache[day(0)]  = [dose('a', true)];
+  G._injectionsCache[day(-5)] = [dose('z', true)];
+  check('streak: 3 empty days end the history walk', G._calcDoseStreak(_rd) === 1, 'got ' + G._calcDoseStreak(_rd));
+
+  // streak: dose-escalation immunity — the same day counts identically with more doses logged
+  G._injectionsCache = {};
+  G._injectionsCache[day(0)] = [dose('a', true), dose('extra1', true), dose('extra2', true)];
+  const _s3 = G._calcDoseStreak(_rd);
+  G._injectionsCache[day(0)] = [dose('a', true)];
+  check('rings/streak measure the plan, not the amount', _s3 === G._calcDoseStreak(_rd));
+
+  G._injectionsCache = _svCache; G._supplements = _svSupps; G.window._peptideLog = _svLog;
+
+  // wiring + markup
+  const _todayJs = fs.readFileSync(path.join(__dirname, '../tab-today.js'), 'utf8');
+  const _suppJs  = fs.readFileSync(path.join(__dirname, '../tab-supplements.js'), 'utf8');
+  check('today page has the rings container', html.includes('id="today-rings"'));
+  check('buildToday refreshes the rings', /function buildToday\(\)\{if\(typeof buildTodayRings==='function'\)buildTodayRings\(\);/.test(_todayJs));
+  check('supplement toggle refreshes the rings', _suppJs.includes("if(typeof buildTodayRings==='function') buildTodayRings();"));
+  check('rings hide while sync pending', /_syncPending\|\|!_injCacheReady\)\{el\.innerHTML='';return;\}/.test(_todayJs));
+  check('ring colors ride theme tokens (lime/teal/violet)', _todayJs.includes("'var(--accent)'") && _todayJs.includes("'var(--teal)'") && _todayJs.includes("'var(--accent4)'"));
+} else {
+  check('_ringStats/_calcDoseStreak present', false);
+}
+console.log('\n── PLASMA freshness chip ──────────────────────────────────');
+if (typeof G._bcAgeLabel === 'function') {
+  const _ref = new Date(2026, 6, 16);
+  check('_bcAgeLabel: same day → today',  G._bcAgeLabel('2026-07-16', _ref) === 'today',  G._bcAgeLabel('2026-07-16', _ref));
+  check('_bcAgeLabel: 1 day → 1d ago',    G._bcAgeLabel('2026-07-15', _ref) === '1d ago', G._bcAgeLabel('2026-07-15', _ref));
+  check('_bcAgeLabel: 5 days → 5d ago',   G._bcAgeLabel('2026-07-11', _ref) === '5d ago', G._bcAgeLabel('2026-07-11', _ref));
+  check('_bcAgeLabel: ~2 months → 2mo ago', G._bcAgeLabel('2026-05-07', _ref) === '2mo ago', G._bcAgeLabel('2026-05-07', _ref));
+  check('_bcAgeLabel: bad input → empty', G._bcAgeLabel('', _ref) === '' && G._bcAgeLabel('nonsense', _ref) === '');
+  const _bodyJs = fs.readFileSync(path.join(__dirname, '../tab-body.js'), 'utf8');
+  check('LATEST RESULTS header carries the age chip', html.includes('id="res-age"'));
+  check('bcRender sets the age chip from the latest entry', _bodyJs.includes("_ra.textContent=_bcAgeLabel(latest.date)"));
+} else {
+  check('_bcAgeLabel present', false);
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
