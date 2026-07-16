@@ -2365,7 +2365,7 @@ function buildTCalc() {
   html += '<div class="card-header"><div class="card-title-wrap">';
   html += '<div class="card-dot" style="background:#6688cc"></div>';
   html += '<div class="card-title">INJECTION SCHEDULE</div></div>';
-  html += '<div style="display:flex;align-items:center;gap:6px">';
+  html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;min-width:0">';
   html += _tcStackPickerHtml();
   if (log.length > 0) {
     html += '<button onclick="_tcPushLogToSchedule()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:10px;font-weight:700;letter-spacing:0.5px;cursor:pointer;padding:5px 10px;font-family:inherit">PUSH TO SCHEDULE</button>';
@@ -2454,7 +2454,7 @@ function buildTCalc() {
         html += '<div style="min-width:0;overflow:hidden"><div style="' + lSty + '">DOSE (mg)</div>';
         html += '<input type="text" inputmode="decimal" value="' + _esc(String(entry.doseMg || '')) + '" placeholder="e.g. 100" onchange="_tcSetManualField(' + idx + ',\'doseMg\',+this.value)" style="' + iSty + ';font-size:14px"></div>';
         html += '<div style="min-width:0;overflow:hidden"><div style="' + lSty + '">DATE</div>';
-        html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px"></div>';
+        html += '<input type="date" value="' + _esc(entry.date || '') + '" onchange="_tcSetManualField(' + idx + ',\'date\',this.value)" style="' + iSty + ';font-size:14px;min-width:0;max-width:100%;-webkit-appearance:none;appearance:none"></div>';
         html += '</div></div>';
       }
     });
