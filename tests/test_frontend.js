@@ -1130,7 +1130,18 @@ G.wizSave().then(async ()=>{
   }
 
   // Final summary
-  console.log(`\n${'─'.repeat(59)}`);
+  // ── Injection Schedule header/date overflow (Add button off-screen) ──────────
+console.log('\n── Card header overflow regressions ────────────────────────');
+{
+  const css = fs.readFileSync(path.join(__dirname, '../css/main.css'), 'utf8');
+  check('card-header wraps instead of overflowing', /\.card-header\{[^}]*flex-wrap:wrap/.test(css));
+  check('card-title-wrap can shrink (min-width:0)', /\.card-title-wrap\{[^}]*min-width:0/.test(css));
+  const tc = fs.readFileSync(path.join(__dirname, '../tab-tcalc.js'), 'utf8');
+  check('injection schedule controls wrap', tc.includes('gap:6px;flex-wrap:wrap;justify-content:flex-end'));
+  check('date input constrained (iOS intrinsic width)', tc.includes('min-width:0;max-width:100%;-webkit-appearance:none'));
+}
+
+console.log(`\n${'─'.repeat(59)}`);
   console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
   process.exit(failed===0?0:1);
 });
