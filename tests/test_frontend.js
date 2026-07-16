@@ -12,6 +12,7 @@ const rawScript = html.slice(html.indexOf('<script>') + 8, html.indexOf('</scrip
 
 const patchedScript = rawScript
   .replace('const PEPTIDE_CAT=',      'var PEPTIDE_CAT=')
+.replace('const THEMES=',           'var THEMES=')
   .replace('const STACK_RULES=',      'var STACK_RULES=')
   .replace('const WEEKLY_DEFAULT=',   'var WEEKLY_DEFAULT=')
   .replace("const VERSION='",         "var VERSION='")
@@ -4698,7 +4699,7 @@ if (typeof G._blBuildLines === 'function') {
   check('_blBuildLines: Free T day-indexed (spd=1)', _blFT && _blFT.spd === 1);
   check('_blBuildLines: Free T starts near the 217 baseline', _blFT && Math.abs(_blFT.curve[0] - 217) < 217*0.15, 'curve[0]='+(_blFT&&_blFT.curve[0])+' peak='+(_blFT&&_blFT.peak));
   check('_blBuildLines: Free T rises above baseline with injections', _blFT && _blFT.peak > _blFT.curve[0]*1.05);
-  check('_blBuildLines: Free T is red', _blFT && _blFT.color === '#ff3b30');
+  check('_blBuildLines: Free T is plasma (bright series red)', _blFT && _blFT.color === '#FF7A6B');
 
   // absorption model for amount line kinds: a dose at day 0 gives curve[0] ~ 0
   // (nothing absorbed yet) and a peak strictly later — not an instant jump.
@@ -4813,7 +4814,7 @@ if (typeof G._blBuildLines === 'function') {
     var _tl = G._blBuildLines();
     var _fts = _tl.filter(function(l){ return l.kind==='freet'; });
     check('_blBuildLines: exactly one Free T line for multiple esters', _fts.length === 1);
-    check('_blBuildLines: Free T is red + pmol/L', _fts[0] && _fts[0].color === '#ff3b30' && _fts[0].unit === 'pmol/L');
+    check('_blBuildLines: Free T is plasma + pmol/L', _fts[0] && _fts[0].color === '#FF7A6B' && _fts[0].unit === 'pmol/L');
     check('_blBuildLines: Free T peak > baseline (rises with injections)', _fts[0] && _fts[0].peak > _fts[0].curve[0]);
     G._injectionsCache = _saveInj; G._userStacks = _saveStacks2; G._activeStackIndices = _saveIdx2; G._supplements = _saveSupp2;
   })();
@@ -4858,7 +4859,7 @@ if (typeof G._blBuildLines === 'function') {
   {
     const _bloodJs = fs.readFileSync(path.join(__dirname, '../tab-blood.js'), 'utf8');
     const _tcalcJs = fs.readFileSync(path.join(__dirname, '../tab-tcalc.js'), 'utf8');
-    check('data hues defined (plasma/teal/amber)', rawScript.includes("DATA_PLASMA='#ff3b30'") && rawScript.includes("DATA_TEAL='#2fd4c4'") && rawScript.includes("DATA_AMBER='#ffb03c'"));
+    check('data hues defined (plasma/teal/amber)', rawScript.includes("DATA_PLASMA='#FF7A6B'") && rawScript.includes("DATA_TEAL='#2fd4c4'") && rawScript.includes("DATA_AMBER='#ffb03c'"));
     check('T-Calc measured-FT line is teal (calibrated)', _tcalcJs.includes("DATA_TEAL + '99'"));
     check('Blood optimal zone is teal ("good")',          _bloodJs.includes("DATA_TEAL + '22'"));
     check('Blood "now" marker uses the amber token',        _bloodJs.includes("DATA_AMBER + '99'"));
@@ -5364,6 +5365,26 @@ if (typeof G._renderSafetyNote === 'function') {
   check('syncSafetyNotes fetches the backend endpoint', rawScript.includes("'/safety-notes'") && rawScript.includes('function syncSafetyNotes'));
 } else {
   check('_renderSafetyNote present', false);
+}
+
+// ── PLASMA theme tokens ────────────────────────────────────────────────────────
+console.log('\n── PLASMA theme tokens ────────────────────────────────────');
+{
+  const _css = fs.readFileSync(path.join(__dirname, '../css/main.css'), 'utf8');
+  check('true-black ground',                    _css.includes('--bg:#000000'));
+  check('warm surfaces',                        _css.includes('--surface:#15130F') && _css.includes('--surface2:#1F1B15'));
+  check('hairline border brightened',           _css.includes('--border:#3A352B'));
+  check('--border-strong exists (3.3:1 functional boundaries)', _css.includes('--border-strong:#6E675A'));
+  check('ink ramp: text/muted2/muted',          _css.includes('--text:#F5F4EF') && _css.includes('--muted2:#C9C4BA') && _css.includes('--muted:#8D897C'));
+  check('muted no longer the 2.75:1 WCAG failure', !_css.includes('#5a5751'));
+  check('plasma series brightened, danger deepened', _css.includes('--plasma:#FF7A6B') && _css.includes('--danger:#FF3B30'));
+  // the VOLTAGE default theme applies at startup and must carry the same values,
+  // otherwise applyTheme() would override the stylesheet tokens with the old greys
+  const _volt = (G.THEMES || []).find(function(t){ return t.id === 1; });
+  check('VOLTAGE default theme matches PLASMA surfaces', !!_volt && _volt.vars.surface === '#15130F' && _volt.vars.surface2 === '#1F1B15' && _volt.vars.border === '#3A352B');
+  check('VOLTAGE default theme matches PLASMA ink',      !!_volt && _volt.vars.text === '#F5F4EF' && _volt.vars.muted === '#8D897C' && _volt.vars.muted2 === '#C9C4BA');
+  check('VOLTAGE danger is status-only deep red',        !!_volt && _volt.vars.danger === '#FF3B30');
+  check('non-default themes untouched',                  (G.THEMES || []).length >= 4 && G.THEMES[1].vars.surface === '#150c10');
 }
 
 console.log('\n───────────────────────────────────────────────────────────');
