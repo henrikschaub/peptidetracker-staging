@@ -46,6 +46,7 @@
   </div>
   <div class="content" id="tab-today">
     <div id="today-alerts" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <div id="today-rings"></div>
     <div class="card">
       <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent)"></div><div class="card-title" id="today-title">TODAY'S DOSES</div></div><span class="card-badge badge-today" id="today-badge">0 / 0</span></div>
       <div id="today-cycle-info" style="font-size:11px;color:var(--muted2);padding:0 16px 10px;line-height:1.5;"></div>
@@ -105,7 +106,7 @@
       </div>
     </div>
     <div class="card" id="bc-results-card" style="display:none;">
-      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3)"></div><div class="card-title">LATEST RESULTS</div></div></div>
+      <div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent3)"></div><div class="card-title">LATEST RESULTS</div></div><span class="card-badge" id="res-age" style="background:var(--surface2);color:var(--muted2);border:1px solid var(--border)"></span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--border);">
         <div style="padding:12px 8px;text-align:center;border-right:1px solid var(--border);"><div style="font-family:var(--font-mono);font-size:26px;line-height:1;color:var(--accent2)" id="res-bf">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">% BF</div></div>
         <div style="padding:12px 8px;text-align:center;border-right:1px solid var(--border);"><div style="font-family:var(--font-mono);font-size:26px;line-height:1;color:var(--accent4)" id="res-lean">—</div><div style="font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">lean kg</div></div>

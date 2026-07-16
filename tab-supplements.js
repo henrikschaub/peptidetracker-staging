@@ -235,6 +235,7 @@ async function toggleSupplementDose(suppId, dstr, slot){
   if(was) delete _suppLog[key]; else _suppLog[key] = true;
   _suppSaveLogCache();
   if(typeof renderTodaySupplements==='function') renderTodaySupplements(_suppViewDate||NOW);
+  if(typeof buildTodayRings==='function') buildTodayRings();
   try{
     var r = await fetch(AGENT_URL + '/supplement-log', {
       method:'POST',
