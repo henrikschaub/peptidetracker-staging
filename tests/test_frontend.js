@@ -5394,7 +5394,8 @@ console.log('\n── PLASMA nav + boundaries ───────────�
   check('all 5 nav buttons carry a glyph icon', ['today','plan','levels','labs','more'].every(function(p){
     return new RegExp('id="navbtn-'+p+'"[^>]*>\\s*<span class="navic">.+?</span>').test(html);
   }));
-  check('nav icon is 23px block above an 11px label', /\.navic\{[^}]*display:block[^}]*font-size:23px/.test(_css) && /\.navbtn\{[^}]*font-size:11px/.test(_css));
+  check('nav icon is 26px block above an 11px label', /\.navic\{[^}]*display:block[^}]*font-size:26px/.test(_css) && /\.navbtn\{[^}]*font-size:11px/.test(_css));
+  check('navbar insets clear the rounded phone corners', /\.navbar\{[^}]*padding-left:max\(22px,env\(safe-area-inset-left\)\)[^}]*padding-right:max\(22px,env\(safe-area-inset-right\)\)/.test(_css));
   check('active nav tab gets a lime top indicator (color is not the only cue)', /\.navbtn\.active::before\{[^}]*background:var\(--accent\)/.test(_css));
   check('checkboxes use --border-strong', /\.check-box\{[^}]*border:2px solid var\(--border-strong\)/.test(_css) && /\.pep-chk\{[^}]*border:2px solid var\(--border-strong\)/.test(_css));
   check('toggle off-track uses --border-strong', /\.toggle-sw\{[^}]*background:var\(--border-strong\)/.test(_css));
