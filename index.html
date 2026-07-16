@@ -220,7 +220,7 @@ const AGENT_URL="https://claude-agent-api-aged-sun-3616.fly.dev";
 // Semantic data-viz hues — mirror the CSS tokens (--plasma / --teal / --warning)
 // so canvas charts, which cannot read CSS variables, use the same palette:
 // plasma = the level/curve, teal = calibrated / optimal ("good"), amber = time / caution.
-var DATA_PLASMA='#ff3b30', DATA_TEAL='#2fd4c4', DATA_AMBER='#ffb03c';
+var DATA_PLASMA='#FF7A6B', DATA_TEAL='#2fd4c4', DATA_AMBER='#ffb03c';
 const HEIGHT_CM=182;
 const NOW=new Date();
 const TODAY_DOW=NOW.getDay();
@@ -299,7 +299,7 @@ const GOOGLE_CLIENT_ID='580935445116-sovhqu5i940pjvb3co63af3tm0ekjds8.apps.googl
 function getData(k,d){try{return JSON.parse(localStorage.getItem(k))||d;}catch{return d;}}
 function setData(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 const THEMES=[
-  {id:1,name:'VOLTAGE',label:'Dark Yellow',vars:{bg:'#000000',surface:'#131313',surface2:'#1c1c1c',border:'#2a2a2a',accent:'#e8ff3c',accent2:'#ff6b2b',accent3:'#3cffa0',accent4:'#c084fc',text:'#f0f0f0',muted:'#555',muted2:'#888',danger:'#ff3c3c',warning:'#ffb03c'},preview:['#e8ff3c','#ff6b2b','#3cffa0']},
+  {id:1,name:'VOLTAGE',label:'Dark Yellow',vars:{bg:'#000000',surface:'#15130F',surface2:'#1F1B15',border:'#3A352B',accent:'#e8ff3c',accent2:'#ff6b2b',accent3:'#3cffa0',accent4:'#c084fc',text:'#F5F4EF',muted:'#8D897C',muted2:'#C9C4BA',danger:'#FF3B30',warning:'#ffb03c'},preview:['#e8ff3c','#ff6b2b','#3cffa0']},
   {id:2,name:'ROSE',label:'Dark Rose',vars:{bg:'#000000',surface:'#150c10',surface2:'#1e1218',border:'#2d1820',accent:'#e8a8c4',accent2:'#c480a0',accent3:'#5B8C6E',accent4:'#c084fc',text:'#f0e8ec',muted:'#907880',muted2:'#b09898',danger:'#C4627A',warning:'#c28040'},preview:['#e8a8c4','#c480a0','#2d1820']},
   {id:3,name:'FOREST',label:'Dark Forest',vars:{bg:'#000000',surface:'#0a110c',surface2:'#121b14',border:'#1c2d1e',accent:'#78c896',accent2:'#5aaa78',accent3:'#78c896',accent4:'#7B5DB5',text:'#e8f0ea',muted:'#789080',muted2:'#98b0a0',danger:'#c06060',warning:'#b08840'},preview:['#78c896','#5aaa78','#1c2d1e']},
   {id:4,name:'EARTH',label:'Dark Earth',vars:{bg:'#000000',surface:'#120c06',surface2:'#1c140c',border:'#2d1e10',accent:'#d4a870',accent2:'#b88850',accent3:'#9C7B63',accent4:'#8B5E9C',text:'#f0e8dc',muted:'#907060',muted2:'#b09070',danger:'#A04040',warning:'#b08830'},preview:['#d4a870','#b88850','#2d1e10']}

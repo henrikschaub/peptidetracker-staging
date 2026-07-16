@@ -380,7 +380,7 @@ function _blBuildLines(){
       var _k = _g - _ftOff;
       _ftCurve[_g] = _k < 0 ? _ftBase : _ftScaleAt(Math.min(_k, _S.totalDays));
     }
-    lines.push({ id:'freeT', pkId:'testosterone', name:'Free T', color:'#ff3b30', kind:'freet', conc:true,
+    lines.push({ id:'freeT', pkId:'testosterone', name:'Free T', color:DATA_PLASMA, kind:'freet', conc:true,
       unit:(_S.unitLabel === 'pmol/L' ? 'pmol/L' : ''), startDate:firstDate, cycleLen:totalDays, curve:_ftCurve });
   }
 

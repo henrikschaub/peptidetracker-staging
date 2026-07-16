@@ -7,12 +7,18 @@
     --font-ui:-apple-system,'SF Pro Text',system-ui,'Segoe UI',Roboto,sans-serif;
     --font-display:-apple-system,'SF Pro Display',system-ui,'Segoe UI',Roboto,sans-serif;
     --font-mono:ui-monospace,'SF Mono',Menlo,'Roboto Mono',monospace;
-    /* Neutrals: warm amber bias (vial-glass of the subject) rather than pure grey */
-    --bg:#0b0a08;--surface:#141311;--surface2:#1d1b18;--border:#2b2723;
+    /* PLASMA theme: true-black ground, warm vial-glass surfaces, audited ink ramp.
+       All text tokens measured vs #000: text 19.1:1 · muted2 12.1:1 · muted 6.0:1 (floor).
+       --border is decorative hairline only; --border-strong (3.3:1) for meaning-bearing
+       boundaries (checkboxes, toggles, inputs). */
+    --bg:#000000;--surface:#15130F;--surface2:#1F1B15;--border:#3A352B;--border-strong:#6E675A;
     --accent:#e8ff3c;--accent2:#ff6b2b;--accent3:#3cffa0;--accent4:#c084fc;
-    --text:#f0efec;--muted:#5a5751;--muted2:#bcb8b0;--danger:#ff3c3c;--warning:#ffb03c;
-    /* Semantic data hues (charts adopt these in a later pass) */
-    --plasma:#ff3b30;--teal:#2fd4c4;
+    --text:#F5F4EF;--muted:#8D897C;--muted2:#C9C4BA;--danger:#FF3B30;--warning:#ffb03c;
+    /* Vitals series (fixed order): plasma=headline T curve · teal=measured/in-range ·
+       violet(accent4)=secondary · amber(warning)=reference markers. Plasma brightened
+       from #ff3b30 (5.9:1) to 8.3:1 so the headline series is no longer the dimmest,
+       and deep #FF3B30 now belongs exclusively to --danger. CVD-validated: ΔE ≥ 11.7. */
+    --plasma:#FF7A6B;--teal:#2fd4c4;
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
   html,body{background:var(--bg) !important;color:var(--text);font-family:var(--font-ui);min-height:100vh;overflow-x:hidden;margin:0;padding:0;}
