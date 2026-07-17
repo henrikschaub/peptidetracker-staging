@@ -543,7 +543,7 @@ function _blDrawChart(canvas){
 
   // Horizontal grid + value labels at each power of ten within the axis range.
   var _axFmt = _blAxisFmt(visible);
-  ctx.font = '9px DM Sans,sans-serif';
+  ctx.font = '9px -apple-system,system-ui,sans-serif';
   for(var _e=Math.ceil(lgB); _e<=Math.floor(lgT+1e-9); _e++){
     var _val = Math.pow(10,_e), y = yOf(_val);
     ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
@@ -607,7 +607,7 @@ function _blDrawChart(canvas){
     _blStrokeSeg(ln, Math.max(xStart, splitAt-dg), xEnd, 0.3);
   });
   if(!visible.length){
-    ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#555'; ctx.font = '11px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('All lines hidden — tap a chip below', PAD.left+cW/2, PAD.top+cH/2);
   }
 }
