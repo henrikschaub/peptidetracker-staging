@@ -1501,6 +1501,33 @@ function obFinish(){
     setTimeout(function(){openTemplatePicker(_g);},250);
   }
 }
+// ── Experience-tier adaptive density (usability study) ───────────────────────
+// The onboarding captures pep-experience (curious/first/experienced/advanced).
+// 'Detail level' turns that into a UI density: Simplified collapses advanced
+// blocks behind a disclosure (summary-before-detail); Full shows everything.
+// Auto follows the experience tier. ALWAYS user-overridable — an existing user
+// with no experience recorded defaults to Full, so nothing is hidden from them.
+function _pepExpTier(){var p=getData('pep-profile',null);return (p&&p.experience)||'';}
+function _isSimplified(){
+  var mode=getData('pep-density','auto');
+  if(mode==='simple')return true;
+  if(mode==='full')return false;
+  var t=_pepExpTier();
+  return t==='curious'||t==='first';
+}
+function setPepDensity(mode){
+  setData('pep-density',mode);
+  if(typeof _googleToken!=='undefined'&&_googleToken)pushPepSettingsToAgent({'pep-density':mode});
+  buildAppearanceCard();
+  // Re-render the surfaces whose density this controls.
+  if(typeof renderRecon==='function'&&document.getElementById('tab-recon')&&!document.getElementById('tab-recon').classList.contains('hidden'))renderRecon();
+}
+function _densityRow(mode,label,desc,cur){
+  var sel=cur===mode;
+  return '<div onclick="setPepDensity(\''+mode+'\')" style="display:flex;align-items:center;gap:10px;padding:11px 14px;border:1px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'rgba(232,255,60,0.06)':'transparent')+';border-radius:10px;margin-bottom:8px;cursor:pointer">'
+    +'<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+label+'</div><div style="font-size:11px;color:var(--muted2);margin-top:1px">'+desc+'</div></div>'
+    +(sel?'<div style="color:var(--accent);font-size:15px">✓</div>':'')+'</div>';
+}
 function buildAppearanceCard(){
   var card=document.getElementById('s-appearance-card');if(!card)return;
   var current=getData('pep-theme',1);
@@ -1515,9 +1542,17 @@ function buildAppearanceCard(){
       +'<div style="font-size:10px;color:'+t.vars.muted+'">'+t.label+'</div>'
       +'</div>';
   }).join('');
+  var _dm=getData('pep-density','auto');
+  var _tierLbl={curious:'just curious',first:'first cycle',experienced:'runs protocols',advanced:'advanced'}[_pepExpTier()]||'not set';
+  var densityBlock='<div style="padding:4px 16px 14px"><div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin:6px 0 8px">Detail level</div>'
+    +_densityRow('auto','Auto','Follows your experience level ('+_tierLbl+')',_dm)
+    +_densityRow('simple','Simplified','Summary first — advanced detail tucked behind a tap',_dm)
+    +_densityRow('full','Full','Show every detail up front',_dm)
+    +'</div>';
   card.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">'
     +sSecHdr('appearance','Appearance')+sSecBody('appearance')
     +'<div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+tiles+'</div>'
+    +densityBlock
     +'</div></div>';
 }
 function buildCacheCard(){var card=document.getElementById('s-cache-card');if(!card)return;card.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">'+sSecHdr('cache','Local Cache')+sSecBody('cache')+'<div style="padding:14px 16px;"><div style="font-size:12px;color:var(--muted2);margin-bottom:12px;">All data is stored on the server. Clear the local cache to force a full re-sync.</div><button onclick="wipeLocalCache()" style="background:var(--danger,#ff3c3c);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font-ui);">Wipe local cache</button></div></div></div>';}
@@ -1525,7 +1560,7 @@ function init(){document.getElementById('hdr-day').textContent=NOW.getDate()+' '
 function initTabVis(){const saved=getData('proto-tab-vis',{});_tabVis=Object.assign({},TAB_DEFAULTS,saved);applyTabVis();}
 async function pushPepSettingsToAgent(kv){try{const r=await fetch(AGENT_URL+'/user-settings',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({settings:kv})});if(!r.ok)_logHttp('pushPepSettings',r.status,'/user-settings');}catch(e){_logErr('pushPepSettings',e);}}
 function wipeLocalCache(){if(!confirm('Clear all locally cached data? The app will reload and re-fetch everything from the backend. You will stay signed in.'))return;var _t=window.localStorage.getItem('google_token');var _e=window.localStorage.getItem('google_email');var _s=window.localStorage.getItem('session_token');window.localStorage.clear();if(_t)window.localStorage.setItem('google_token',_t);if(_e)window.localStorage.setItem('google_email',_e);if(_s)window.localStorage.setItem('session_token',_s);window.location.reload();}
-async function syncPepSettingsFromAgent(){try{const r=await fetch(AGENT_URL+'/user-settings',{headers:authHeaders()});if(!r.ok){_logHttp('syncPepSettings',r.status,'/user-settings');return;}const s=await r.json();if(!s)return;if(s['proto-tab-vis']){_tabVis=Object.assign({},TAB_DEFAULTS,s['proto-tab-vis']);setData('proto-tab-vis',s['proto-tab-vis']);applyTabVis();buildTabsSettingsCard();}if(s['user_sex'])setBioSex(s['user_sex']);if(s['user_height']){localStorage.setItem('user_height',String(s['user_height']));const hi=document.getElementById('bc-height-in');if(hi)hi.value=s['user_height'];}if(s['user_weight']){localStorage.setItem('user_weight',String(s['user_weight']));const wi=document.getElementById('bc-weight-in');if(wi)wi.value=s['user_weight'];}if(s['user_age']){localStorage.setItem('user_age',String(s['user_age']));const ai=document.getElementById('bc-age-in');if(ai)ai.value=s['user_age'];}if(s['proto-blood-hidden'])setData('proto-blood-hidden',s['proto-blood-hidden']);if(s['tc-avg-line']!==undefined)setData('tc-avg-line',s['tc-avg-line']);if(s['pep-theme'])applyTheme(s['pep-theme']);if(s['macros-train-time'])localStorage.setItem('macros-train-time',s['macros-train-time']);if(s['macros-train-dur'])localStorage.setItem('macros-train-dur',String(s['macros-train-dur']));}catch(e){_logErr('syncPepSettings',e);}}
+async function syncPepSettingsFromAgent(){try{const r=await fetch(AGENT_URL+'/user-settings',{headers:authHeaders()});if(!r.ok){_logHttp('syncPepSettings',r.status,'/user-settings');return;}const s=await r.json();if(!s)return;if(s['proto-tab-vis']){_tabVis=Object.assign({},TAB_DEFAULTS,s['proto-tab-vis']);setData('proto-tab-vis',s['proto-tab-vis']);applyTabVis();buildTabsSettingsCard();}if(s['user_sex'])setBioSex(s['user_sex']);if(s['user_height']){localStorage.setItem('user_height',String(s['user_height']));const hi=document.getElementById('bc-height-in');if(hi)hi.value=s['user_height'];}if(s['user_weight']){localStorage.setItem('user_weight',String(s['user_weight']));const wi=document.getElementById('bc-weight-in');if(wi)wi.value=s['user_weight'];}if(s['user_age']){localStorage.setItem('user_age',String(s['user_age']));const ai=document.getElementById('bc-age-in');if(ai)ai.value=s['user_age'];}if(s['proto-blood-hidden'])setData('proto-blood-hidden',s['proto-blood-hidden']);if(s['tc-avg-line']!==undefined)setData('tc-avg-line',s['tc-avg-line']);if(s['pep-theme'])applyTheme(s['pep-theme']);if(s['pep-density']){setData('pep-density',s['pep-density']);if(typeof buildAppearanceCard==='function')buildAppearanceCard();}if(s['macros-train-time'])localStorage.setItem('macros-train-time',s['macros-train-time']);if(s['macros-train-dur'])localStorage.setItem('macros-train-dur',String(s['macros-train-dur']));}catch(e){_logErr('syncPepSettings',e);}}
 // A sub-tab is visible unless the user toggled it off. Settings is always on;
 // a tab absent from TAB_LABELS (e.g. Storage on prod) stays hidden as before.
 function _subVisible(id){if(id==='settings')return true;if(!(id in TAB_LABELS))return false;return _tabVis[id]!==false;}
