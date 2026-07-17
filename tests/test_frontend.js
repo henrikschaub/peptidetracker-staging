@@ -1577,6 +1577,19 @@ console.log('\n── dose dedup migration ────────────�
   check('Today empty state branches on an active stack', todayJs.includes('_hasActive'));
   check('Today empty state offers a template when templates loaded', todayJs.includes('openTemplatePicker()') && todayJs.includes('_protocolTemplates'));
 
+  // Empty-state coaching extended to Levels + Timeline (usability study, #621):
+  // a dead "nothing here" becomes a first action routed to the right flow.
+  {
+    const _bloodJs2 = fs.readFileSync(path.join(__dirname, '../tab-blood.js'), 'utf8');
+    const _tlJs2 = fs.readFileSync(path.join(__dirname, '../tab-timeline.js'), 'utf8');
+    check('Levels empty state has a CTA (build stack / go to Plan)',
+      _bloodJs2.includes('Build your first stack') && /switchPrimary\(\\?'plan\\?'\)/.test(_bloodJs2) && _bloodJs2.includes('createNewStack()'));
+    check('Levels empty state branches on whether stacks exist', _bloodJs2.includes('_hasStacks'));
+    check('Timeline empty state coaches with a CTA',
+      _tlJs2.includes('No milestones yet') && /switchPrimary\(\\?'plan\\?'\)/.test(_tlJs2) && _tlJs2.includes('createNewStack()'));
+    check('Timeline empty state branches on whether stacks exist', _tlJs2.includes('_hasStk'));
+  }
+
   // Protocol templates — fetched from the backend, instantiated into a stack.
   check('syncProtocolTemplates fetches the backend endpoint', rawScript.includes("'/protocol-templates'") && rawScript.includes('function syncProtocolTemplates'));
   if (typeof G.useTemplate === 'function' && typeof G.openTemplatePicker === 'function') {

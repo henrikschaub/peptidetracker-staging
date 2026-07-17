@@ -723,8 +723,18 @@ function buildBloodLevels(){
   if(!el) return;
   _blLines = _blBuildLines();
   if(!_blLines.length){
-    el.innerHTML = '<div class="empty" style="padding:40px 20px"><div class="empty-icon">🩸</div>'+
-      'No active compounds or supplements to plot.<br>Add a stack with a dose, or track a supplement.</div>';
+    // Empty-state coaching (usability study): a dead "nothing to plot" becomes a
+    // first action. Levels needs a protocol to model — route to building one.
+    var _hasStacks = (typeof _userStacks!=='undefined' && _userStacks && _userStacks.length);
+    el.innerHTML = '<div class="empty" style="padding:40px 20px"><div class="empty-icon">∿</div>'+
+      '<div style="font-size:15px;color:var(--text);font-weight:600;margin-bottom:6px">Nothing to plot yet</div>'+
+      '<div style="font-size:13px;color:var(--muted2);line-height:1.6;max-width:280px;margin:0 auto 20px">'+
+      (_hasStacks
+        ? 'Your stacks don’t have a compound with a dose to model. Add a dose in Plan, or track a supplement.'
+        : 'Levels charts the predicted plasma curve from your protocol. Add a stack with a dose to see it.')+
+      '</div>'+
+      '<button onclick="'+(_hasStacks?'switchPrimary(\'plan\')':'createNewStack()')+'" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">'+
+      (_hasStacks?'Go to Plan':'Build your first stack')+'</button></div>';
     return;
   }
   var html = '<div style="padding:12px 16px 6px;font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px">'+

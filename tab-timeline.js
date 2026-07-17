@@ -52,6 +52,21 @@ function buildTimeline(){
     });
   }
   if(active&&(active.cycle_start||active.peptides)){all.sort((a,b)=>a.date-b.date);}
+  // Empty-state coaching (usability study): with no cycle and no milestones the
+  // timeline was blank. Turn it into a first action.
+  if(!all.length){
+    var _hasStk = (typeof _userStacks!=='undefined' && _userStacks && _userStacks.length);
+    body.innerHTML='<div class="empty" style="padding:44px 20px;text-align:center"><div class="empty-icon">▤</div>'+
+      '<div style="font-size:15px;color:var(--text);font-weight:600;margin-bottom:6px">No milestones yet</div>'+
+      '<div style="font-size:13px;color:var(--muted2);line-height:1.6;max-width:280px;margin:0 auto 20px">'+
+      (_hasStk
+        ? 'Set a start date on your stack in Plan and its cycle start, checkpoints and end will appear here.'
+        : 'Your cycle start, checkpoints and end date show up here once you start a protocol.')+
+      '</div>'+
+      '<button onclick="'+(_hasStk?'switchPrimary(\'plan\')':'createNewStack()')+'" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">'+
+      (_hasStk?'Go to Plan':'Start a protocol')+'</button></div>';
+    return;
+  }
   all.forEach((m,i)=>{
     const past=m.date<NOW&&m.date.toDateString()!==NOW.toDateString();
     const isToday=m.date.toDateString()===NOW.toDateString();
