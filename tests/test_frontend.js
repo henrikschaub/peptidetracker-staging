@@ -5307,6 +5307,11 @@ if (typeof G.switchPrimary === 'function' && typeof G.primaryOf === 'function') 
   check('primaryOf: recon → plan',     G.primaryOf('recon') === 'plan');
   check('primaryOf: settings → more',  G.primaryOf('settings') === 'more');
   check('primaryOf: unknown → ""',     G.primaryOf('nope') === '');
+  // Regression (2026-07-17): tapping a week-strip day from another primary calls
+  // switchTab('today',…) directly — the sub-tab strip must follow the new primary,
+  // not keep showing the previous group's tabs (e.g. MACROS/SETTINGS over Today).
+  check('switchTab refreshes the sub-tab strip for the new primary',
+    /_setPrimaryActive\(_pr\);_applySubtabVis\(_pr\);/.test(rawScript));
   // Human sub-tab renames present (jargon → plain language)
   check('sub-labels: T-Calc → Testosterone',  rawScript.includes("tcalc:'Testosterone'"));
   check('sub-labels: Recon → Reconstitution', rawScript.includes("recon:'Reconstitution'"));
