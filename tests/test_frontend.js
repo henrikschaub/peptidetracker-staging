@@ -5443,6 +5443,37 @@ if (Array.isArray(G._OB_ORDER) && typeof G.obSetStart === 'function') {
   check('serious onboarding (obSetStart / tour / start) present', false);
 }
 
+// ── Experience-tier adaptive density (#623) ──────────────────────────────────
+console.log('\n── Adaptive density (experience tier) ─────────────────────');
+if (typeof G._isSimplified === 'function' && typeof G._pepExpTier === 'function') {
+  var _svProf = G.getData('pep-profile', null), _svDens = G.getData('pep-density', null);
+  // explicit override wins regardless of tier
+  G.setData('pep-profile', { experience: 'advanced' }); G.setData('pep-density', 'simple');
+  check('detail level "simple" forces simplified even for advanced tier', G._isSimplified() === true);
+  G.setData('pep-density', 'full');
+  check('detail level "full" forces full even for a beginner tier', (function(){ G.setData('pep-profile',{experience:'first'}); return G._isSimplified() === false; })());
+  // auto follows the tier
+  G.setData('pep-density', 'auto');
+  G.setData('pep-profile', { experience: 'curious' }); check('auto + curious → simplified', G._isSimplified() === true);
+  G.setData('pep-profile', { experience: 'first' });   check('auto + first cycle → simplified', G._isSimplified() === true);
+  G.setData('pep-profile', { experience: 'experienced' }); check('auto + experienced → full', G._isSimplified() === false);
+  G.setData('pep-profile', { experience: 'advanced' });    check('auto + advanced → full', G._isSimplified() === false);
+  // safety: an existing user with no experience recorded is never auto-simplified
+  G.setData('pep-profile', { experience: '' }); check('auto + no experience recorded → full (existing users unaffected)', G._isSimplified() === false);
+  G.setData('pep-profile', null);               check('auto + no profile at all → full', G._isSimplified() === false);
+  G.setData('pep-profile', _svProf); G.setData('pep-density', _svDens);
+  check('setPepDensity persists locally and pushes to backend',
+    rawScript.includes("setData('pep-density',mode)") && rawScript.includes("pushPepSettingsToAgent({'pep-density':mode})"));
+  check('pep-density synced back from backend settings', rawScript.includes("s['pep-density']"));
+  check('Settings exposes an overridable Detail level control (auto/simple/full)',
+    rawScript.includes("_densityRow('auto'") && rawScript.includes("_densityRow('simple'") && rawScript.includes("_densityRow('full'"));
+  var _reconJs2 = fs.readFileSync(path.join(__dirname, '../tab-recon.js'), 'utf8');
+  check('Recon dose guidance sits behind a disclosure in simplified mode',
+    _reconJs2.includes('_isSimplified()') && _reconJs2.includes('<details') && _reconJs2.includes('Dosing guidance'));
+} else {
+  check('adaptive density (_isSimplified / _pepExpTier) present', false);
+}
+
 // ── Contextual safety notes (watch/test/stop, all tiers) ─────────────────────
 console.log('\n── Contextual safety notes ────────────────────────────────');
 if (typeof G._renderSafetyNote === 'function') {
