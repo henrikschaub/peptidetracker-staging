@@ -4883,6 +4883,12 @@ if (typeof G._blBuildLines === 'function') {
       !rawScript.includes('DM Sans'));
     check('canvas fonts use the system UI stack',
       _bloodJs.includes("-apple-system,system-ui,sans-serif") && _tcalcJs.includes("-apple-system,system-ui,sans-serif"));
+    // Body-comp charts: stale pre-PLASMA theme greys aligned to the current tokens
+    // (#0a0a0a inner-dot fills now blend with the true-black bg; #2a2a2a grid → --border).
+    const _bodyJs = fs.readFileSync(path.join(__dirname, '../tab-body.js'), 'utf8');
+    check('body-comp charts drop the stale #0a0a0a / #2a2a2a theme greys',
+      !_bodyJs.includes('#0a0a0a') && !_bodyJs.includes('#2a2a2a'));
+    check('body-comp inner-dot fills use the true-black bg', _bodyJs.includes("fillStyle='#000000'"));
   }
 
   // Phase 2: backend PK dataset → actual blood levels for compounds with an assay
