@@ -4867,6 +4867,22 @@ if (typeof G._blBuildLines === 'function') {
     G._blLines = _svBl; G._tcp = _svTcp2;
   }
 
+  // Timeline "What this means" — a computed one-liner from cycle position only.
+  if (typeof G._tlWhatThisMeans === 'function') {
+    check('timeline wtm: before start reads as not started',
+      G._tlWhatThisMeans(1, 12, -3, 84).includes("hasn't started"));
+    check('timeline wtm: early cycle mentions building to steady state',
+      /early|building/.test(G._tlWhatThisMeans(2, 12, 10, 84)));
+    check('timeline wtm: mid cycle reads as stable',
+      G._tlWhatThisMeans(6, 12, 42, 84).includes('mid-cycle'));
+    check('timeline wtm: final week flags planning next step',
+      G._tlWhatThisMeans(12, 12, 81, 84).includes('final week'));
+    check('timeline wtm: complete cycle nudges bloodwork review',
+      G._tlWhatThisMeans(12, 12, 90, 84).includes('complete'));
+    check('timeline wtm: reports weeks remaining',
+      /week[s]? left/.test(G._tlWhatThisMeans(6, 12, 42, 84)));
+  }
+
   // Semantic chart palette — canvas hues mirror the CSS tokens.
   {
     const _bloodJs = fs.readFileSync(path.join(__dirname, '../tab-blood.js'), 'utf8');
