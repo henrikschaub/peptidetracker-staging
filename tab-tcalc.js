@@ -1528,7 +1528,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     if (_sv > maxV) maxV = _sv;
   }
   if (_mftNum && calFT && _mftNum > maxV) maxV = _mftNum * 1.1;
-  if (!maxV) { ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.fillText('No data', 10, 40); return; }
+  if (!maxV) { ctx.fillStyle = '#555'; ctx.font = '11px -apple-system,system-ui,sans-serif'; ctx.fillText('No data', 10, 40); return; }
   var vMax = maxV * 1.1;
 
   // Clip x-axis to where free T last crosses back down to baseline (the interesting area)
@@ -1576,11 +1576,11 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     ctx.strokeStyle = DATA_TEAL + '99'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
     ctx.beginPath(); ctx.moveTo(PAD.left, _refY); ctx.lineTo(PAD.left + cW, _refY); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = DATA_TEAL + 'cc'; ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = DATA_TEAL + 'cc'; ctx.font = '8px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'left';
     ctx.fillText(Math.round(_mftNum), PAD.left + 3, _refY - 2);
   }
 
-  ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'right';
+  ctx.fillStyle = '#555'; ctx.font = '9px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
   for (var ti = 0; ti <= 3; ti++) {
     var ty = PAD.top + (cH / 3) * ti;
     ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
@@ -1589,17 +1589,17 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     ctx.fillText(calFT ? Math.round(tv) : (tv >= 100 ? Math.round(tv) : tv >= 10 ? tv.toFixed(1) : tv.toFixed(2)), PAD.left - 4, ty + 3);
   }
   ctx.save(); ctx.translate(10, PAD.top + cH / 2); ctx.rotate(-Math.PI / 2);
-  ctx.textAlign = 'center'; ctx.fillStyle = '#444'; ctx.font = '8px DM Sans,sans-serif';
+  ctx.textAlign = 'center'; ctx.fillStyle = '#444'; ctx.font = '8px -apple-system,system-ui,sans-serif';
   ctx.fillText(unitLabel, 0, 0); ctx.restore();
 
   // SHBG suppression + β-source annotation (top-right of chart)
   if (_ghAnnot) {
-    ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'right';
+    ctx.font = '8px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
     ctx.fillStyle = '#3cffa077';
     ctx.fillText(_ghAnnot, PAD.left + cW, PAD.top + 9);
   }
   if (_betaAnnot) {
-    ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'right';
+    ctx.font = '8px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
     ctx.fillStyle = '#8891a5aa';   // muted: shows whether β is personalised or population default
     ctx.fillText(_betaAnnot, PAD.left + cW, PAD.top + (_ghAnnot ? 19 : 9));
   }
@@ -1633,7 +1633,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     ctx.setLineDash([]);
     // Keep the peak number clear of today's boxed number when the two sit at the same height.
     var _pkTextY = (_todayLabelY != null) ? _tcNudgeLabelY(_pkY, [_todayLabelY], 11, PAD.top + 6, PAD.top + cH - 2) : _pkY;
-    ctx.fillStyle = lineColor; ctx.font = 'bold 8px DM Sans,sans-serif'; ctx.textAlign = 'right';
+    ctx.fillStyle = lineColor; ctx.font = 'bold 8px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
     ctx.fillText(Math.round(peakV), PAD.left - 4, _pkTextY + 3);
   }
 
@@ -1670,7 +1670,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
       ctx.strokeStyle = '#5ad1b0cc'; ctx.lineWidth = 1; ctx.setLineDash([1,3]);
       ctx.beginPath(); ctx.moveTo(PAD.left, _avY); ctx.lineTo(PAD.left + cW, _avY); ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = '#5ad1b0'; ctx.font = 'bold 8px DM Sans,sans-serif'; ctx.textAlign = 'right';
+      ctx.fillStyle = '#5ad1b0'; ctx.font = 'bold 8px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
       ctx.fillText('avg ' + Math.round(_avgLvl), PAD.left + cW, _avY - 3);
     }
   }
@@ -1679,7 +1679,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   // mistakes an age-default / no-SHBG curve for a bloodwork-calibrated result.
   if (_tier && _tier !== 'measured' && calFT) {
     var _badge = (_tier === 'estimate') ? '⚠ ESTIMATE · NO BLOODWORK' : '⚠ EST · NO SHBG DATA';
-    ctx.font = 'bold 8px DM Sans,sans-serif'; ctx.textAlign = 'left';
+    ctx.font = 'bold 8px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'left';
     var _badgeW = (ctx.measureText(_badge).width || 0) + 10;
     var _bx = PAD.left + 2, _by = PAD.top + 2;
     ctx.fillStyle = '#e8a020dd';
@@ -1698,7 +1698,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     var nowX = xOf(nowDay);
     ctx.strokeStyle = '#ffffff33'; ctx.lineWidth = 1.5; ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(nowX, PAD.top); ctx.lineTo(nowX, PAD.top + cH); ctx.stroke();
-    ctx.fillStyle = '#ffffff99'; ctx.font = 'bold 8px DM Sans,sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff99'; ctx.font = 'bold 8px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('today', nowX, PAD.top + 8);
     if (calFT && _nowLvl > 0) {
       var _nlY = yOf(_nowLvl);
@@ -1708,7 +1708,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
       ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(nowX, _nlY, 3, 0, 2*Math.PI); ctx.fill();
       // Boxed Y-axis label so today's level stays legible over the gridline numbers.
       var _lbl = String(Math.round(_nowLvl));
-      ctx.font = 'bold 9px DM Sans,sans-serif'; ctx.textAlign = 'right';
+      ctx.font = 'bold 9px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
       var _tw = ctx.measureText(_lbl).width;
       ctx.fillStyle = '#000000cc'; ctx.fillRect(PAD.left - 7 - _tw, _nlY - 6, _tw + 6, 12);
       ctx.fillStyle = '#ffffff'; ctx.fillText(_lbl, PAD.left - 4, _nlY + 3);
@@ -1742,7 +1742,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     });
   }
 
-  ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#555'; ctx.font = '9px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'center';
   var labelEvery = winDays <= 7 ? 1 : winDays <= 30 ? 5 : xDays <= 28 ? 7 : xDays <= 84 ? 14 : 28;
   for (var dl = xStart; dl <= xEnd; dl += labelEvery) {
     var lx = xOf(dl);
@@ -2099,7 +2099,7 @@ function _tcDrawChart(canvasId, total, stats, plan, sched, calFT, measuredFT) {
   var maxV = stats ? stats.bandCeil * scale * 1.1 : 0;
   for (var i = 0; i <= cycleDays; i++) if (total[i] * scale > maxV) maxV = total[i] * scale;
   if (measuredFT && calFT && measuredFT > maxV) maxV = measuredFT * 1.1;
-  if (!maxV) { ctx.fillStyle = '#555'; ctx.font = '11px DM Sans,sans-serif'; ctx.fillText('No data', 10, 40); return; }
+  if (!maxV) { ctx.fillStyle = '#555'; ctx.font = '11px -apple-system,system-ui,sans-serif'; ctx.fillText('No data', 10, 40); return; }
   var vMax = maxV * 1.05;
 
   function xOf(t){ return PAD.left + (t / cycleDays) * cW; }
@@ -2126,11 +2126,11 @@ function _tcDrawChart(canvasId, total, stats, plan, sched, calFT, measuredFT) {
     ctx.strokeStyle = '#e8a02099'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
     ctx.beginPath(); ctx.moveTo(PAD.left, refY); ctx.lineTo(PAD.left + cW, refY); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#e8a020bb'; ctx.font = '8px DM Sans,sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#e8a020bb'; ctx.font = '8px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'left';
     ctx.fillText(Math.round(measuredFT), PAD.left + 3, refY - 2);
   }
 
-  ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'right';
+  ctx.fillStyle = '#555'; ctx.font = '9px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
   for (var ti = 0; ti <= 3; ti++) {
     var ty = PAD.top + (cH / 3) * ti;
     ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 0.5;
@@ -2139,7 +2139,7 @@ function _tcDrawChart(canvasId, total, stats, plan, sched, calFT, measuredFT) {
     ctx.fillText(calFT ? Math.round(tv) : (tv >= 100 ? Math.round(tv) : tv >= 10 ? tv.toFixed(1) : tv.toFixed(2)), PAD.left - 4, ty + 3);
   }
   ctx.save(); ctx.translate(10, PAD.top + cH/2); ctx.rotate(-Math.PI/2);
-  ctx.textAlign = 'center'; ctx.fillStyle = '#444'; ctx.font = '8px DM Sans,sans-serif';
+  ctx.textAlign = 'center'; ctx.fillStyle = '#444'; ctx.font = '8px -apple-system,system-ui,sans-serif';
   ctx.fillText(unitLabel, 0, 0); ctx.restore();
 
   var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
@@ -2160,7 +2160,7 @@ function _tcDrawChart(canvasId, total, stats, plan, sched, calFT, measuredFT) {
     ctx.beginPath(); ctx.moveTo(ix, PAD.top + cH); ctx.lineTo(ix, PAD.top + cH + 5); ctx.stroke();
   });
 
-  ctx.fillStyle = '#555'; ctx.font = '9px DM Sans,sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#555'; ctx.font = '9px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'center';
   var labelEvery = totalWeeks <= 8 ? 1 : totalWeeks <= 16 ? 2 : 4;
   for (var w2 = 0; w2 <= totalWeeks; w2 += labelEvery) {
     var lx = xOf(w2 * 7); if (lx > PAD.left + cW + 8) break;

@@ -4875,6 +4875,14 @@ if (typeof G._blBuildLines === 'function') {
     check('T-Calc measured-FT line is teal (calibrated)', _tcalcJs.includes("DATA_TEAL + '99'"));
     check('Blood optimal zone is teal ("good")',          _bloodJs.includes("DATA_TEAL + '22'"));
     check('Blood "now" marker uses the amber token',        _bloodJs.includes("DATA_AMBER + '99'"));
+    // Canvas charts no longer reference the removed DM Sans webfont (dead ref →
+    // browser default). They use the system stack, matching the CSS --font tokens.
+    check('no canvas font references the removed DM Sans webfont',
+      !_bloodJs.includes('DM Sans') && !_tcalcJs.includes('DM Sans') &&
+      !fs.readFileSync(path.join(__dirname, '../tab-body.js'), 'utf8').includes('DM Sans') &&
+      !rawScript.includes('DM Sans'));
+    check('canvas fonts use the system UI stack',
+      _bloodJs.includes("-apple-system,system-ui,sans-serif") && _tcalcJs.includes("-apple-system,system-ui,sans-serif"));
   }
 
   // Phase 2: backend PK dataset → actual blood levels for compounds with an assay
