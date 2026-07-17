@@ -5359,6 +5359,42 @@ if (Array.isArray(G._OB_ORDER) && typeof G.obToggleGoal === 'function' && typeof
   check('_OB_ORDER / obToggleGoal / obSetExperience present', false);
 }
 
+// ── Serious onboarding: tour + in-flow starting point ─────────────────────────
+console.log('\n── Serious onboarding (tour + starting point) ─────────────');
+if (Array.isArray(G._OB_ORDER) && typeof G.obSetStart === 'function') {
+  check('flow ends at the starting-point step', G._OB_ORDER[G._OB_ORDER.length - 1] === 'start');
+  check('nav tour step precedes the starting point',
+    G._OB_ORDER.indexOf('tour') >= 0 && G._OB_ORDER.indexOf('tour') < G._OB_ORDER.indexOf('start'));
+  check('stats step comes before the cosmetic theme step',
+    G._OB_ORDER.indexOf('stats') < G._OB_ORDER.indexOf('theme'));
+  check('stats step collects age', rawScript.includes('_obData.age=this.value'));
+  check('obFinish persists age locally + to backend',
+    rawScript.includes("localStorage.setItem('user_age',String(profile.age))") && rawScript.includes("kv['user_age']=profile.age"));
+  var _svOb2 = G._obData;
+  G._obData = { sex:null, height:'', weight:'', age:'', theme:3, experience:'', goals:['recovery'], startChoice:null };
+  G.obSetStart('build');    check('obSetStart records the builder choice',  G._obData.startChoice === 'build');
+  G.obSetStart('tpl:abc');  check('obSetStart records a template choice',   G._obData.startChoice === 'tpl:abc');
+  // Ranking: goal-matched templates first
+  var _svTpl = G._protocolTemplates;
+  G._protocolTemplates = [ { id:'x', name:'X', goals:['muscle'] }, { id:'y', name:'Y', goals:['recovery'] } ];
+  var _rk = G._obRankedTemplates();
+  check('_obRankedTemplates puts goal matches first', _rk.list[0].id === 'y' && _rk.matches(_rk.list[0]) && !_rk.matches(_rk.list[1]));
+  G._protocolTemplates = _svTpl;
+  G._obData = _svOb2;
+  // Finish routing: template → useTemplate, build → createNewStack, explore → Today
+  check('obFinish schedules the chosen template via useTemplate', rawScript.includes("useTemplate(_tid)"));
+  check('obFinish opens the stack builder on build choice',       /_choice==='build'[\s\S]{0,120}createNewStack/.test(rawScript));
+  check('obFinish lands explore on Today',                        /_choice==='explore'[\s\S]{0,80}switchPrimary\('today'\)/.test(rawScript));
+  check('skipping before the choice keeps the legacy picker fallback', rawScript.includes('openTemplatePicker(_g)'));
+  check('tour step names all five primaries',
+    ['Today','Plan','Levels','Labs','More'].every(function (n) { return G._obHtmlTour().indexOf(n) >= 0; }));
+  check('start step offers build + explore alternatives',
+    (function () { var s = G._obData, r; G._obData = { goals: [], startChoice: null }; r = G._obHtmlStart(); G._obData = s;
+      return r.indexOf('Build my own stack') >= 0 && r.indexOf('Just explore first') >= 0; })());
+} else {
+  check('serious onboarding (obSetStart / tour / start) present', false);
+}
+
 // ── Contextual safety notes (watch/test/stop, all tiers) ─────────────────────
 console.log('\n── Contextual safety notes ────────────────────────────────');
 if (typeof G._renderSafetyNote === 'function') {

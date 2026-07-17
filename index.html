@@ -1295,10 +1295,12 @@ function saveWeightFromInput(){
     setTimeout(function(){inp.style.borderColor='var(--border)';},1500);
   }
 }
-var _obStep=0;var _obData={sex:null,height:'',weight:'',theme:3,experience:'',goals:[]};
-// Onboarding step order — experience + goals come first (the meaningful, tailoring
-// questions), then the cosmetic theme + stats. Renderer per step name below.
-var _OB_ORDER=['welcome','experience','goals','theme','stats'];
+var _obStep=0;var _obData={sex:null,height:'',weight:'',age:'',theme:3,experience:'',goals:[],startChoice:null};
+// Onboarding step order (usability study, "serious" flow): the meaningful, tailoring
+// questions first (experience → goals → stats), cosmetic theme after, then a quick
+// nav tour, ending at a tailored STARTING POINT — the first minute ends with a
+// scheduled protocol, an open builder, or a deliberate "explore" choice.
+var _OB_ORDER=['welcome','experience','goals','stats','theme','tour','start'];
 function obInit(){
   var _hasHistory=Object.keys(localStorage).some(function(k){return k.startsWith('proto-chk-');});
   var savedTheme=getData('pep-theme',null);
@@ -1327,7 +1329,9 @@ function obRender(){
   dotsEl.innerHTML=dots;
   backBtn.style.display=_obStep===0?'none':'';
   skipBtn.style.display=_obStep===total-1?'none':'';
-  nextBtn.textContent=_obStep===0?'Get Started':_obStep===total-1?"Let's go!":'Continue';
+  var _lastLbl="Let's go!";
+  if(_OB_ORDER[_obStep]==='start'){var _c=_obData.startChoice||'';_lastLbl=_c.indexOf('tpl:')===0?'Start this protocol':_c==='build'?'Open the builder':"Let's go!";}
+  nextBtn.textContent=_obStep===0?'Get Started':_obStep===total-1?_lastLbl:'Continue';
   body.innerHTML=_obRenderStep(_OB_ORDER[_obStep]);
 }
 function _obRenderStep(name){
@@ -1335,6 +1339,8 @@ function _obRenderStep(name){
   if(name==='goals')return _obHtmlGoals();
   if(name==='theme')return _obHtml1();
   if(name==='stats')return _obHtml2();
+  if(name==='tour')return _obHtmlTour();
+  if(name==='start')return _obHtmlStart();
   return _obHtml0();
 }
 function _obHtml0(){
@@ -1391,7 +1397,7 @@ function _obHtml2(){
   var g=_obData.sex;
   return '<div style="margin-bottom:20px">'
     +'<div style="font-family:var(--font-display);font-size:30px;letter-spacing:1px;color:var(--text)">Your Stats</div>'
-    +'<div style="font-size:13px;color:var(--muted);margin-top:4px">Used for body composition calculations.</div></div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-top:4px">Used for body-comp and hormone calculations.</div></div>'
     +'<div class="ob-field"><label>Biological Sex</label>'
     +'<div style="display:flex;gap:10px">'
     +'<button class="ob-gender-btn'+(g==='male'?' ob-sel':'')+'" onclick="obSetSex(\'male\')">♂ Male</button>'
@@ -1401,6 +1407,8 @@ function _obHtml2(){
     +'<input type="number" placeholder="180" min="100" max="250" value="'+(_obData.height||'')+'" oninput="_obData.height=this.value"></div>'
     +'<div class="ob-field"><label>Body Weight (kg)</label>'
     +'<input type="text" inputmode="decimal" placeholder="85" value="'+(_obData.weight||'')+'" oninput="_obData.weight=this.value"></div>'
+    +'<div class="ob-field"><label>Age</label>'
+    +'<input type="number" placeholder="35" min="16" max="99" value="'+(_obData.age||'')+'" oninput="_obData.age=this.value"></div>'
     +'<div style="font-size:12px;color:var(--muted);margin-top:-6px;line-height:1.5">All fields optional — skip if you prefer.</div>';
 }
 function obSelectTheme(id){_obData.theme=id;applyTheme(id);obRender();}
@@ -1410,24 +1418,86 @@ function obSetSex(g){
     b.classList.toggle('ob-sel',(g==='male'&&b.textContent.indexOf('Male')>-1)||(g==='female'&&b.textContent.indexOf('Female')>-1));
   });
 }
+// Quick orientation for the 5-tab nav — one line per primary, no interaction needed.
+function _obHtmlTour(){
+  var rows=[
+    ['◉','Today','Your daily checklist — doses due, supplements, adherence'],
+    ['▤','Plan','Your stacks, cycle timeline and reconstitution math'],
+    ['∿','Levels','Predicted plasma levels from your protocol'],
+    ['⬡','Labs','Bloodwork results and body composition'],
+    ['≡','More','Macros, settings and extras']];
+  var html='<div style="margin-bottom:18px"><div style="font-family:var(--font-display);font-size:30px;letter-spacing:1px;color:var(--text)">Where things live</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Five tabs along the bottom — that\'s the whole app.</div></div>';
+  rows.forEach(function(r){
+    html+='<div style="display:flex;align-items:center;gap:14px;border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">'
+      +'<div style="font-size:24px;color:var(--accent);width:28px;text-align:center;flex-shrink:0">'+r[0]+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;color:var(--text)">'+r[1]+'</div><div style="font-size:12px;color:var(--muted);line-height:1.4">'+r[2]+'</div></div></div>';
+  });
+  return html;
+}
+// Rank the backend starter templates by the goals picked in the flow (same matching
+// rule as openTemplatePicker) — goal matches first, so the top cards are tailored.
+function _obRankedTemplates(){
+  var tpl=(typeof _protocolTemplates!=='undefined'&&_protocolTemplates)?_protocolTemplates.slice():[];
+  var pref=Array.isArray(_obData.goals)?_obData.goals:[];
+  var m=function(t){return pref.length&&(t.goals||[]).some(function(g){return pref.indexOf(g)>=0;});};
+  tpl.sort(function(a,b){return (m(b)?1:0)-(m(a)?1:0);});
+  return {list:tpl,matches:m};
+}
+// Final step — the flow ends AT a starting point (usability study): pick a suggested
+// plan, open the builder, or deliberately explore first. Choice is applied in obFinish.
+function _obHtmlStart(){
+  var _e=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');};
+  var r=_obRankedTemplates();var tpl=r.list.slice(0,2);
+  var html='<div style="margin-bottom:18px"><div style="font-family:var(--font-display);font-size:30px;letter-spacing:1px;color:var(--text)">Pick your starting point</div><div style="font-size:13px;color:var(--muted);margin-top:4px">'+(tpl.length?'A vetted plan you can edit any time — or go your own way.':'How do you want to begin?')+'</div></div>';
+  tpl.forEach(function(t){
+    var id='tpl:'+t.id;var sel=_obData.startChoice===id;
+    var nComp=((t.peptides||[]).length)+(((t.trt||{}).compounds||[]).length)+(((t.enhanced||{}).compounds||[]).length);
+    var _sug=r.matches(t)?'<span style="font-size:9px;font-weight:800;letter-spacing:0.4px;color:#000;background:var(--accent);border-radius:5px;padding:2px 6px;margin-left:8px;vertical-align:middle">SUGGESTED</span>':'';
+    html+='<div onclick="obSetStart(\'tpl:'+_e(t.id)+'\')" style="border:1px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'rgba(232,255,60,0.06)':'transparent')+';border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer">'
+      +'<div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;color:var(--text)">'+_e(t.name)+_sug+'</div>'
+      +(t.tagline?'<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);margin-top:2px">'+_e(t.tagline)+'</div>':'')
+      +'<div style="font-size:12px;color:var(--muted);margin-top:3px">'+nComp+' compound'+(nComp===1?'':'s')+' · starts today · fully editable</div></div>'
+      +(sel?'<div style="color:var(--accent);font-size:16px;flex-shrink:0">✓</div>':'')+'</div></div>';
+  });
+  var alts=[['build','🛠️','Build my own stack','Full control — pick compounds, doses and schedule'],['explore','👀','Just explore first','Look around; you can start a protocol any time']];
+  alts.forEach(function(o){var sel=_obData.startChoice===o[0];
+    html+='<div onclick="obSetStart(\''+o[0]+'\')" style="display:flex;align-items:center;gap:12px;border:1px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'rgba(232,255,60,0.06)':'transparent')+';border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer">'
+      +'<div style="font-size:22px">'+o[1]+'</div>'
+      +'<div style="flex:1"><div style="font-size:15px;font-weight:600;color:var(--text)">'+o[2]+'</div><div style="font-size:12px;color:var(--muted)">'+o[3]+'</div></div>'
+      +(sel?'<div style="color:var(--accent);font-size:16px">✓</div>':'')+'</div>';
+  });
+  return html;
+}
+function obSetStart(v){_obData.startChoice=v;obRender();}
 function obNext(){if(_obStep===_OB_ORDER.length-1){obFinish();return;}_obStep++;obRender();}
 function obBack(){if(_obStep===0)return;_obStep--;obRender();}
 function obSkip(){obFinish();}
 function obFinish(){
-  var profile={sex:_obData.sex,height:_obData.height?parseDec(_obData.height):null,weight:_obData.weight?parseDec(_obData.weight):null,experience:_obData.experience||'',goals:(_obData.goals||[]).slice(),onboarded:true};
+  var profile={sex:_obData.sex,height:_obData.height?parseDec(_obData.height):null,weight:_obData.weight?parseDec(_obData.weight):null,age:_obData.age?parseInt(_obData.age):null,experience:_obData.experience||'',goals:(_obData.goals||[]).slice(),onboarded:true};
   setData('pep-profile',profile);
   if(_obData.sex)setBioSex(_obData.sex);
   if(profile.height){localStorage.setItem('user_height',String(profile.height));var hi=document.getElementById('bc-height-in');if(hi)hi.value=profile.height;}
   if(profile.weight){localStorage.setItem('user_weight',String(profile.weight));var wi=document.getElementById('bc-weight-in');if(wi)wi.value=profile.weight;}
-  var kv={};if(_obData.sex)kv['user_sex']=_obData.sex;if(profile.height)kv['user_height']=profile.height;if(profile.weight)kv['user_weight']=profile.weight;
+  if(profile.age){localStorage.setItem('user_age',String(profile.age));var ai=document.getElementById('bc-age-in');if(ai)ai.value=profile.age;}
+  var kv={};if(_obData.sex)kv['user_sex']=_obData.sex;if(profile.height)kv['user_height']=profile.height;if(profile.weight)kv['user_weight']=profile.weight;if(profile.age)kv['user_age']=profile.age;
   if(_obData.experience)kv['pep-experience']=_obData.experience;if((_obData.goals||[]).length)kv['pep-goals']=_obData.goals;
   if(Object.keys(kv).length)pushPepSettingsToAgent(kv);
   document.getElementById('onboarding-overlay').classList.add('hidden');
   buildAppearanceCard();buildCacheCard();
-  // Adaptive: if they have no protocol yet and templates are available, offer a
-  // starting point matched to the goals they picked.
-  if((!_userStacks||!_userStacks.length)&&typeof openTemplatePicker==='function'&&typeof _protocolTemplates!=='undefined'&&_protocolTemplates&&_protocolTemplates.length){
-    var _g=(_obData.goals||[]).slice();
+  // Route the starting-point choice made on the final step. A choice of a template
+  // schedules it immediately (useTemplate starts today + regenerates injections);
+  // 'build' opens the stack wizard; 'explore' lands on Today (empty-state coaching
+  // takes over). If the flow was skipped before the choice, keep the legacy
+  // behavior: offer the goal-matched template picker when no protocol exists yet.
+  var _choice=_obData.startChoice;var _g=(_obData.goals||[]).slice();
+  if(_choice&&String(_choice).indexOf('tpl:')===0){
+    var _tid=String(_choice).slice(4);
+    setTimeout(function(){if(typeof useTemplate==='function')useTemplate(_tid);},250);
+  }else if(_choice==='build'){
+    setTimeout(function(){if(typeof createNewStack==='function')createNewStack();},250);
+  }else if(_choice==='explore'){
+    if(typeof switchPrimary==='function')switchPrimary('today');
+  }else if((!_userStacks||!_userStacks.length)&&typeof openTemplatePicker==='function'&&typeof _protocolTemplates!=='undefined'&&_protocolTemplates&&_protocolTemplates.length){
     setTimeout(function(){openTemplatePicker(_g);},250);
   }
 }
