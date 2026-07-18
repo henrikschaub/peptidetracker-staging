@@ -5929,6 +5929,14 @@ console.log('\n── SI units (µg not mcg) + % topical unit ──────
     var hrt=G.CYCLE_TEMPLATES_FEMALE.find(function(t){return t.kind==='hrt';});
     check('HRT cream expressed as % topical', !!hrt&&hrt.compounds[0].unit==='%');
   }
+  // GUARD: the unit dropdown must NEVER render an 'mcg' option — even for legacy mcg
+  // data the option shown is 'µg'. Enforces the "never surface mcg" rule.
+  if(typeof G._renderEditPep==='function'){
+    G._editBuf={name:'T',peptides:[{id:'cjc-ipa',name:'CJC/IPA',dot:'#3cffa0',times:['AM','PM'],days:[1,2,3],dose_am:'100',dose_pm:'100',unit_am:'mcg',unit_pm:'mcg',active:true}],trt:{enabled:false,compounds:[]},enhanced:{enabled:false,compounds:[]},cycle_length:12};
+    var pepHtml=G._renderEditPep(G._editBuf.peptides[0],0);
+    check('unit dropdown never renders an mcg option', !/>mcg<|value="mcg"/.test(pepHtml));
+    check('unit dropdown offers µg', /value="µg"/.test(pepHtml));
+  }
 }
 
 console.log('\n───────────────────────────────────────────────────────────');
