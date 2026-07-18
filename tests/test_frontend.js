@@ -1182,6 +1182,15 @@ check('reconDoseRow: tiny vol < 0.05ml warns',  rowTiny.includes('Very small vol
 const rowLarge= G.reconDoseRow('AM','3','ml',5,2,'mg');
 check('reconDoseRow: large vol > 1ml warns',    rowLarge.includes('Large injection volume'), `snippet: ${rowLarge.slice(0,200)}`);
 
+// ── Recon guide: low-dead-space (LDS) syringe hardware guidance (#636) ────────
+{
+  const guide = G.buildReconGuide();
+  check('recon guide recommends low-dead-space syringes',
+    /low[- ]dead[- ]space|LDS/i.test(guide));
+  check('recon guide warns about ~10% loss to dead space',
+    guide.includes('10%') && /dead[- ]space|hub/i.test(guide));
+}
+
 // ── reconDoseRow: 1mg threshold display logic ────────────────────────────────
 console.log('\n── reconDoseRow: 1mg threshold display ────────────────────');
 // IU input <1mg → IU only (no ml, no mcg) — CJC 4 IU at 6.667mg/ml = 0.267mg
