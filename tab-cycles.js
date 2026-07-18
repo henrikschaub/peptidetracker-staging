@@ -160,6 +160,7 @@ function _cycleAncillariesHtml(t){var a=t&&t.ancillaries;if(!a||!a.length)return
 function _cwizStep1(){
   var h='<div style="padding:20px">';
   h+='<div style="font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px">Step 1 of 3 — Choose Template</div>';
+  h+=(typeof _bfReadinessCard==='function'?_bfReadinessCard('enhanced'):'');
   CYCLE_TEMPLATES.forEach(function(t){
     var sel=_cwiz.tpl===t.id;
     h+='<div onclick="cycleWizSelectTpl(\''+t.id+'\')" style="cursor:pointer;background:var(--surface2);border:2px solid '+(sel?t.badgeColor:'var(--border)')+';border-radius:12px;padding:14px;margin-bottom:10px">';

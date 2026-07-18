@@ -279,6 +279,10 @@ var _wizOverlay=null;
 let _userStacks=[];let _activeStackIndices=[0];let _stacksLoaded=false;
 var _protocolTemplates=getData('proto-templates',[]);
 var _safetyNotes=getData('proto-safety-notes',null); // per-tier watch/test/stop, from the backend
+// Pre-cycle body-fat readiness guidance (backend /safety-notes → readiness). Frontend
+// fallback so the card still shows offline; backend is the source of truth when reachable.
+var _READINESS_FALLBACK={body_fat:{title:'Lean out before you start',body:'Body fat drives aromatase — the enzyme that converts testosterone to estradiol. The higher your body fat, the more of any androgen you carry or add (your own or injected) is converted to estrogen, which lowers free testosterone and raises the risk of gyno, water retention and high blood pressure. Leaning out first raises your own free T, improves insulin sensitivity, and makes a TRT or enhanced cycle both safer and more effective at the same dose.',action:'Aim to reach the target range before starting TRT or an enhanced cycle.',target_pct:{male:15,female:25},elevated_pct:{male:20,female:30},applies_to:['trt','enhanced']}};
+var _readinessNotes=getData('proto-readiness-notes',null); // from backend /safety-notes → readiness
 var _safetyDismissed={}; // session-only dismiss set (safety re-surfaces on a fresh load)
 function _isActiveStack(i){return _activeStackIndices.indexOf(i)>=0;}
 let _stackViewTab='peptides';let _editInnerTab='peptides';
@@ -328,7 +332,39 @@ function _cyclesAllowed(){if(!_featuresLoaded)return true;if(_userTier>=2)return
 // Cached read-only for offline first-paint; the empty state offers them as a first action.
 async function syncProtocolTemplates(){try{const r=await fetch(AGENT_URL+'/protocol-templates',{headers:authHeaders()});if(!r.ok){_logHttp('syncTemplates',r.status,'/protocol-templates');return;}const d=await r.json();if(d&&Array.isArray(d.templates)){_protocolTemplates=d.templates;setData('proto-templates',_protocolTemplates);if(typeof buildToday==='function')buildToday();}}catch(e){_logErr('syncTemplates',e);}}
 // Contextual safety notes (watch/test/stop) per compound tier — served from the backend.
-async function syncSafetyNotes(){try{const r=await fetch(AGENT_URL+'/safety-notes',{headers:authHeaders()});if(!r.ok){_logHttp('syncSafety',r.status,'/safety-notes');return;}const d=await r.json();if(d&&d.notes){_safetyNotes=d.notes;setData('proto-safety-notes',_safetyNotes);}}catch(e){_logErr('syncSafety',e);}}
+async function syncSafetyNotes(){try{const r=await fetch(AGENT_URL+'/safety-notes',{headers:authHeaders()});if(!r.ok){_logHttp('syncSafety',r.status,'/safety-notes');return;}const d=await r.json();if(d&&d.notes){_safetyNotes=d.notes;setData('proto-safety-notes',_safetyNotes);}if(d&&d.readiness){_readinessNotes=d.readiness;setData('proto-readiness-notes',_readinessNotes);}}catch(e){_logErr('syncSafety',e);}}
+// ── Pre-cycle body-fat readiness card (BF drives aromatase → lowers free T) ───
+function _bfFmt(n){return (Math.round(n*10)/10).toString();}
+function _bfEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _latestBodyFat(){
+  var arr=[];try{arr=JSON.parse(localStorage.getItem(BC_KEY)||'[]')||[];}catch(e){arr=[];}
+  var seen={};arr.forEach(function(e){if(e&&e.date)seen[e.date]=1;});
+  if(typeof BC_SEED!=='undefined'&&BC_SEED)BC_SEED.forEach(function(s){if(s&&s.date&&!seen[s.date])arr.push(s);});
+  arr=arr.filter(function(e){return e&&e.date&&typeof e.bf==='number'&&isFinite(e.bf);});
+  if(!arr.length)return null;
+  arr.sort(function(a,b){return new Date(String(a.date).replace(/-/g,'/'))-new Date(String(b.date).replace(/-/g,'/'));});
+  return arr[arr.length-1].bf;
+}
+// Non-blocking coaching card shown at the "start a cycle" points for tiers the
+// backend flags (trt/enhanced). Personalised by the user's own latest BF% when logged.
+function _bfReadinessCard(tier){
+  var cfg=(_readinessNotes&&_readinessNotes.body_fat)||(_READINESS_FALLBACK&&_READINESS_FALLBACK.body_fat);
+  if(!cfg)return '';
+  if(cfg.applies_to&&cfg.applies_to.indexOf(tier)<0)return '';
+  var sex=(localStorage.getItem('user_sex')||'male').toLowerCase();if(sex!=='female')sex='male';
+  var tgt=cfg.target_pct&&cfg.target_pct[sex];var elev=cfg.elevated_pct&&cfg.elevated_pct[sex];
+  var bf=_latestBodyFat();
+  var accent,statusLbl,statusMsg;
+  if(bf==null){accent='var(--muted2)';statusLbl='';statusMsg='Log your body fat in Body Comp to see how ready you are to start.';}
+  else if(elev!=null&&bf>elev){accent='#ff6b2b';statusLbl='Recommend leaning out first';statusMsg='You’re at '+_bfFmt(bf)+'% — above the '+elev+'% mark where estrogen conversion climbs. Getting toward '+tgt+'% first will lift your free T and cut cycle side-effects.';}
+  else if(tgt!=null&&bf>tgt){accent='#e8c34a';statusLbl='A little above ideal';statusMsg='You’re at '+_bfFmt(bf)+'%. The ideal pre-cycle range is at or below '+tgt+'% — close, but trimming a bit more first still helps.';}
+  else{accent='var(--accent3)';statusLbl='Good range to start';statusMsg='You’re at '+_bfFmt(bf)+'%'+(tgt!=null?', at or under the '+tgt+'% target':'')+' — a solid base to start from.';}
+  var h='<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid '+accent+';border-radius:10px;padding:12px 14px;margin-bottom:14px">';
+  h+='<div style="font-size:12px;font-weight:700;color:'+accent+';margin-bottom:4px">'+_bfEsc(cfg.title)+(statusLbl?' — '+_bfEsc(statusLbl):'')+'</div>';
+  h+='<div style="font-size:11.5px;color:var(--muted2);line-height:1.55;margin-bottom:6px">'+_bfEsc(cfg.body)+'</div>';
+  h+='<div style="font-size:11.5px;color:var(--text);line-height:1.5">'+_bfEsc(statusMsg)+'</div>';
+  return h+'</div>';
+}
 async function pushBodyCompToAgent(entry){try{const r=await fetch(AGENT_URL+"/bodycomp",{method:"POST",headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(entry)});if(!r.ok)_logHttp('pushBodyComp',r.status,'/bodycomp');}catch(e){_logErr('pushBodyComp',e);}}
 async function deleteBodyCompFromAgent(date){try{const r=await fetch(AGENT_URL+"/bodycomp/"+date,{method:"DELETE",headers:authHeaders()});if(!r.ok)_logHttp('deleteBodyComp',r.status,'/bodycomp/'+date);}catch(e){_logErr('deleteBodyComp',e);}}
 function getWeightForDate(dateStr){if(!weights.length)return null;const target=new Date(dateStr.replace(/-/g,'/'));let best=null,bestDiff=Infinity;for(const w of weights){const diff=Math.abs(target-new Date(w.date.replace(/-/g,'/')));if(diff<bestDiff){bestDiff=diff;best=w.weight;}}return bestDiff<=7*86400000?best:null;}
