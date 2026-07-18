@@ -5786,6 +5786,45 @@ console.log('\n── Pre-cycle body-fat readiness card ────────
   check('TRT protocol section renders readiness card', _stkSrc.includes("_bfReadinessCard('trt')"));
 }
 
+// ── T-Calc: body-fat adjustment of the population SHBG baseline ───────────────
+console.log('\n── T-Calc: body-fat → SHBG baseline adjustment ─────────────');
+{
+  const G=sandbox;
+  const approx=(a,b)=>Math.abs(a-b)<1e-3;
+  check('_tcShbgBodyFatFactor defined', typeof G._tcShbgBodyFatFactor==='function');
+  if(typeof G._tcShbgBodyFatFactor==='function'){
+    // Unknown / non-positive BF → no change
+    check('factor=1 when BF unknown (0)', G._tcShbgBodyFatFactor(0,'male')===1);
+    check('factor=1 when BF null', G._tcShbgBodyFatFactor(null,'male')===1);
+    // At the reference BF the factor is exactly 1 (male ref 18, female ref 27)
+    check('male at ref 18% → factor 1', approx(G._tcShbgBodyFatFactor(18,'male'),1));
+    check('female at ref 27% → factor 1', approx(G._tcShbgBodyFatFactor(27,'female'),1));
+    // Higher BF lowers SHBG (<1); lower BF raises it (>1)
+    check('high BF (28%) lowers SHBG (<1)', G._tcShbgBodyFatFactor(28,'male')<1);
+    check('high BF (28%) ≈ 0.819', approx(G._tcShbgBodyFatFactor(28,'male'),Math.exp(-0.02*10)));
+    check('lean BF (12%) raises SHBG (>1)', G._tcShbgBodyFatFactor(12,'male')>1);
+    // Monotonic: fatter → smaller factor
+    check('monotonic in BF', G._tcShbgBodyFatFactor(30,'male')<G._tcShbgBodyFatFactor(20,'male'));
+    // Clamp: extreme adiposity floored at min_factor (0.60)
+    check('extreme BF floored at 0.60', approx(G._tcShbgBodyFatFactor(60,'male'),0.60));
+    check('factor never below min', G._tcShbgBodyFatFactor(90,'male')>=0.60);
+    // Sex-specific bands differ
+    check('male vs female bands differ at 30%', G._tcShbgBodyFatFactor(30,'male')!==G._tcShbgBodyFatFactor(30,'female'));
+    // Direction check through Vermeulen: lower SHBG → higher free T
+    if(typeof G._tcVermeulenFT==='function'){
+      var ftBase=G._tcVermeulenFT(20,40);
+      var ftAdj=G._tcVermeulenFT(20,40*G._tcShbgBodyFatFactor(28,'male'));
+      check('BF-lowered SHBG raises the free-T estimate', ftAdj>ftBase);
+    }
+  }
+  // Source wiring: applied only to the population baseline, sync consumes the params
+  var _tcSrc=fs.readFileSync(path.join(path.dirname(path.resolve(htmlPath)),'tab-tcalc.js'),'utf8');
+  check('tcalc consumes shbgBodyFat from backend', _tcSrc.includes('d.shbgBodyFat'));
+  check('tcalc applies BF factor to population SHBG', _tcSrc.includes('_popShbg = _popShbg * _bfFac'));
+  check('tcalc guards BF factor behind _popShbg>0 (no measured SHBG)',
+    /_popShbg > 0[\s\S]{0,400}_tcShbgBodyFatFactor/.test(_tcSrc));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
