@@ -5825,6 +5825,60 @@ console.log('\n── T-Calc: body-fat → SHBG baseline adjustment ────
     /_popShbg > 0[\s\S]{0,400}_tcShbgBodyFatFactor/.test(_tcSrc));
 }
 
+// ── Female Tier-3 cycle protocols (sex-aware wizard) ─────────────────────────
+console.log('\n── Female Tier-3 cycle protocols ───────────────────────────');
+{
+  const G=sandbox;
+  check('CYCLE_TEMPLATES_FEMALE defined', Array.isArray(G.CYCLE_TEMPLATES_FEMALE));
+  check('_userSexCyc defined', typeof G._userSexCyc==='function');
+  check('_activeCycleTemplates defined', typeof G._activeCycleTemplates==='function');
+  check('_cycleTemplateById defined', typeof G._cycleTemplateById==='function');
+  check('_femaleCycleNoteHtml defined', typeof G._femaleCycleNoteHtml==='function');
+  if(Array.isArray(G.CYCLE_TEMPLATES_FEMALE)){
+    // SAFETY-CRITICAL: no male/androgenic compound may ever appear in a female template
+    var banned=/testosterone|trenbolone|\bnpp\b|nandrolone|masteron|drostanolone|dianabol|methandrostenolone|anadrol|oxymetholone|deca/i;
+    var leak=null;
+    G.CYCLE_TEMPLATES_FEMALE.forEach(function(t){(t.compounds||[]).forEach(function(c){if(banned.test(c.name))leak=t.id+':'+c.name;});});
+    check('NO male/androgenic compound in any female template', leak===null, leak||'');
+    // Female whitelist only + dose bands
+    var okDose=true;
+    G.CYCLE_TEMPLATES_FEMALE.forEach(function(t){(t.compounds||[]).forEach(function(c){
+      if(/oxandrolone|anavar/i.test(c.name)){ if(!(c.unit==='mg/day'&&c.dose<=10)) okDose=false; }
+      else if(/primobolan|metenolone/i.test(c.name)){ if(!(c.unit==='mg/week'&&c.dose<=50)) okDose=false; }
+    });});
+    check('female doses within safe bands (Anavar ≤10 mg/day, Primo ≤50 mg/week)', okDose);
+    // Short cycles (≤8 weeks) — opposite of the male 16–24 wk templates
+    check('all female cycles ≤8 weeks', G.CYCLE_TEMPLATES_FEMALE.every(function(t){return t.weeks<=8;}));
+    // Every female template carries a virilization risk axis + a stop-protocol ancillary
+    check('female templates carry viril_risk', G.CYCLE_TEMPLATES_FEMALE.every(function(t){return t.safety&&t.safety.viril_risk;}));
+    check('female templates carry a virilization stop-protocol', G.CYCLE_TEMPLATES_FEMALE.every(function(t){return (t.ancillaries||[]).some(function(a){return /virilization/i.test(a.name);});}));
+    // No AI / hCG in a female kit
+    check('female kit has no AI/hCG', G.CYCLE_TEMPLATES_FEMALE.every(function(t){return !(t.ancillaries||[]).some(function(a){return /aromatase inhibitor|\bhcg\b/i.test(a.name);});}));
+  }
+  if(typeof G._activeCycleTemplates==='function'){
+    // Male user → male set (test present); female user → female set (never test)
+    G.localStorage.setItem('user_sex','male');
+    var maleSet=G._activeCycleTemplates();
+    check('male user gets the male template set', maleSet.some(function(t){return /Test/i.test(t.name);}));
+    G.localStorage.setItem('user_sex','female');
+    var femSet=G._activeCycleTemplates();
+    check('female user gets the female set (ids)', femSet.some(function(t){return t.id==='fem_first';}));
+    check('female user NEVER sees a testosterone template', !femSet.some(function(t){return (t.compounds||[]).some(function(c){return /testosterone/i.test(c.name);});}));
+    // Contraindication banner shows for female, hidden for male
+    check('female contraindication banner renders', /Do not use|different sport/i.test(G._femaleCycleNoteHtml()));
+    check('female banner lists testosterone + tren as avoid', /Testosterone/.test(G._femaleCycleNoteHtml())&&/Trenbolone/.test(G._femaleCycleNoteHtml()));
+    G.localStorage.setItem('user_sex','male');
+    check('male user sees no female banner', G._femaleCycleNoteHtml()==='');
+    // lookup spans both sets
+    check('_cycleTemplateById finds a female template', !!G._cycleTemplateById('fem_synergy'));
+    check('_cycleTemplateById finds a male template', !!G._cycleTemplateById('first'));
+  }
+  // Viril badge renders in the safety badges
+  if(typeof G._cycleSafetyBadges==='function'){
+    check('_cycleSafetyBadges renders a Viril badge', /Viril/.test(G._cycleSafetyBadges({safety:{viril_risk:'low'}})));
+  }
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);

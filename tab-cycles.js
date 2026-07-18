@@ -112,14 +112,71 @@ var CYCLE_TEMPLATES=[
    why:'',tip:'',
    compounds:[{name:'Testosterone Enanthate',dose:500,unit:'mg/week',active:true,startWeek:0}]}
 ];
+// Female protocols — a different sport: results WITHOUT irreversible virilization.
+// Mildest compounds, a fraction of the dose, short cycles, one compound at a time.
+// A female user must NEVER be shown the male test/tren templates, so these carry inline
+// safety + a monitoring "kit" (no AI/hCG — those are male-cycle tools) that renders even
+// offline; the backend (?sex=female) enriches/overrides them when reachable.
+var _F_ANC_VIRIL={name:'Virilization stop-protocol',kind:'monitor',have_on_hand:true,
+  trigger:'STOP at the first sign — voice roughness or deepening, clitoral enlargement or sensitivity, new coarse facial or body hair, sudden acne, or a menstrual change. Voice and clitoral changes can be PERMANENT — never push through them.'};
+var _F_ANC_LIVER={name:'Liver support (TUDCA) + LFT/lipid checks',kind:'hepatic',have_on_hand:true,
+  trigger:'For 17-aa orals (oxandrolone): keep TUDCA on hand and check ALT/AST at baseline and mid-cycle. Oral AAS also drop HDL — recheck a lipid panel.'};
+var CYCLE_TEMPLATES_FEMALE=[
+  {id:'fem_first',sex:'female',phase:'foundational',weeks:6,badge:'CYCLE 1',badgeColor:'var(--accent)',
+   name:'Anavar Only — Foundational',
+   desc:'The evidence-based female starting point. Oxandrolone alone — the lowest-virilization anabolic — at a low dose over a short cycle so you learn your own response first.',
+   why:'Female protocols are built around avoiding irreversible virilization, not maximising dose. One mild oral compound, low and short, lets you read your tolerance safely.',
+   tip:'Start 5 mg/day, hold the cycle to 6 weeks. Do NOT exceed 10 mg/day or 8 weeks — virilization risk climbs steeply past both. Keep time OFF longer than time ON.',
+   compounds:[{name:'Oxandrolone (Anavar)',dose:5,unit:'mg/day',active:true,startWeek:0}],
+   ancillaries:[_F_ANC_VIRIL,_F_ANC_LIVER],
+   safety:{viril_risk:'low',gyno_risk:'low',liver_risk:'moderate',
+     rationale:'Oxandrolone has the most favourable anabolic-to-androgenic profile for women, but it is 17-aa (liver load and HDL drop) so the cycle stays short with LFT/lipid checks. No AI or hCG — women need their estrogen; those are male-cycle tools.'}},
+  {id:'fem_primo',sex:'female',phase:'foundational',weeks:8,badge:'CYCLE 1 (Injectable)',badgeColor:'var(--accent)',
+   name:'Primobolan Only — Lean',
+   desc:'Injectable alternative for women who prefer to avoid orals. Metenolone is non-17-aa (no liver load) with a very low androgenic rating — the other pillar of low-virilization female use.',
+   why:'Primobolan gives clean, lean anabolism with no liver strain and a mild androgenic profile, making it a solid single-compound female cycle.',
+   tip:'50 mg/week for 8 weeks. The slow ester tails off after you stop — so stop at the FIRST virilization sign, do not wait. Do not stack on a first cycle.',
+   compounds:[{name:'Primobolan (Metenolone Enanthate)',dose:50,unit:'mg/week',active:true,startWeek:0}],
+   ancillaries:[_F_ANC_VIRIL],
+   safety:{viril_risk:'low',gyno_risk:'low',liver_risk:'low',
+     rationale:'Metenolone does not aromatize and is non-17-aa (minimal liver load); its low androgenic rating keeps virilization risk low at 50 mg/week. Slow ester means sides tail off gradually — stop early.'}},
+  {id:'fem_synergy',sex:'female',phase:'synergy',weeks:8,badge:'CYCLE 2',badgeColor:'var(--accent3)',
+   name:'Anavar + Primobolan — Synergy',
+   desc:'Second cycle, only after tolerating each compound alone. The two mildest anabolics at low doses for better partitioning — without escalating the dose of either.',
+   why:'Stacking the two lowest-virilization compounds beats raising the dose of one. Never introduce two new variables at once — run each solo first so you know where any side came from.',
+   tip:'Oxandrolone 10 mg/day + Primobolan 50 mg/week, 8 weeks max. If ANY virilization appears, drop the Anavar first (it clears faster than the Primo ester).',
+   compounds:[{name:'Oxandrolone (Anavar)',dose:10,unit:'mg/day',active:true,startWeek:0},{name:'Primobolan (Metenolone Enanthate)',dose:50,unit:'mg/week',active:true,startWeek:0}],
+   ancillaries:[_F_ANC_VIRIL,_F_ANC_LIVER],
+   safety:{viril_risk:'moderate',gyno_risk:'low',liver_risk:'moderate',
+     rationale:'Two mild compounds at low doses, but the cumulative androgen load raises virilization risk vs either alone — hence the stricter stop-protocol. The oral keeps liver and lipids in the monitoring picture.'}},
+  {id:'fem_custom',sex:'female',phase:'foundational',weeks:8,badge:'CUSTOM',badgeColor:'var(--muted2)',
+   name:'Custom Cycle',
+   desc:'Full control. Build your own low-virilization stack — start from the mildest compounds and lowest doses.',
+   why:'',tip:'',
+   compounds:[{name:'Oxandrolone (Anavar)',dose:5,unit:'mg/day',active:true,startWeek:0}],
+   ancillaries:[_F_ANC_VIRIL,_F_ANC_LIVER],
+   safety:{viril_risk:'moderate',gyno_risk:'low',liver_risk:'moderate',
+     rationale:'Custom stacks carry whatever risk you build in — keep to the female whitelist (Anavar, Primobolan), avoid testosterone, tren, 19-nors and DHT derivatives, and keep the stop-protocol ready.'}}
+];
+// Contraindication framing shown above the female template list. Backend note (?sex=female)
+// overrides this fallback when reachable.
+var _femaleCycleNote=getData('proto-female-cycle-note',null);
+var _FEMALE_CYCLE_NOTE_FALLBACK={title:'Female protocols are a different sport',
+  body:'For women the goal is results WITHOUT irreversible virilization, so the whole approach inverts the male playbook: the mildest compounds, a fraction of the dose, short cycles (6–8 weeks) with longer time off, one compound at a time, and immediate discontinuation at the first virilizing sign — voice and clitoral changes can be permanent.',
+  avoid:['Testosterone (any performance dose)','Trenbolone','Nandrolone / Deca / NPP (19-nors)','Dianabol','Anadrol','Higher-dose DHT derivatives (e.g. Masteron)'],
+  avoid_reason:'These are highly androgenic and/or progestogenic — in women they cause fast, often permanent virilization (voice deepening, clitoral enlargement, facial hair). AIs and hCG are male-cycle tools and are not part of a female protocol.'};
+function _userSexCyc(){var s=(typeof localStorage!=='undefined'&&localStorage.getItem('user_sex'))||'male';return (String(s).toLowerCase()==='female')?'female':'male';}
+// The wizard's display list depends on the user's sex; lookups by id search both sets.
+function _activeCycleTemplates(){return _userSexCyc()==='female'?CYCLE_TEMPLATES_FEMALE:CYCLE_TEMPLATES;}
+function _cycleTemplateById(id){return CYCLE_TEMPLATES.find(function(x){return x.id===id;})||CYCLE_TEMPLATES_FEMALE.find(function(x){return x.id===id;})||null;}
 var ENHANCEMENT_COMPOUNDS=[];
 // #639: enrich the (legacy, hardcoded) cycle templates with backend-served
 // ancillaries + safety metadata. In-memory only, re-fetched each session; falls
 // back silently to the plain templates if the backend is unreachable.
-async function syncCycleTemplatesFromAgent(){try{var r=await fetch(AGENT_URL+'/cycles/templates',{headers:authHeaders()});if(!r.ok){_logHttp('syncCycleTpls',r.status,'/cycles/templates');return;}var d=await r.json();var tpls=(d&&d.templates)||[];if(!tpls.length)return;tpls.forEach(function(bt){var ft=CYCLE_TEMPLATES.find(function(x){return x.id===bt.id;});if(ft){if(bt.ancillaries)ft.ancillaries=bt.ancillaries;if(bt.safety)ft.safety=bt.safety;if(bt.tier)ft.tier=bt.tier;}});var wiz=document.getElementById('cycle-wizard');if(wiz&&wiz.style.display!=='none'&&typeof cycleWizRender==='function')cycleWizRender();}catch(e){_logErr('syncCycleTpls',e);}}
+async function syncCycleTemplatesFromAgent(){try{var _sx=_userSexCyc();var r=await fetch(AGENT_URL+'/cycles/templates?sex='+_sx,{headers:authHeaders()});if(!r.ok){_logHttp('syncCycleTpls',r.status,'/cycles/templates');return;}var d=await r.json();var tpls=(d&&d.templates)||[];if(d&&d.note){_femaleCycleNote=d.note;setData('proto-female-cycle-note',_femaleCycleNote);}if(tpls.length){tpls.forEach(function(bt){var ft=_cycleTemplateById(bt.id);if(ft){if(bt.ancillaries)ft.ancillaries=bt.ancillaries;if(bt.safety)ft.safety=bt.safety;if(bt.tier)ft.tier=bt.tier;}});}var wiz=document.getElementById('cycle-wizard');if(wiz&&wiz.style.display!=='none'&&typeof cycleWizRender==='function')cycleWizRender();}catch(e){_logErr('syncCycleTpls',e);}}
 // #640: recommended lab-marker panels per checkpoint phase (marker keys only — not
 // proprietary compound data, safe to cache for offline).
-async function syncCycleBloodworkRecsFromAgent(){try{var r=await fetch(AGENT_URL+'/cycles/bloodwork-recommendations',{headers:authHeaders()});if(!r.ok){_logHttp('syncCycleBwRecs',r.status,'/cycles/bloodwork-recommendations');return;}var d=await r.json();if(d&&d.panels){_cycleBwPanels=d.panels;setData('proto-cycle-bw-panels',_cycleBwPanels);if(typeof renderCyclesTab==='function')renderCyclesTab();}}catch(e){_logErr('syncCycleBwRecs',e);}}
+async function syncCycleBloodworkRecsFromAgent(){try{var r=await fetch(AGENT_URL+'/cycles/bloodwork-recommendations?sex='+_userSexCyc(),{headers:authHeaders()});if(!r.ok){_logHttp('syncCycleBwRecs',r.status,'/cycles/bloodwork-recommendations');return;}var d=await r.json();if(d&&d.panels){_cycleBwPanels=d.panels;setData('proto-cycle-bw-panels',_cycleBwPanels);if(typeof renderCyclesTab==='function')renderCyclesTab();}}catch(e){_logErr('syncCycleBwRecs',e);}}
 async function syncEnhancedCompoundsFromAgent(){
   var ctrl=new AbortController();var tid=setTimeout(function(){ctrl.abort();},10000);
   try{var r=await fetch(AGENT_URL+'/compounds/enhanced',{headers:authHeaders(),signal:ctrl.signal});clearTimeout(tid);if(!r.ok){_logHttp('syncEnhanced',r.status,'/compounds/enhanced');return{ok:false,status:r.status};}var d=await r.json();ENHANCEMENT_COMPOUNDS=Array.isArray(d)?d:(d.compounds||[]);return{ok:true};}catch(e){clearTimeout(tid);_logErr('syncEnhanced',e);return{ok:false,status:null,msg:String(e&&e.message||e)};}
@@ -154,14 +211,28 @@ function cycleWizRender(){
 }
 // #639: gyno/liver-safety badges from the backend safety metadata (lead with safety).
 function _cycleSafetyRiskColor(r){return r==='low'?'var(--accent3)':r==='high'?'var(--danger)':'#ffb03c';}
-function _cycleSafetyBadges(t){var s=t&&t.safety;if(!s)return '';var b=function(lbl,risk){if(!risk)return '';var c=_cycleSafetyRiskColor(risk);return '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;background:'+c+'22;color:'+c+';border:1px solid '+c+'55;white-space:nowrap">'+lbl+': '+String(risk).toUpperCase()+'</span>';};var badges=b('Gyno',s.gyno_risk)+b('Liver',s.liver_risk);if(!badges)return '';return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px">'+badges+'</div>'+(s.rationale?'<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-bottom:8px">'+_cycEsc(s.rationale)+'</div>':'');}
+function _cycleSafetyBadges(t){var s=t&&t.safety;if(!s)return '';var b=function(lbl,risk){if(!risk)return '';var c=_cycleSafetyRiskColor(risk);return '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;background:'+c+'22;color:'+c+';border:1px solid '+c+'55;white-space:nowrap">'+lbl+': '+String(risk).toUpperCase()+'</span>';};var badges=b('Viril',s.viril_risk)+b('Gyno',s.gyno_risk)+b('Liver',s.liver_risk);if(!badges)return '';return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px">'+badges+'</div>'+(s.rationale?'<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-bottom:8px">'+_cycEsc(s.rationale)+'</div>':'');}
+// Female contraindication banner shown above the female template list.
+function _femaleCycleNoteHtml(){
+  if(_userSexCyc()!=='female')return '';
+  var n=_femaleCycleNote||_FEMALE_CYCLE_NOTE_FALLBACK;
+  if(!n)return '';
+  var avoid='';
+  if(n.avoid&&n.avoid.length){
+    var chips=n.avoid.map(function(a){return '<span style="font-size:10px;font-weight:600;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.4);color:var(--danger);border-radius:8px;padding:2px 7px;white-space:nowrap">'+_cycEsc(a)+'</span>';}).join('');
+    avoid='<div style="font-size:11px;font-weight:700;color:var(--danger);margin-top:8px;text-transform:uppercase;letter-spacing:0.5px">Do not use</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px">'+chips+'</div>';
+    if(n.avoid_reason)avoid+='<div style="font-size:10.5px;color:var(--muted2);line-height:1.45;margin-top:6px">'+_cycEsc(n.avoid_reason)+'</div>';
+  }
+  return '<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--danger);border-radius:10px;padding:12px 14px;margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--danger);margin-bottom:4px">'+_cycEsc(n.title||'Female protocol')+'</div><div style="font-size:11.5px;color:var(--muted2);line-height:1.55">'+_cycEsc(n.body||'')+'</div>'+avoid+'</div>';
+}
 // #639: structured "have on hand" ancillaries with a use trigger.
 function _cycleAncillariesHtml(t){var a=t&&t.ancillaries;if(!a||!a.length)return '';var rows=a.map(function(x){var onHand=x.have_on_hand?'<span style="font-size:9px;font-weight:700;color:var(--accent);background:rgba(232,255,60,0.12);border:1px solid rgba(232,255,60,0.35);border-radius:6px;padding:1px 6px;margin-left:6px;white-space:nowrap">HAVE ON HAND</span>':'';return '<div style="padding:6px 0;border-top:1px solid var(--border)"><div style="font-size:11px;font-weight:600;color:var(--text)">'+_cycEsc(x.name)+onHand+'</div>'+(x.trigger?'<div style="font-size:10.5px;color:var(--muted2);line-height:1.45;margin-top:2px">'+_cycEsc(x.trigger)+'</div>':'')+'</div>';}).join('');return '<div style="margin-top:8px;background:var(--surface2);border-radius:8px;padding:8px 10px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)">Support meds — have on hand</div>'+rows+'</div>';}
 function _cwizStep1(){
   var h='<div style="padding:20px">';
   h+='<div style="font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px">Step 1 of 3 — Choose Template</div>';
+  h+=_femaleCycleNoteHtml();
   h+=(typeof _bfReadinessCard==='function'?_bfReadinessCard('enhanced'):'');
-  CYCLE_TEMPLATES.forEach(function(t){
+  _activeCycleTemplates().forEach(function(t){
     var sel=_cwiz.tpl===t.id;
     h+='<div onclick="cycleWizSelectTpl(\''+t.id+'\')" style="cursor:pointer;background:var(--surface2);border:2px solid '+(sel?t.badgeColor:'var(--border)')+';border-radius:12px;padding:14px;margin-bottom:10px">';
     h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">';
@@ -182,7 +253,7 @@ function _cwizStep1(){
   return h;
 }
 function cycleWizSelectTpl(id){
-  var t=CYCLE_TEMPLATES.find(function(x){return x.id===id;});
+  var t=_cycleTemplateById(id);
   if(t){_cwiz.tpl=id;_cwiz.phase=t.phase;_cwiz.weeks=t.weeks;_cwiz.compounds=t.compounds.map(function(c){return Object.assign({},c);});}
   cycleWizRender();
 }
@@ -193,7 +264,7 @@ function cycleWizNext(){
 function cycleWizBack(){_cwiz.step=Math.max(1,_cwiz.step-1);cycleWizRender();}
 function _cwizInStyle(){return 'padding:9px 12px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:14px;width:100%;box-sizing:border-box;font-family:inherit';}
 function _cwizStep2(){
-  var t=CYCLE_TEMPLATES.find(function(x){return x.id===_cwiz.tpl;})||CYCLE_TEMPLATES[0];
+  var t=_cycleTemplateById(_cwiz.tpl)||_activeCycleTemplates()[0];
   var ins=_cwizInStyle();
   var h='<div style="padding:20px">';
   h+='<div style="font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px">Step 2 of 3 &#x2014; Configure</div>';
@@ -276,7 +347,7 @@ function _cwizGenBw(wks){
   return bw;
 }
 function _cwizStep3(){
-  var t=CYCLE_TEMPLATES.find(function(x){return x.id===_cwiz.tpl;})||{name:'Custom',badgeColor:'var(--muted2)',badge:'CUSTOM'};
+  var t=_cycleTemplateById(_cwiz.tpl)||{name:'Custom',badgeColor:'var(--muted2)',badge:'CUSTOM'};
   var bw=_cwizGenBw(_cwiz.weeks);
   var startD=(_cwiz.startDate?parseLocalDate(_cwiz.startDate):null)||NOW;
   var h='<div style="padding:20px">';
