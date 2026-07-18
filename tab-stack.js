@@ -1062,6 +1062,9 @@ function setStackViewTab(t){_stackViewTab=t;renderStackEditor();}
 function setEditInnerTab(t){_collectEditInputs();_editInnerTab=t;renderStackEditor();}
 function _buildEnhancementCycleSection(){
   var c=_cycle;
+  // #639: cycles are a TRT/Enhanced-tier feature. Hide for confirmed peptide-only
+  // users (fail-open — see _cyclesAllowed). An active cycle always still shows.
+  if(typeof _cyclesAllowed==='function'&&!_cyclesAllowed()&&!(c&&c.startDate))return '';
   var h='<div class="wiz-section" style="margin-top:24px;">Enhancement Cycle</div>';
   if(!c||!c.startDate){
     h+='<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:20px;text-align:center;margin-bottom:16px;">';

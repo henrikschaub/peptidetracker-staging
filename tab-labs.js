@@ -333,13 +333,15 @@ function _labRender() {
 
 var LAB_QUICK_KEYS = ['total_t', 'free_t', 'shbg', 'estradiol'];
 
-function _labOpenAddSheet(prefillDate) {
-  if (!_labMarkers) { syncLabMarkersFromAgent().then(function () { _labOpenAddSheet(prefillDate); }); return; }
+function _labOpenAddSheet(prefillDate, preselect) {
+  if (!_labMarkers) { syncLabMarkersFromAgent().then(function () { _labOpenAddSheet(prefillDate, preselect); }); return; }
   var today = new Date().toISOString().slice(0, 10);
   // Optional pre-filled date (e.g. opened from a cycle bloodwork checkpoint); never future.
   var d0 = (typeof prefillDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(prefillDate) && prefillDate <= today) ? prefillDate : today;
   _labAdd = { date: d0, dose: '', values: {} };
-  _labMoreOpen = false;
+  // When opened from a cycle checkpoint (#640) with a recommended panel, reveal the
+  // full marker list so every recommended marker (incl. advanced ones) is enterable.
+  _labMoreOpen = !!(preselect && preselect.length);
   var ol = document.createElement('div');
   ol.id = 'lab-add-overlay';
   ol.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
