@@ -256,6 +256,19 @@ Examples of things that must be dynamic, not hardcoded:
 
 The `IS_STAGING` constant is already declared at the top of the `<script>` block, right after `const VERSION`.
 
+## ⚠️ SI UNITS ONLY — NEVER SURFACE "mcg" ⚠️
+The US "mcg" is **never** to be shown to the user or stored as a canonical unit —
+the correct SI symbol is **`µg`** (micro sign U+00B5 + g). This is settled and permanent.
+- Canonical unit value is `µg`; the unit dropdown (`UNITS` in tab-stack.js) and every
+  peptide catalogue default use `µg`, never `mcg`.
+- `_canonUnit(u)` (index.html) maps any legacy `'mcg'` data → `'µg'` on read; use it at
+  every point a stored unit is compared or displayed so old data renders as `µg`.
+- Comparisons may still *accept* legacy `'mcg'` as input (back-compat), but code must
+  never *emit* `mcg` into rendered HTML, dose labels, dropdowns, or exports.
+- Same rule for any future unit: use the SI symbol, not a US medical abbreviation.
+- `%` is a valid unit for topical/transdermal products (creams/gels) — concentration,
+  e.g. a 1% testosterone cream.
+
 ## App structure
 - Single-file app: `index.html` (JS, CSS, HTML all inline)
 - `version.json` — current version, read by the update-checker in the app
