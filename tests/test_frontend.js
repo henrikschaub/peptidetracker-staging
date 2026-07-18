@@ -5108,8 +5108,32 @@ if (typeof G._cycleBwMatch === 'function') {
   check('checkpoint done derived from unified store',       cyc.includes('_cycleBwMatch(d)') && cyc.includes('var _done=bw.done||!!_uni'));
   check('checkpoint no longer opens the separate inline form', !/onclick="cycleBwToggle\(/.test(cyc));
   const labs = fs.readFileSync(path.join(__dirname, '../tab-labs.js'), 'utf8');
-  check('Labs add-sheet accepts a prefill date',   labs.includes('function _labOpenAddSheet(prefillDate)'));
+  check('Labs add-sheet accepts a prefill date + preselect panel',   labs.includes('function _labOpenAddSheet(prefillDate, preselect)'));
+  check('Labs add-sheet reveals full panel when opened with a recommended set', labs.includes('_labMoreOpen = !!(preselect && preselect.length)'));
   check('Labs save refreshes the cycle view',      labs.includes('renderCyclesTab()'));
+}
+
+// ── Cycle protocol batch: pre-cycle labeling, panels, ancillaries, tier (#638-640) ──
+console.log('\n── Cycle protocol enrichment ──────────────────────────────');
+{
+  const cyc = fs.readFileSync(path.join(__dirname, '../tab-cycles.js'), 'utf8');
+  const stk = fs.readFileSync(path.join(__dirname, '../tab-stack.js'), 'utf8');
+  // #638: pre-cycle labeling
+  check('checkpoint week label: baseline reads "Pre-cycle", not "Week 0"',
+    /_cycleBwWeekLabel\(bw\)/.test(cyc) && cyc.includes("bw.phase==='pre'||bw.week===0") && cyc.includes("'Pre-cycle'"));
+  check('checkpoint no longer hardcodes "Week "+bw.week in the render', !cyc.includes("'Week '+bw.week+' — '"));
+  // #640: recommended panels
+  check('checkpoint renders recommended marker chips', cyc.includes('_cycleBwMarkersHtml(bw)') && cyc.includes('recommended_markers'));
+  check('checkpoint markers fall back to fetched phase panels', cyc.includes('_cycleBwPanels') && cyc.includes("getData('proto-cycle-bw-panels'"));
+  check('log checkpoint passes recommended markers to Labs', cyc.includes('_labOpenAddSheet(dstr,_markers)'));
+  check('bloodwork-recommendations fetched from backend', cyc.includes("'/cycles/bloodwork-recommendations'"));
+  // #639: templates enrichment + safety + ancillaries + tier gate
+  check('cycle templates enriched from backend', cyc.includes("'/cycles/templates'") && cyc.includes('function syncCycleTemplatesFromAgent'));
+  check('safety badges render gyno/liver risk', cyc.includes('function _cycleSafetyBadges') && cyc.includes('gyno_risk') && cyc.includes('liver_risk'));
+  check('ancillaries render as "have on hand"', cyc.includes('function _cycleAncillariesHtml') && cyc.includes('HAVE ON HAND'));
+  check('wizard step 1 shows safety + ancillaries', cyc.includes('_cycleSafetyBadges(t)') && cyc.includes('_cycleAncillariesHtml(t)'));
+  check('cycles feature gated to TRT/Enhanced (fail-open)',
+    stk.includes('_cyclesAllowed()') && /function _cyclesAllowed\(\)\{if\(!_featuresLoaded\)return true/.test(rawScript));
 }
 
 // ── Phase 5: analysis polish (safety summary, sparklines, tier) ───────────────

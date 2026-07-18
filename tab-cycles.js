@@ -32,7 +32,17 @@ function cycleRenderStatus(c){
 }
 function cycleRenderCompounds(c){var b=document.getElementById('cycle-compounds-body');if(!b)return;if(!c||!c.compounds||!c.compounds.length){b.innerHTML='<div class="empty">No active cycle</div>';return;}var h='';c.compounds.forEach(function(x){h+='<div class="info-row"><span class="info-label">'+_cycEsc(x.name)+'</span><span class="info-val" style="color:'+(x.active?'var(--accent)':'var(--muted2)')+'">'+x.dose+' '+_cycEsc(x.unit)+'</span></div>';});b.innerHTML=h;}
 function _cycleBwDesc(t){return t==='baseline'?'Pre-cycle bloodwork — establish baseline':t==='response'?'Assess test response & aromatization':t==='midcycle'?'Full panel — adjust if needed':t==='eoc'?'Final check before offramp':'';}
-function cycleRenderBloodwork(c){var b=document.getElementById('cycle-bloodwork-body');if(!b)return;if(!c||!c.bloodwork||!c.bloodwork.length){b.innerHTML='<div class="empty">No cycle started</div>';return;}var start=parseLocalDate(c.startDate),n=c.bloodwork.length,h='';c.bloodwork.forEach(function(bw,i){var d=new Date(start);d.setDate(d.getDate()+bw.week*7);var _uni=_cycleBwMatch(d);var _done=bw.done||!!_uni;var past=d<NOW,today=d.toDateString()===NOW.toDateString(),last=i===n-1;var dotCls=_done?'past':today?'today-dot':past?'past':'future';var nameCol=_done?'var(--muted2)':today?'var(--accent)':'var(--text)';h+='<div class="milestone"><div class="milestone-line"><div class="milestone-dot '+dotCls+'"></div>'+(!last?'<div class="milestone-connector"></div>':'')+'</div><div class="milestone-body"><div class="milestone-date">Week '+bw.week+' — '+fmtDate(d)+(today?' · TODAY':'')+(_done?' · DONE ✓':'')+'</div><div class="milestone-name" style="color:'+nameCol+'">'+_cycEsc(bw.label)+'</div><div class="milestone-desc">'+_cycleBwDesc(bw.type)+'</div>'+(_done?'':'<button onclick="_cycleLogCheckpoint('+bw.week+')" style="margin-top:8px;background:var(--surface2);color:var(--muted2);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Log result</button>')+'</div></div>';});b.innerHTML=h;}
+// #638: a checkpoint's week label. The pre-cycle baseline (phase 'pre' or the
+// legacy offset week 0) reads "Pre-cycle", never "Week 0". Real checkpoints keep
+// their week number.
+function _cycleBwWeekLabel(bw){return (bw&&(bw.phase==='pre'||bw.week===0))?'Pre-cycle':'Week '+bw.week;}
+// #640: recommended lab-marker panel for a checkpoint — prefer the backend-attached
+// list, fall back to the fetched phase→panel map by checkpoint type. Pretty labels.
+var _cycleBwPanels=getData('proto-cycle-bw-panels',null); // {baseline:[...],response:[...],...}
+var _BW_MARKER_LABEL={total_t:'Total T',free_t:'Free T',estradiol:'E2',shbg:'SHBG',lh:'LH',fsh:'FSH',hematocrit:'HCT',hemoglobin:'Hgb',ldl:'LDL',hdl:'HDL',alt:'ALT',ast:'AST',psa:'PSA',prolactin:'Prolactin',igf1:'IGF-1'};
+function _cycleBwMarkers(bw){var m=(bw&&bw.recommended_markers&&bw.recommended_markers.length)?bw.recommended_markers:((_cycleBwPanels&&_cycleBwPanels[bw&&bw.type])||[]);return m||[];}
+function _cycleBwMarkersHtml(bw){var m=_cycleBwMarkers(bw);if(!m.length)return '';var chips=m.map(function(k){return '<span style="font-size:9px;font-weight:600;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1px 6px;color:var(--muted2);white-space:nowrap">'+(_BW_MARKER_LABEL[k]||k)+'</span>';}).join('');return '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">'+chips+'</div>';}
+function cycleRenderBloodwork(c){var b=document.getElementById('cycle-bloodwork-body');if(!b)return;if(!c||!c.bloodwork||!c.bloodwork.length){b.innerHTML='<div class="empty">No cycle started</div>';return;}var start=parseLocalDate(c.startDate),n=c.bloodwork.length,h='';c.bloodwork.forEach(function(bw,i){var d=new Date(start);d.setDate(d.getDate()+bw.week*7);var _uni=_cycleBwMatch(d);var _done=bw.done||!!_uni;var past=d<NOW,today=d.toDateString()===NOW.toDateString(),last=i===n-1;var dotCls=_done?'past':today?'today-dot':past?'past':'future';var nameCol=_done?'var(--muted2)':today?'var(--accent)':'var(--text)';h+='<div class="milestone"><div class="milestone-line"><div class="milestone-dot '+dotCls+'"></div>'+(!last?'<div class="milestone-connector"></div>':'')+'</div><div class="milestone-body"><div class="milestone-date">'+_cycleBwWeekLabel(bw)+' — '+fmtDate(d)+(today?' · TODAY':'')+(_done?' · DONE ✓':'')+'</div><div class="milestone-name" style="color:'+nameCol+'">'+_cycEsc(bw.label)+'</div><div class="milestone-desc">'+_cycleBwDesc(bw.type)+'</div>'+_cycleBwMarkersHtml(bw)+(_done?'':'<button onclick="_cycleLogCheckpoint('+bw.week+')" style="margin-top:8px;background:var(--surface2);color:var(--muted2);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Log result</button>')+'</div></div>';});b.innerHTML=h;}
 // Phase 4: cycle bloodwork lives in the unified /bloodwork store. A checkpoint is
 // "done" when a unified bloodwork entry sits within ±14 days of its target date,
 // and logging opens the shared Labs add-sheet pre-filled with that date.
@@ -53,7 +63,10 @@ function _cycleLogCheckpoint(week){
   try{
     if(c&&c.startDate){var s=parseLocalDate(c.startDate);var d=new Date(s);d.setDate(d.getDate()+week*7);var t=new Date();if(d>t)d=t;if(typeof dateKey==='function')dstr=dateKey(d);}
   }catch(_e){}
-  if(typeof _labOpenAddSheet==='function'){_labOpenAddSheet(dstr);}
+  // #640: pass this checkpoint's recommended markers so the Labs add-sheet reveals
+  // the full panel (rather than only the common markers) for entry.
+  var _markers=[];try{if(c&&c.bloodwork){var _bw=c.bloodwork.find(function(x){return x.week===week;});if(_bw)_markers=_cycleBwMarkers(_bw);}}catch(_e2){}
+  if(typeof _labOpenAddSheet==='function'){_labOpenAddSheet(dstr,_markers);}
   else if(typeof switchTab==='function'){switchTab('labs',document.getElementById('tab-btn-labs'));}
 }
 function cycleRenderBiofeedback(c){var box=document.getElementById('today-bf-list');if(!box)return;if(!c||!c.id){box.innerHTML='<div class="empty">Start a cycle to log biofeedback</div>';cycleUpdateBFBadge();return;}var inStyle='padding:8px;border-radius:6px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:13px;width:100%;box-sizing:border-box';var h='<div id="cycle-bf-form" style="padding:16px;display:grid;gap:14px">';CYCLE_BF_FIELDS.forEach(function(f){h+='<div style="display:grid;gap:4px"><label style="font-size:12px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:0.5px">'+f.label+'</label>';if(f.detail)h+='<div style="font-size:11px;color:var(--muted2)">'+f.detail+'</div>';if(f.kind==='select'){h+='<select id="cycle-bf-'+f.id+'" onchange="cycleUpdateBFBadge()" style="'+inStyle+'">';f.options.forEach(function(o){h+='<option value="'+o[0]+'">'+o[1]+'</option>';});h+='</select>';}else if(f.kind==='text'){h+='<textarea id="cycle-bf-'+f.id+'" placeholder="'+f.ph+'" style="'+inStyle+';resize:vertical;min-height:60px"></textarea>';}else{h+='<input id="cycle-bf-'+f.id+'" type="text" inputmode="decimal" placeholder="'+f.ph+'" oninput="cycleUpdateBFBadge()" style="'+inStyle+'">';}h+='</div>';});h+='<div style="display:flex;gap:8px;margin-top:4px"><button id="cycle-bf-save" onclick="cycleSubmitBiofeedback()" style="flex:1;background:var(--accent);color:#000;border:none;border-radius:6px;padding:10px;font-weight:600;cursor:pointer;font-family:inherit;font-size:13px">Save Today\'s Data</button><button onclick="cycleClearBiofeedback()" style="background:var(--surface2);color:var(--muted2);border:1px solid var(--border);border-radius:6px;padding:10px 16px;cursor:pointer;font-family:inherit;font-size:13px">Clear</button></div></div>';box.innerHTML=h;cycleLoadBiofeedbackForToday(c);cycleUpdateBFBadge();}
@@ -100,6 +113,13 @@ var CYCLE_TEMPLATES=[
    compounds:[{name:'Testosterone Enanthate',dose:500,unit:'mg/week',active:true,startWeek:0}]}
 ];
 var ENHANCEMENT_COMPOUNDS=[];
+// #639: enrich the (legacy, hardcoded) cycle templates with backend-served
+// ancillaries + safety metadata. In-memory only, re-fetched each session; falls
+// back silently to the plain templates if the backend is unreachable.
+async function syncCycleTemplatesFromAgent(){try{var r=await fetch(AGENT_URL+'/cycles/templates',{headers:authHeaders()});if(!r.ok){_logHttp('syncCycleTpls',r.status,'/cycles/templates');return;}var d=await r.json();var tpls=(d&&d.templates)||[];if(!tpls.length)return;tpls.forEach(function(bt){var ft=CYCLE_TEMPLATES.find(function(x){return x.id===bt.id;});if(ft){if(bt.ancillaries)ft.ancillaries=bt.ancillaries;if(bt.safety)ft.safety=bt.safety;if(bt.tier)ft.tier=bt.tier;}});var wiz=document.getElementById('cycle-wizard');if(wiz&&wiz.style.display!=='none'&&typeof cycleWizRender==='function')cycleWizRender();}catch(e){_logErr('syncCycleTpls',e);}}
+// #640: recommended lab-marker panels per checkpoint phase (marker keys only — not
+// proprietary compound data, safe to cache for offline).
+async function syncCycleBloodworkRecsFromAgent(){try{var r=await fetch(AGENT_URL+'/cycles/bloodwork-recommendations',{headers:authHeaders()});if(!r.ok){_logHttp('syncCycleBwRecs',r.status,'/cycles/bloodwork-recommendations');return;}var d=await r.json();if(d&&d.panels){_cycleBwPanels=d.panels;setData('proto-cycle-bw-panels',_cycleBwPanels);if(typeof renderCyclesTab==='function')renderCyclesTab();}}catch(e){_logErr('syncCycleBwRecs',e);}}
 async function syncEnhancedCompoundsFromAgent(){
   var ctrl=new AbortController();var tid=setTimeout(function(){ctrl.abort();},10000);
   try{var r=await fetch(AGENT_URL+'/compounds/enhanced',{headers:authHeaders(),signal:ctrl.signal});clearTimeout(tid);if(!r.ok){_logHttp('syncEnhanced',r.status,'/compounds/enhanced');return{ok:false,status:r.status};}var d=await r.json();ENHANCEMENT_COMPOUNDS=Array.isArray(d)?d:(d.compounds||[]);return{ok:true};}catch(e){clearTimeout(tid);_logErr('syncEnhanced',e);return{ok:false,status:null,msg:String(e&&e.message||e)};}
@@ -132,6 +152,11 @@ function cycleWizRender(){
   else h+=_cwizStep3();
   inner.innerHTML=h;
 }
+// #639: gyno/liver-safety badges from the backend safety metadata (lead with safety).
+function _cycleSafetyRiskColor(r){return r==='low'?'var(--accent3)':r==='high'?'var(--danger)':'#ffb03c';}
+function _cycleSafetyBadges(t){var s=t&&t.safety;if(!s)return '';var b=function(lbl,risk){if(!risk)return '';var c=_cycleSafetyRiskColor(risk);return '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;background:'+c+'22;color:'+c+';border:1px solid '+c+'55;white-space:nowrap">'+lbl+': '+String(risk).toUpperCase()+'</span>';};var badges=b('Gyno',s.gyno_risk)+b('Liver',s.liver_risk);if(!badges)return '';return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px">'+badges+'</div>'+(s.rationale?'<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-bottom:8px">'+_cycEsc(s.rationale)+'</div>':'');}
+// #639: structured "have on hand" ancillaries with a use trigger.
+function _cycleAncillariesHtml(t){var a=t&&t.ancillaries;if(!a||!a.length)return '';var rows=a.map(function(x){var onHand=x.have_on_hand?'<span style="font-size:9px;font-weight:700;color:var(--accent);background:rgba(232,255,60,0.12);border:1px solid rgba(232,255,60,0.35);border-radius:6px;padding:1px 6px;margin-left:6px;white-space:nowrap">HAVE ON HAND</span>':'';return '<div style="padding:6px 0;border-top:1px solid var(--border)"><div style="font-size:11px;font-weight:600;color:var(--text)">'+_cycEsc(x.name)+onHand+'</div>'+(x.trigger?'<div style="font-size:10.5px;color:var(--muted2);line-height:1.45;margin-top:2px">'+_cycEsc(x.trigger)+'</div>':'')+'</div>';}).join('');return '<div style="margin-top:8px;background:var(--surface2);border-radius:8px;padding:8px 10px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)">Support meds — have on hand</div>'+rows+'</div>';}
 function _cwizStep1(){
   var h='<div style="padding:20px">';
   h+='<div style="font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px">Step 1 of 3 — Choose Template</div>';
@@ -143,7 +168,9 @@ function _cwizStep1(){
     h+='<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:'+t.badgeColor+'22;color:'+t.badgeColor+';border:1px solid '+t.badgeColor+'44;white-space:nowrap;flex-shrink:0">'+t.badge+'</span>';
     h+='</div>';
     h+='<div style="font-size:12px;color:var(--muted2);line-height:1.6;margin-bottom:8px">'+t.desc+'</div>';
+    h+=_cycleSafetyBadges(t);
     if(t.why)h+='<div style="font-size:11px;color:var(--accent3);padding:7px 10px;background:rgba(60,255,160,0.07);border-radius:6px;border-left:2px solid var(--accent3);line-height:1.5">'+t.why+'</div>';
+    h+=_cycleAncillariesHtml(t);
     h+='</div>';
   });
   h+='<div style="display:flex;gap:8px;margin-top:16px">';
