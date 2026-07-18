@@ -233,7 +233,7 @@ function _tcSuppDailyDose(inter, kind, obj) {
               (times.indexOf('PM') >= 0 ? (parseDec(obj.dose_pm) || 0) : 0);
     var dpw = (obj.days || [0, 1, 2, 3, 4, 5, 6]).length;
     nativeDaily = per * dpw / 7;
-    nativeUnit = obj.unit_am || obj.unit_pm || 'mcg';
+    nativeUnit = obj.unit_am || obj.unit_pm || 'µg';
   } else if (kind === 'compound') {
     var raw = parseDec(obj.dose) || 0;
     var parts = String(obj.unit || 'mg/week').split('/');

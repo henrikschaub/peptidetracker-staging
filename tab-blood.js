@@ -300,7 +300,7 @@ function _blBuildLines(){
       var injDays = _pkInjectionDays(p, cycleLen, startDow);
       if(!injDays.length) return;
       lines.push({ id:'pep_'+si+'_'+p.id, pkId:p.id, name:p.name||p.id, color:(cat&&cat.dot)||p.dot||'#3cffa0',
-        kind:'peptide', unit:(p.unit_am||p.unit_pm||'mcg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
+        kind:'peptide', unit:(p.unit_am||p.unit_pm||'µg'), startDate:startDate, cycleLen:cycleLen, sub:stackLabel,
         lastInjDay:injDays[injDays.length-1], tmaxPad:_blTmax(hl), curve:_pkCurveFineAbs(injDays, dose, hl, cycleLen) });
     });
 
