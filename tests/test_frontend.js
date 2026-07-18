@@ -2262,6 +2262,19 @@ console.log('\n── Edit Enhanced tab — stack editor regression ────
     G.wizStepGoals(gBody,gFoot);
     check('wizStepGoals T3: shows Enhanced Cycle toggle', gBody.innerHTML.includes('Enhanced Cycle'));
 
+    // #637: AM/PM split is user-toggleable on any enhanced compound
+    check('editSetEnhAmPm defined', typeof G.editSetEnhAmPm==='function');
+    G.editSetEnhAmPm(testId2,true);
+    check('editSetEnhAmPm: sets amPm=true', G._editBuf.enhanced.compounds[0].amPm===true);
+    G.editSetEnhAmPm(testId2,false);
+    check('editSetEnhAmPm: sets amPm=false', G._editBuf.enhanced.compounds[0].amPm===false);
+    // Edit view surfaces the Split AM / PM toggle row and honours the per-compound flag
+    var enhEditOn=G._renderEditEnhanced({enabled:true,compounds:[{id:testId2,name:'Test',dose_am:'2',dose_pm:'1',unit:'IU/day',days:[1],amPm:true}]});
+    check('_renderEditEnhanced: shows Split AM / PM toggle', enhEditOn.includes('Split AM / PM'));
+    check('_renderEditEnhanced amPm on: shows AM Dose + PM Dose rows', enhEditOn.includes('AM Dose')&&enhEditOn.includes('PM Dose'));
+    var enhEditOff=G._renderEditEnhanced({enabled:true,compounds:[{id:testId2,name:'Test',dose:'250',unit:'mg/week',days:[1],amPm:false}]});
+    check('_renderEditEnhanced amPm off: single Dose row, no AM Dose', enhEditOff.includes('Split AM / PM')&&!enhEditOff.includes('AM Dose'));
+
     G.editToggleEnhancedCompound(testId2);
     check('editToggleEnhancedCompound: removes compound on second call', G._editBuf.enhanced.compounds.length===0);
     check('editToggleEnhancedCompound: enabled=false when empty', G._editBuf.enhanced.enabled===false);
@@ -2571,6 +2584,14 @@ console.log('\n── View & Edit tab render functions ────────�
     check('_renderEditTRT enabled: shows compound name', etH2.includes(tCat0.name));
     check('_renderEditTRT enabled: shows Dose row', etH2.includes('Dose'));
     check('_renderEditTRT enabled: shows Days row (non-Nebido compound)', etH2.includes('Days'));
+    // #637: TRT compounds expose an AM/PM Time selector (parity with peptides/enhanced)
+    check('_renderEditTRT enabled: shows Time row', etH2.includes('>Time<'));
+    check('_renderEditTRT enabled: shows AM/PM time chips', etH2.includes('editSetTRTTime'));
+    check('editSetTRTTime defined', typeof G.editSetTRTTime==='function');
+    G.editSetTRTTime(tCat0.id,'PM');
+    check('editSetTRTTime: sets time=PM', G._editBuf.trt.compounds[0].time==='PM');
+    G.editSetTRTTime(tCat0.id,'AM');
+    check('editSetTRTTime: sets time=AM', G._editBuf.trt.compounds[0].time==='AM');
   }
 
   // _renderEditPep: renders peptide config card
@@ -2610,6 +2631,15 @@ console.log('\n── Source-code structural assertions ────────
   // wizStepGoals must show Enhanced Cycle toggle for T3 (restored 2026-06-25)
   check('source: wizStepGoals shows Enhanced Cycle for T3',
     (function(){var fn=tsJs.match(/function wizStepGoals\([\s\S]{0,3000}/);return fn&&fn[0].includes('Enhanced Cycle');})());
+
+  // #637: TRT injection entries must carry a real AM/PM time_of_day, never hardcoded null
+  check('source: TRT injection builder sets time_of_day from c.time (not null)',
+    tsJs.includes("time_of_day:(c.time==='PM'?'PM':'AM')"));
+  check('source: no TRT injection entry hardcodes time_of_day:null',
+    !(function(){var m=tsJs.match(/tier:'trt'[\s\S]{0,120}time_of_day:null/);return!!m;})());
+  // Enhanced injection builder honours the per-compound amPm flag (user-toggleable)
+  check('source: enhanced injection builder reads c.amPm',
+    tsJs.includes('var isAmPm=c.amPm||(eCat&&eCat.amPm)'));
 
   // All required render functions must be defined in tab-stack.js
   check('source: function _renderEnhancedViewTab( defined', tsJs.includes('function _renderEnhancedViewTab('));
