@@ -121,6 +121,8 @@ var _F_ANC_VIRIL={name:'Virilization stop-protocol',kind:'monitor',have_on_hand:
   trigger:'STOP at the first sign — voice roughness or deepening, clitoral enlargement or sensitivity, new coarse facial or body hair, sudden acne, or a menstrual change. Voice and clitoral changes can be PERMANENT — never push through them.'};
 var _F_ANC_LIVER={name:'Liver support (TUDCA) + LFT/lipid checks',kind:'hepatic',have_on_hand:true,
   trigger:'For 17-aa orals (oxandrolone): keep TUDCA on hand and check ALT/AST at baseline and mid-cycle. Oral AAS also drop HDL — recheck a lipid panel.'};
+var _F_ANC_HRT={name:'Total-T monitoring (physiologic ceiling)',kind:'monitor',have_on_hand:true,
+  trigger:'Keep total testosterone within the healthy young-female range — the target is replacement, not elevation. Recheck total T ~6–8 weeks in; if it climbs above range or any virilization appears, lower the dose.'};
 var CYCLE_TEMPLATES_FEMALE=[
   {id:'fem_first',sex:'female',phase:'foundational',weeks:6,badge:'CYCLE 1',badgeColor:'var(--accent)',
    name:'Anavar Only — Foundational',
@@ -149,6 +151,15 @@ var CYCLE_TEMPLATES_FEMALE=[
    ancillaries:[_F_ANC_VIRIL,_F_ANC_LIVER],
    safety:{viril_risk:'moderate',gyno_risk:'low',liver_risk:'moderate',
      rationale:'Two mild compounds at low doses, but the cumulative androgen load raises virilization risk vs either alone — hence the stricter stop-protocol. The oral keeps liver and lipids in the monitoring picture.'}},
+  {id:'fem_test_hrt',sex:'female',kind:'hrt',phase:'sustainability',weeks:12,badge:'HRT',badgeColor:'#5ac8fa',
+   name:'Low-dose Testosterone — HRT (libido / wellbeing)',
+   desc:'Physiologic testosterone REPLACEMENT — not a performance cycle. Low-dose transdermal testosterone to restore a normal young-female level for low libido (HSDD). Continuous and dosed to bloodwork — there is no bulking dose and no coming off.',
+   why:'The 2019 Global Consensus (endorsed by the Endocrine Society, IMS, NAMS and others) supports testosterone for post-menopausal women with HSDD at roughly 1/10th of a male dose, keeping blood levels within the healthy young-female range. Above that range is where virilization begins.',
+   tip:'Transdermal cream ~5 mg/day (about 1/10th of a male gel dose). Prefer transdermal over injectable esters — injections spike to supraphysiologic peaks that virilize. Recheck total T at ~6–8 weeks and keep it in range. Evidence is strongest post-menopause; data in pre-menopausal women is insufficient.',
+   compounds:[{name:'Testosterone (transdermal cream)',dose:5,unit:'mg/day',active:true,startWeek:0}],
+   ancillaries:[_F_ANC_HRT,_F_ANC_VIRIL],
+   safety:{viril_risk:'low',gyno_risk:'low',liver_risk:'low',
+     rationale:'At a physiologic replacement dose (blood level kept in the young-female range) virilization risk is low; it rises only if dosed above range or via peaky injectables. Transdermal and non-oral — no liver load. This is replacement therapy, not a growth cycle.'}},
   {id:'fem_custom',sex:'female',phase:'foundational',weeks:8,badge:'CUSTOM',badgeColor:'var(--muted2)',
    name:'Custom Cycle',
    desc:'Full control. Build your own low-virilization stack — start from the mildest compounds and lowest doses.',
