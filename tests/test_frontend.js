@@ -5862,7 +5862,7 @@ console.log('\n── Female Tier-3 cycle protocols ─────────�
     if(hrt){
       var hc=hrt.compounds[0];
       check('HRT testosterone is transdermal (not injectable)', /transdermal/i.test(hc.name));
-      check('HRT dose is physiologic (≤10 mg/day)', hc.unit==='mg/day'&&hc.dose<=10);
+      check('HRT is a low-dose topical (% cream or ≤10 mg/day)', (hc.unit==='%'&&hc.dose<=2)||(hc.unit==='mg/day'&&hc.dose<=10));
       check('HRT framed as replacement, not a cycle', /replacement/i.test(hrt.desc));
     }
     // Performance female cycles (non-HRT) stay short (≤8 weeks)
@@ -5895,6 +5895,39 @@ console.log('\n── Female Tier-3 cycle protocols ─────────�
   // Viril badge renders in the safety badges
   if(typeof G._cycleSafetyBadges==='function'){
     check('_cycleSafetyBadges renders a Viril badge', /Viril/.test(G._cycleSafetyBadges({safety:{viril_risk:'low'}})));
+  }
+}
+
+// ── SI units: µg not mcg + % for topical products ───────────────────────────
+console.log('\n── SI units (µg not mcg) + % topical unit ──────────────────');
+{
+  const G=sandbox;
+  check('_canonUnit defined', typeof G._canonUnit==='function');
+  if(typeof G._canonUnit==='function'){
+    check('_canonUnit maps legacy mcg → µg', G._canonUnit('mcg')==='µg');
+    check('_canonUnit leaves µg as µg', G._canonUnit('µg')==='µg');
+    check('_canonUnit leaves mg/IU/ml/% untouched', G._canonUnit('mg')==='mg'&&G._canonUnit('%')==='%'&&G._canonUnit('IU')==='IU');
+  }
+  // Unit dropdown list: µg + % present, raw mcg gone
+  check('UNITS uses µg (SI), not mcg', Array.isArray(G.UNITS)&&G.UNITS.indexOf('µg')>=0&&G.UNITS.indexOf('mcg')<0);
+  check('UNITS offers % for topical products', Array.isArray(G.UNITS)&&G.UNITS.indexOf('%')>=0);
+  // Peptide catalogue defaults never store the US "mcg" token
+  if(Array.isArray(G.PEPTIDE_CAT)){
+    var catMcg=G.PEPTIDE_CAT.some(function(p){var d=p&&p.dflt;return d&&(d.unitAm==='mcg'||d.unitPm==='mcg');});
+    check('no PEPTIDE_CAT default uses mcg', !catMcg);
+    var catUg=G.PEPTIDE_CAT.some(function(p){var d=p&&p.dflt;return d&&(d.unitAm==='µg'||d.unitPm==='µg');});
+    check('peptide catalogue uses µg defaults', catUg);
+  }
+  // Legacy mcg data still renders — but as µg, never mcg
+  if(typeof G._doseLabel==='function'){
+    var lbl=G._doseLabel('cjc-ipa','100','mcg');
+    check('_doseLabel renders legacy mcg as µg', /µg/.test(lbl)&&!/mcg/.test(lbl), lbl);
+    check('_doseLabel passes % through', /%/.test(G._doseLabel('someid','1','%')));
+  }
+  // Female HRT cream is expressed as a % topical
+  if(Array.isArray(G.CYCLE_TEMPLATES_FEMALE)){
+    var hrt=G.CYCLE_TEMPLATES_FEMALE.find(function(t){return t.kind==='hrt';});
+    check('HRT cream expressed as % topical', !!hrt&&hrt.compounds[0].unit==='%');
   }
 }
 

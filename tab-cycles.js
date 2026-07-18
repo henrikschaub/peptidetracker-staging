@@ -155,8 +155,8 @@ var CYCLE_TEMPLATES_FEMALE=[
    name:'Low-dose Testosterone — HRT (libido / wellbeing)',
    desc:'Physiologic testosterone REPLACEMENT — not a performance cycle. Low-dose transdermal testosterone to restore a normal young-female level for low libido (HSDD). Continuous and dosed to bloodwork — there is no bulking dose and no coming off.',
    why:'The 2019 Global Consensus (endorsed by the Endocrine Society, IMS, NAMS and others) supports testosterone for post-menopausal women with HSDD at roughly 1/10th of a male dose, keeping blood levels within the healthy young-female range. Above that range is where virilization begins.',
-   tip:'Transdermal cream ~5 mg/day (about 1/10th of a male gel dose). Prefer transdermal over injectable esters — injections spike to supraphysiologic peaks that virilize. Recheck total T at ~6–8 weeks and keep it in range. Evidence is strongest post-menopause; data in pre-menopausal women is insufficient.',
-   compounds:[{name:'Testosterone (transdermal cream)',dose:5,unit:'mg/day',active:true,startWeek:0}],
+   tip:'1% transdermal cream, apply ~0.5 mL/day (≈5 mg testosterone, about 1/10th of a male gel dose). Prefer transdermal over injectable esters — injections spike to supraphysiologic peaks that virilize. Recheck total T at ~6–8 weeks and keep it in range. Evidence is strongest post-menopause; data in pre-menopausal women is insufficient.',
+   compounds:[{name:'Testosterone (transdermal cream)',dose:1,unit:'%',active:true,startWeek:0}],
    ancillaries:[_F_ANC_HRT,_F_ANC_VIRIL],
    safety:{viril_risk:'low',gyno_risk:'low',liver_risk:'low',
      rationale:'At a physiologic replacement dose (blood level kept in the young-female range) virilization risk is low; it rises only if dosed above range or via peaky injectables. Transdermal and non-oral — no liver load. This is replacement therapy, not a growth cycle.'}},
@@ -307,7 +307,8 @@ function _cwizStep2(){
     h+='</select>';
     h+='<input id="cwiz-cd-'+i+'" type="text" inputmode="decimal" value="'+c.dose+'" oninput="_cwiz.compounds['+i+'].dose=parseDec(this.value)||0" style="flex:1;min-width:70px;'+ins+'">';
     h+='<select id="cwiz-cu-'+i+'" onchange="_cwiz.compounds['+i+'].unit=this.value" style="flex:1;min-width:90px;padding:9px 4px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:13px;font-family:inherit">';
-    var units=['mg/week','mg/day','mg/EOD'];
+    var units=['mg/week','mg/day','mg/EOD','%'];  // % for topical/transdermal products (creams, gels)
+    if(c.unit&&units.indexOf(c.unit)<0)units.unshift(c.unit); // preserve any pre-set unit
     units.forEach(function(u){h+='<option value="'+u+'"'+(c.unit===u?' selected':'')+'>'+u+'</option>';});
     h+='</select>';
     if(ec)h+='<button onclick="_cwizToggleInfo('+i+')" style="background:transparent;border:1px solid var(--border);color:var(--muted2);border-radius:6px;padding:7px 9px;cursor:pointer;font-size:13px;line-height:1;flex-shrink:0" title="Usage &amp; risks">ⓘ</button>';
