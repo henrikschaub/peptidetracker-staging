@@ -27,7 +27,7 @@ const RECON_DB={
   'ghkcu':      {vials:[50,100],water:[5,10],defaultVi:0,defaultWi:0,notes:'Available injectable or topical. Potent collagen stimulator. 71% of Glow stack.'},
   // Fat Loss ────────────────────────────────────────────────────────────────
   // retatrutide: 10mg/1ml=10mg/ml → 3mg=0.3ml=30 IU ✓
-  'retatrutide':{vials:[5,10,20,30],water:[0.5,1,2],defaultVi:1,defaultWi:1,notes:'SC injection on scheduled days. Start at 1–2 mg and escalate by 1–2 mg every 4 weeks as tolerated.'},
+  'retatrutide':{vials:[5,10,20,30],water:[0.5,1,2],defaultVi:1,defaultWi:1,notes:'SC injection on scheduled days. Start at 1 mg and escalate by 1 mg every week as tolerated.'},
   // tirzepatide: 10mg/1ml=10mg/ml → 5mg=0.5ml=50 IU ✓
   'tirzepatide':{vials:[5,10,15,20,30],water:[0.5,1,2],defaultVi:1,defaultWi:1,notes:'Weekly injection. Start at 2.5 mg, increase by 2.5 mg every 4 weeks.'},
   // semaglutide: 5mg/2ml=2.5mg/ml → 0.5mg=0.2ml=20 IU ✓

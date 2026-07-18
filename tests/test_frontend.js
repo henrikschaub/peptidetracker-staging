@@ -5136,6 +5136,23 @@ console.log('\n── Cycle protocol enrichment ──────────�
     stk.includes('_cyclesAllowed()') && /function _cyclesAllowed\(\)\{if\(!_featuresLoaded\)return true/.test(rawScript));
 }
 
+// ── Reta escalation reconciled to +1 mg/week (#641) ──────────────────────────
+console.log('\n── Reta escalation reconcile ──────────────────────────────');
+{
+  const recon = fs.readFileSync(path.join(__dirname, '../tab-recon.js'), 'utf8');
+  // DEFAULT_PHASES reta must be strictly +1 mg/week
+  const reta = G.DEFAULT_PHASES && G.DEFAULT_PHASES.retatrutide;
+  check('DEFAULT_PHASES reta present', Array.isArray(reta) && reta.length >= 6);
+  if (Array.isArray(reta)) {
+    const incrOk = reta.every((p, i) => i === 0 || (Number(p.d) - Number(reta[i - 1].d) === 1 && Number(p.w) - Number(reta[i - 1].w) === 1));
+    check('DEFAULT_PHASES reta escalates +1 mg every week', incrOk, JSON.stringify(reta.map(p => p.d)));
+  }
+  check('no "monthly" reta escalation prose in catalogue', !rawScript.includes('Escalate monthly: 2 mg'));
+  check('no "every 4 weeks" reta prose in Recon', !recon.includes('every 4 weeks as tolerated'));
+  check('reta prose states +1 mg/week', rawScript.includes('Escalate by 1 mg every week') && recon.includes('escalate by 1 mg every week'));
+  check('backend escalation schedule consumed', rawScript.includes("'/compounds/escalation'") && rawScript.includes('function syncEscalationFromAgent'));
+}
+
 // ── Phase 5: analysis polish (safety summary, sparklines, tier) ───────────────
 console.log('\n── Labs Phase 5: safety summary + sparklines + tier ───────');
 if (typeof G._labSafetyFindings === 'function') {
