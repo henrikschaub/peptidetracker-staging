@@ -52,6 +52,29 @@ This includes, but is not limited to:
 
 **Current state (as of 2026-06-21):** `PEPTIDE_CAT`, `ENHANCEMENT_COMPOUNDS`, `RECON_DB`, `DOSE_GUIDE`, `DEFAULT_PHASES`, `PRICELIST`, and related constants are still hardcoded in `index.html` / `tab-cycles.js`. This is a known technical debt. **Do not add new compound data to these files** — any new compounds or data updates must go into the backend and be served via API.
 
+## ⚠️ RESEARCH & REFERENCE DOCS LIVE IN THE BACKEND — `docs/enhanced-bodybuilding/` ⚠️
+**All peptide/enhancement/compound research, protocol, and reference documents
+live in `claude-agent-backend/docs/enhanced-bodybuilding/` — the single canonical
+home for this material.** Never store research/reference/protocol docs in this
+public repo (or any public frontend repo); the reasoning is identical to the
+compound-data rule above (commercially sensitive, proprietary).
+
+When you research, compile, or write any cycle/dosing/compound/protocol reference
+material, it goes there — not into this repo, and not left only as a chat reply.
+
+### 📚 EVIDENCE STANDARD — MANDATORY, ZERO TOLERANCE FOR HALLUCINATION OR BRO-SCIENCE
+**Every recommendation, dose, mechanism, or risk claim — in those docs, in the
+app's dose guidance, or in anything Claude tells Henrik — MUST be backed by
+published, peer-reviewed research or an established clinical guideline.**
+- **No citation → do not state it as fact.** If it can't be sourced, leave it out
+  or explicitly label it *anecdotal / low-evidence*.
+- **Bro-science, forum lore, coach dogma, and confident-but-unsourced AI output
+  are NOT acceptable sources.** Where popular practice contradicts the evidence,
+  the evidence wins.
+- **Fabricating or guessing a citation (author, journal, year, PMID) is the worst
+  possible failure** — worse than omitting the claim. Verify before writing.
+- Where evidence is thin, pre-clinical, or animal-only, say so in-line.
+
 ## ⚠️ NO PRICES IN THE APP — NEVER ⚠️
 Supplier pricing is commercially sensitive and must **NEVER** appear in any app UI, rendered HTML, or user-facing output. The `PRICELIST` const in `index.html` (and `tests/pricelist.csv`) contains only vial sizes and quantities (`q`, `unit`, `n` fields) — **no `usd` or price fields**.
 
