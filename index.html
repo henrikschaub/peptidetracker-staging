@@ -1592,7 +1592,67 @@ function switchPrimary(p){if(!PRIMARY_GROUPS[p])return;_currentPrimary=p;_setPri
 function _navVisiblePrimaries(){return PRIMARY_ORDER.filter(function(p){var b=document.getElementById('navbtn-'+p);if(!b)return false;if(b.style&&b.style.display==='none')return false;try{if(typeof getComputedStyle==='function'&&getComputedStyle(b).display==='none')return false;}catch(e){}return true;});}
 function _navSwipeTarget(vis,cur,dir){if(!vis||vis.length<2)return null;var i=vis.indexOf(cur);if(i<0)return null;var n=i+dir;if(n<0||n>=vis.length)return null;return vis[n];}
 function _navNoSwipeZone(el,stop){while(el&&el!==stop&&el.nodeType===1){var tag=el.tagName;if(tag==='CANVAS'||tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(el.hasAttribute&&el.hasAttribute('data-noswipe')))return true;var cs=null;try{cs=getComputedStyle(el);}catch(e){}if(cs){if(cs.position==='fixed'||cs.position==='sticky')return true;if((cs.overflowX==='auto'||cs.overflowX==='scroll')&&(el.scrollWidth-el.clientWidth>4))return true;}el=el.parentNode;}return false;}
-function _initSwipeNav(){var host=document.getElementById('app')||(document.querySelector&&document.querySelector('.content'))||document.body;if(!host||host._swipeWired)return;host._swipeWired=true;var sx=0,sy=0,st=0,ok=false;host.addEventListener('touchstart',function(e){if(!e.touches||e.touches.length!==1){ok=false;return;}var t=e.touches[0];sx=t.clientX;sy=t.clientY;st=Date.now();ok=!_navNoSwipeZone(e.target,host);},{passive:true});host.addEventListener('touchend',function(e){if(!ok)return;ok=false;var t=e.changedTouches&&e.changedTouches[0];if(!t)return;var dx=t.clientX-sx,dy=t.clientY-sy;if(Date.now()-st>700)return;if(Math.abs(dx)<60||Math.abs(dx)<Math.abs(dy)*1.7)return;var tgt=_navSwipeTarget(_navVisiblePrimaries(),_currentPrimary,dx<0?1:-1);if(tgt)switchPrimary(tgt);},{passive:true});}
+function _navActiveView(){return document.getElementById('tab-'+_currentTab);}
+function _initSwipeNav(){
+  var host=document.getElementById('app')||(document.querySelector&&document.querySelector('.content'))||document.body;
+  if(!host||host._swipeWired)return;host._swipeWired=true;
+  var DUR=200; // ms for slide-out / slide-in
+  var sx=0,sy=0,active=false,decided=false,locked=false,av=null,W=360,animating=false;
+  function reset(){active=false;decided=false;locked=false;av=null;}
+  function clearT(el){if(el){el.style.transition='';el.style.transform='';el.style.willChange='';}}
+  host.addEventListener('touchstart',function(e){
+    if(animating||!e.touches||e.touches.length!==1){reset();return;}
+    if(_navNoSwipeZone(e.target,host)){reset();return;}
+    var t=e.touches[0];sx=t.clientX;sy=t.clientY;
+    active=true;decided=false;locked=false;
+    av=_navActiveView();W=host.clientWidth||window.innerWidth||360;
+  },{passive:true});
+  host.addEventListener('touchmove',function(e){
+    if(!active||animating)return;
+    var t=e.touches&&e.touches[0];if(!t)return;
+    var dx=t.clientX-sx,dy=t.clientY-sy;
+    if(!decided){
+      if(Math.abs(dx)>8&&Math.abs(dx)>Math.abs(dy)*1.2){decided=true;locked=true;if(av){av.style.transition='none';av.style.willChange='transform';}}
+      else if(Math.abs(dy)>8){reset();return;} // vertical scroll — let it be
+      else return;
+    }
+    if(!locked||!av)return;
+    e.preventDefault(); // we own this horizontal gesture now
+    var dir=dx<0?1:-1;
+    var hasTarget=!!_navSwipeTarget(_navVisiblePrimaries(),_currentPrimary,dir);
+    var off=hasTarget?dx:dx*0.28; // rubber-band resistance at the ends
+    av.style.transform='translateX('+off+'px)';
+  },{passive:false});
+  host.addEventListener('touchend',function(e){
+    if(!active){return;}
+    var wasLocked=locked,view=av;reset();
+    if(!wasLocked)return;
+    var ch=e.changedTouches&&e.changedTouches[0];
+    var dx=ch?ch.clientX-sx:0;
+    var dir=dx<0?1:-1;
+    var target=_navSwipeTarget(_navVisiblePrimaries(),_currentPrimary,dir);
+    var commit=target&&Math.abs(dx)>Math.max(60,W*0.22);
+    if(commit){
+      animating=true;
+      if(view){view.style.transition='transform '+DUR+'ms ease-out';view.style.transform='translateX('+(dir<0?W:-W)+'px)';}
+      setTimeout(function(){
+        switchPrimary(target);
+        clearT(view);
+        var nv=_navActiveView();
+        if(nv){
+          nv.style.transition='none';nv.style.willChange='transform';
+          nv.style.transform='translateX('+(dir<0?-W:W)+'px)';
+          void nv.offsetWidth; // reflow so the start position sticks
+          nv.style.transition='transform '+DUR+'ms ease-out';nv.style.transform='translateX(0)';
+          setTimeout(function(){clearT(nv);animating=false;},DUR+30);
+        }else{animating=false;}
+      },DUR);
+    }else if(view){
+      view.style.transition='transform '+DUR+'ms ease-out';view.style.transform='translateX(0)';
+      setTimeout(function(){clearT(view);},DUR+30);
+    }
+  },{passive:true});
+}
 function _userProfile(){return{sex:localStorage.getItem('user_sex')||'male',age:parseInt(localStorage.getItem('user_age')||'0')||0,weight_kg:parseDec(localStorage.getItem('user_weight')||'0')||0};}
 // ── IGF-1 → GH-axis dose direction ───────────────────────────────────────────
 // GH-axis peptides/hGH are titrated to IGF-1 in the upper-normal range for age.
@@ -1646,18 +1706,18 @@ function _dosePersonalization(pepId,profile){var mods=[];var ghAxis=['cjc-ipa','
 function toggleTabVis(id){if(id==='settings')return;_tabVis[id]=!_tabVis[id];setData('proto-tab-vis',_tabVis);pushPepSettingsToAgent({'proto-tab-vis':_tabVis});if(!_tabVis[id]&&_currentTab===id){const b=document.getElementById('tab-btn-today');if(b)switchTab('today',b);}applyTabVis();buildTabsSettingsCard();}
 function buildTabsSettingsCard(){const card=document.getElementById('s-tabs-card');if(!card)return;const rows=Object.entries(TAB_LABELS).map(([id,label])=>{const on=!!_tabVis[id];return'<div style="padding:11px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)"><span style="font-size:13px;color:var(--text)">'+label+'</span><button onclick="toggleTabVis(\''+id+'\')" style="background:'+(on?'var(--accent)':'var(--surface2)')+';color:'+(on?'#000':'var(--muted)')+';border:1px solid '+(on?'transparent':'var(--border)')+';border-radius:20px;padding:4px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;min-width:48px">'+(on?'ON':'OFF')+'</button></div>';}).join('');card.innerHTML='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">'+sSecHdr('tabs','Tabs')+sSecBody('tabs')+rows+'<div style="padding:8px 16px 10px;font-size:11px;color:var(--muted2)">Settings is always visible</div></div></div>';}
 </script>
-<script src="tab-cycles.js?v=1.498"></script>
-<script src="tab-macros.js?v=1.498"></script>
-<script src="tab-stack.js?v=1.498"></script>
-<script src="tab-today.js?v=1.498"></script>
-<script src="tab-schedule.js?v=1.498"></script>
-<script src="tab-timeline.js?v=1.498"></script>
-<script src="tab-body.js?v=1.498"></script>
-<script src="tab-recon.js?v=1.498"></script>
-<script src="tab-blood.js?v=1.498"></script>
-<script src="tab-labs.js?v=1.498"></script>
-<script src="tab-tcalc.js?v=1.498"></script>
-<script src="tab-supplements.js?v=1.498"></script>
+<script src="tab-cycles.js?v=1.497"></script>
+<script src="tab-macros.js?v=1.497"></script>
+<script src="tab-stack.js?v=1.497"></script>
+<script src="tab-today.js?v=1.497"></script>
+<script src="tab-schedule.js?v=1.497"></script>
+<script src="tab-timeline.js?v=1.497"></script>
+<script src="tab-body.js?v=1.497"></script>
+<script src="tab-recon.js?v=1.497"></script>
+<script src="tab-blood.js?v=1.497"></script>
+<script src="tab-labs.js?v=1.497"></script>
+<script src="tab-tcalc.js?v=1.497"></script>
+<script src="tab-supplements.js?v=1.497"></script>
 <script>
 init();
 if(IS_STAGING){const dc=document.getElementById('s-deploy-card');if(dc)dc.style.display='';}

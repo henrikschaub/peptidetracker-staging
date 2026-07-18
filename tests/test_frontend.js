@@ -5722,6 +5722,12 @@ console.log('\n── Swipe navigation between top-level tabs ──────
   check('_navVisiblePrimaries defined', typeof G._navVisiblePrimaries==='function');
   check('_navNoSwipeZone defined', typeof G._navNoSwipeZone==='function');
   check('_initSwipeNav defined', typeof G._initSwipeNav==='function');
+  check('_navActiveView defined', typeof G._navActiveView==='function');
+  // drag-follow animation wiring must be present
+  var _swpSrc=fs.readFileSync(path.resolve(htmlPath),'utf8');
+  check('swipe: touchmove drag handler wired', _swpSrc.includes("addEventListener('touchmove'"));
+  check('swipe: view follows finger via translateX', /av\.style\.transform='translateX\(/.test(_swpSrc));
+  check('swipe: rubber-band resistance at the ends', _swpSrc.includes('dx*0.28'));
   if(typeof G._navSwipeTarget==='function'){
     var order=['today','plan','levels','labs','more']; // mirrors PRIMARY_ORDER (const, not exported to sandbox)
     // swipe left (dir +1) → next primary
