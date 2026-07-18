@@ -35,6 +35,10 @@ var _tcGhStack = [];          // [{pepId, startDateStr, interactions, dailyDose}
 var _tcSysInter = null;       // compounds map from /systemic-interactions
 var _tcFtBaseline = null;      // age→free-T population baseline (pmol/L) from /systemic-interactions
 var _tcShbgBaseline = null;    // age→SHBG population baseline (nmol/L) from /systemic-interactions
+var _tcShbgBodyFat = null;     // body-fat→SHBG adjustment params from /systemic-interactions
+// Frontend fallback for the BF→SHBG adjustment so the personalisation still runs
+// offline; the backend value overrides this when reachable. Adiposity lowers SHBG.
+var _TC_SHBG_BF_FALLBACK = {ref_pct:{male:18,female:27},per_pct_k:{male:0.020,female:0.016},min_factor:0.60,max_factor:1.50};
 var _tcActiveStacks = null;   // raw response from /protocol/stacks
 
 // Testosterone → SHBG dose-response model. Exogenous androgens suppress hepatic
@@ -164,6 +168,7 @@ function _tcLoadProfile() {
       _tcSysInter = d.compounds;
       if (d.ftBaseline) _tcFtBaseline = d.ftBaseline;
       if (d.shbgBaseline) _tcShbgBaseline = d.shbgBaseline;
+      if (d.shbgBodyFat) _tcShbgBodyFat = d.shbgBodyFat;
       _tcComputeGhStack();
       buildTCalc();
     })
@@ -377,6 +382,24 @@ function _tcShbgBaselineForAge(age) {
     if (age <= b.bands[i].max_age) return b.bands[i].value;
   }
   return b.bands[b.bands.length - 1].value;
+}
+
+// Body-fat multiplier on the population SHBG baseline. Adiposity lowers SHBG, so a
+// leaner person of the same age runs a higher SHBG (→ lower free-T fraction). Pure +
+// testable. Returns 1 (no change) when BF% is unknown or params are missing. Applied
+// ONLY to the population estimate — a measured SHBG is never touched.
+function _tcShbgBodyFatFactor(bf, sex) {
+  if (!(bf > 0)) return 1;
+  var cfg = _tcShbgBodyFat || _TC_SHBG_BF_FALLBACK;
+  if (!cfg) return 1;
+  sex = (sex === 'female') ? 'female' : 'male';
+  var ref = cfg.ref_pct && cfg.ref_pct[sex];
+  var k   = cfg.per_pct_k && cfg.per_pct_k[sex];
+  if (!(ref > 0) || !(k > 0)) return 1;
+  var f  = Math.exp(-k * (bf - ref));
+  var lo = (cfg.min_factor > 0) ? cfg.min_factor : 0.5;
+  var hi = (cfg.max_factor > 0) ? cfg.max_factor : 1.6;
+  return Math.max(lo, Math.min(hi, f));
 }
 
 // Nudge a chart label's y so it stays at least `gap` px clear of any already-placed
@@ -1320,6 +1343,7 @@ function _tcFreeTSeries(sorted, hooks) {
   var calFT_arr = null, _calFTlo = null, _calFThi = null;
   var _ghAnnot  = '';
   var _betaAnnot = '';
+  var _bfAnnot = '';
   var _shbgMeas = parseDec(_tcp.shbg)   || 0;
   var _ttMeas   = parseDec(_tcp.totalT) || 0;
   var _tcAge    = (parseInt(_tcp.birthYear, 10) > 0) ? (new Date().getFullYear() - parseInt(_tcp.birthYear, 10)) : 0;
@@ -1332,6 +1356,19 @@ function _tcFreeTSeries(sorted, hooks) {
   // SHBG suppression model runs whenever we have one — so GH/Boron move the curve even with
   // no bloodwork (population averages) or only a partial / mid-cycle test.
   var _popShbg = (_shbgMeas > 0) ? 0 : _tcShbgBaselineForAge(_tcAge);
+  // Personalise the population SHBG baseline by the user's own body-fat % (adiposity
+  // lowers SHBG). Only when there's no measured SHBG — a real lab always wins.
+  if (_popShbg > 0) {
+    var _bfPct = (typeof _latestBodyFat === 'function') ? _latestBodyFat() : null;
+    if (_bfPct != null && _bfPct > 0) {
+      var _bfSex = (typeof localStorage !== 'undefined' && localStorage.getItem('user_sex')) || 'male';
+      var _bfFac = _tcShbgBodyFatFactor(_bfPct, _bfSex);
+      if (_bfFac && _bfFac !== 1) {
+        _popShbg = _popShbg * _bfFac;
+        _bfAnnot = 'SHBG est · ' + Math.round(_bfPct) + '% BF';
+      }
+    }
+  }
   if (calFT && (_shbgMeas > 0 || _popShbg > 0)) {
       // SHBG anchor day: the bloodwork draw if entered, else the free-T calibration anchor.
       var _bwEntry = (_tcBwEntries && _tcBwEntries[0]) ? _tcBwEntries[0] : null;
@@ -1496,7 +1533,7 @@ function _tcFreeTSeries(sorted, hooks) {
   if (hooks.start) hooks.start(total[0] * (calFT_arr ? calFT_arr[0] : scale));
   return { firstDate: firstDate, totalDays: totalDays, total: total, calFT: calFT, scale: scale,
            calFT_arr: calFT_arr, calFTlo: _calFTlo, calFThi: _calFThi, unitLabel: unitLabel,
-           measuredFT: _mftNum, ghAnnot: _ghAnnot, betaAnnot: _betaAnnot, tier: _tier, sorted: sorted };
+           measuredFT: _mftNum, ghAnnot: _ghAnnot, betaAnnot: _betaAnnot, bfAnnot: _bfAnnot, tier: _tier, sorted: sorted };
 }
 
 function _tcDrawManualChart(canvasId, log, zoom3) {
@@ -1507,7 +1544,7 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
   var _S = _tcFreeTSeries(sorted, { calFT: canvas._testCalFTHook, shbg: canvas._testShbgHook, start: canvas._testStartHook });
   var firstDate = _S.firstDate, totalDays = _S.totalDays, total = _S.total, calFT = _S.calFT, scale = _S.scale,
       calFT_arr = _S.calFT_arr, _calFTlo = _S.calFTlo, _calFThi = _S.calFThi, unitLabel = _S.unitLabel,
-      _mftNum = _S.measuredFT, _ghAnnot = _S.ghAnnot, _betaAnnot = _S.betaAnnot, _tier = _S.tier;
+      _mftNum = _S.measuredFT, _ghAnnot = _S.ghAnnot, _betaAnnot = _S.betaAnnot, _bfAnnot = _S.bfAnnot, _tier = _S.tier;
 
   var dpr  = window.devicePixelRatio || 1;
   var cssW = canvas.offsetWidth || 300;
@@ -1602,6 +1639,11 @@ function _tcDrawManualChart(canvasId, log, zoom3) {
     ctx.font = '8px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
     ctx.fillStyle = '#8891a5aa';   // muted: shows whether β is personalised or population default
     ctx.fillText(_betaAnnot, PAD.left + cW, PAD.top + (_ghAnnot ? 19 : 9));
+  }
+  if (_bfAnnot) {
+    ctx.font = '8px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
+    ctx.fillStyle = '#ff6b2baa';   // amber: SHBG baseline personalised from body fat %
+    ctx.fillText(_bfAnnot, PAD.left + cW, PAD.top + ((_ghAnnot ? 10 : 0) + (_betaAnnot ? 10 : 0) + 9));
   }
 
   var lineColor = _tcCompInfo(sorted[0].compId).dot || '#e8a020';
