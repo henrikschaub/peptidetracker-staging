@@ -411,9 +411,23 @@ var _advBody={innerHTML:''}, _advFooter={innerHTML:''}, _advThrew=false;
 try{ G.wizStepAdvise(_advBody,_advFooter); }catch(e){ _advThrew=true; }
 check('wizStepAdvise: renders without throwing', !_advThrew);
 check('wizStepAdvise: shows objective picker', _advBody.innerHTML.includes('Primary objective'));
+check('wizStepAdvise: shows experience/cycle-stage picker', _advBody.innerHTML.includes('Where are you at?') && _advBody.innerHTML.includes('2nd–few cycles'));
 check('wizStepAdvise: has a Get recommendations action', _advBody.innerHTML.includes('Get recommendations'));
 check('wizStepAdvise: Next button proceeds via wizAdviseNext', _advFooter.innerHTML.includes('wizAdviseNext'));
 check('wizAdviseSetObjective updates advise state', (G.wizAdviseSetObjective('cut'), G._wiz.advise.objective==='cut'));
+check('wizAdviseSetExperience updates advise state', (G.wizAdviseSetExperience('experienced'), G._wiz.advise.experience==='experienced'));
+check('_advNormExp collapses curious → first', G._advNormExp('curious')==='first');
+// Advisor result renders the new structure (headline, best addition, save-for-later, on-cycle)
+G._userTier=3;G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['enhanced'];
+G._wiz.advise=G._wizAdviseState();
+G._wiz.advise.result={headline:'Add ONE compound to your testosterone base — start with Primobolan.',base:{name:'Testosterone Enanthate',note:'base'},best_addition:{id:'primo',name:'Primobolan',reason:'mild lean-mass'},primary:[{id:'primo',name:'Primobolan',reason:'mild lean-mass'}],consider:[{id:'anavar',name:'Anavar',reason:'oral ⚠ hepatically active'}],save_for_later:[{id:'tren_e',name:'Trenbolone Enanthate',reason:'advanced-only'}],avoid:[],on_cycle:[{agent:'HCG',message:'HCG 250–500 IU 2×/week.'}],guardrails:['Prefer injectables over orals'],notes:[]};
+var _advB2={innerHTML:''},_advF2={innerHTML:''};
+try{ G.wizStepAdvise(_advB2,_advF2); }catch(e){ _advB2.innerHTML='THREW'; }
+check('wizStepAdvise result: shows headline', _advB2.innerHTML.includes('Add ONE compound'));
+check('wizStepAdvise result: shows Best addition', _advB2.innerHTML.includes('Best addition') && _advB2.innerHTML.includes('Best pick'));
+check('wizStepAdvise result: shows Save for a later cycle', _advB2.innerHTML.includes('Save for a later cycle'));
+check('wizStepAdvise result: shows On-cycle support (HCG)', _advB2.innerHTML.includes('On-cycle support') && _advB2.innerHTML.includes('HCG'));
+G.initWizard();
 // wizNext / wizBack
 G._userTier=1;G.initWizard();
 G._userTier=1;G.initWizard();
@@ -2265,7 +2279,12 @@ console.log('\n── Edit Enhanced tab — stack editor regression ────
     var viewHtml=G._renderEnhancedViewTab({enhanced:{enabled:true,compounds:[{id:testId2,name:'Test Compound',dose:'250',unit:'mg',days:[1,3],dot:'#e05050'}]}});
     check('_renderEnhancedViewTab: contains compound name', viewHtml.includes('Test Compound'));
     check('_renderEnhancedViewTab: contains dose', viewHtml.includes('250mg'));
-    check('_renderEnhancedViewTab: includes Recovery & PCT panel when compounds present', viewHtml.includes('Recovery &amp; PCT') && viewHtml.includes('pct-recovery-body'));
+    check('_renderEnhancedViewTab: includes On-cycle & recovery panel when compounds present', viewHtml.includes('On-cycle &amp; recovery') && viewHtml.includes('pct-recovery-body'));
+    // PCT panel separates on-cycle support from post-cycle
+    var _pctSplit=G._renderPctPlanHtml({applicable:true,on_cycle:[{agent:'HCG',message:'HCG 250–500 IU 2×/week.'}],pct:{start:'≈2 week(s) after the last injection.',serm:{primary:{agent:'Tamoxifen',schedule:[{weeks:'1–2',dose:'20 mg/day'}]}},confirm_labs:['LH and FSH']},notes:[],guardrails:[]});
+    check('_renderPctPlanHtml: labels On-cycle support', _pctSplit.includes('On-cycle support'));
+    check('_renderPctPlanHtml: labels Post-cycle (PCT)', _pctSplit.includes('Post-cycle (PCT)'));
+    check('_renderPctPlanHtml: on-cycle HCG at 250–500 IU', _pctSplit.includes('250–500 IU'));
 
     // _renderPctPlanHtml renders a backend plan (no network — pass a mock plan)
     check('_renderPctPlanHtml defined', typeof G._renderPctPlanHtml==='function');
