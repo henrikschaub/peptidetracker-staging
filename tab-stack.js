@@ -296,6 +296,7 @@ function renderStackEditor(){
     html+='<button onclick="deleteStack('+_editIdx+')" style="width:100%;background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;opacity:0.7;">Delete Protocol</button>';
     html+='</div>';
     body.innerHTML=html;
+    if(_stackViewTab==='enhanced'&&(_userTier||1)>=3)_ensurePctPanel(st);
     return;
   }
 
@@ -1464,8 +1465,60 @@ function _renderEnhancedViewTab(st){
       html+='<div style="font-size:12px;color:var(--muted2);">'+doseStr+'</div>';
       html+='</div>';
     });
+    // Recovery & PCT panel — filled async from the backend by _ensurePctPanel(st)
+    html+='<div class="wiz-section" style="margin-top:18px;">Recovery &amp; PCT</div>';
+    html+='<div id="pct-recovery-body"><div style="color:var(--muted2);font-size:12px;padding:8px 0;">Loading recovery plan…</div></div>';
   }
   return html;
+}
+// ── Recovery & PCT (fetched from /compounds/pct-plan, cached per compound set) ──
+var _pctCache={};
+function _pctSig(st){var ids=((st.enhanced&&st.enhanced.compounds)||[]).map(function(c){return c.id;}).filter(Boolean).sort();var sex=((typeof getData==='function'&&getData('pep-profile',null))||{}).sex||'male';return sex+'|'+ids.join(',');}
+async function pctPlanFromAgent(compoundIds,sex){
+  var ctrl=new AbortController();var tid=setTimeout(function(){ctrl.abort();},10000);
+  try{
+    var r=await fetch(AGENT_URL+'/compounds/pct-plan',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({compounds:compoundIds,sex:sex}),signal:ctrl.signal});
+    clearTimeout(tid);
+    if(!r.ok){if(typeof _logHttp==='function')_logHttp('pct',r.status,'/compounds/pct-plan');return{ok:false,status:r.status};}
+    var d=await r.json();return{ok:true,plan:(d&&d.plan)||null};
+  }catch(e){clearTimeout(tid);if(typeof _logErr==='function')_logErr('pct',e);return{ok:false,status:null,msg:String(e&&e.message||e)};}
+}
+function _renderPctPlanHtml(plan){
+  if(!plan)return '<div style="color:var(--muted2);font-size:12px;">Recovery plan unavailable.</div>';
+  if(plan.applicable===false){return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px;color:var(--muted2);line-height:1.5;">'+_esc((plan.notes&&plan.notes[0])||'Not applicable.')+'</div>';}
+  var h='';
+  (plan.on_cycle||[]).forEach(function(o){h+='<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:8px 10px;margin-bottom:8px;"><div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">On-cycle · '+_esc(o.agent||'')+'</div><div style="font-size:12px;color:var(--text);line-height:1.5;">'+_esc(o.message||'')+'</div></div>';});
+  var p=plan.pct;
+  if(p){
+    h+='<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin:10px 0 4px;">Start PCT</div>';
+    h+='<div style="font-size:12px;color:var(--text);line-height:1.5;margin-bottom:8px;">'+_esc(p.start||'')+'</div>';
+    if(p.serm){
+      var sm=p.serm;
+      function _sermRows(x){return (x.schedule||[]).map(function(s){return '<div style="font-size:12px;color:var(--text);">'+_esc(s.weeks)+': <b>'+_esc(s.dose)+'</b></div>';}).join('');}
+      h+='<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin:10px 0 4px;">SERM restart</div>';
+      h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;"><div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px;">'+_esc(sm.primary.agent)+'</div>'+_sermRows(sm.primary)+'</div>';
+      if(sm.alternative)h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;"><div style="font-size:11px;font-weight:600;color:var(--muted2);margin-bottom:3px;">Alternative · '+_esc(sm.alternative.agent)+'</div>'+_sermRows(sm.alternative)+'</div>';
+      if(sm.note)h+='<div style="font-size:11px;color:#f59e0b;line-height:1.5;margin-bottom:6px;">⚠ '+_esc(sm.note)+'</div>';
+    }
+    if(p.confirm_labs&&p.confirm_labs.length){h+='<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin:10px 0 4px;">Confirm recovery</div>'+p.confirm_labs.map(function(l){return '<div style="font-size:11px;color:var(--text);line-height:1.5;padding:1px 0;">• '+_esc(l)+'</div>';}).join('');}
+  }
+  (plan.notes||[]).forEach(function(n){h+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-top:6px;font-size:11px;color:var(--muted2);line-height:1.5;">ℹ '+_esc(n)+'</div>';});
+  if(plan.guardrails&&plan.guardrails.length){h+='<div style="margin-top:8px;">'+plan.guardrails.map(function(g){return '<div style="font-size:11px;color:var(--muted2);line-height:1.5;">• '+_esc(g)+'</div>';}).join('')+'</div>';}
+  h+=(typeof _renderSafetyNote==='function')?_renderSafetyNote('enhanced'):'';
+  return h;
+}
+function _ensurePctPanel(st){
+  var el=document.getElementById('pct-recovery-body');if(!el||!st)return;
+  var ids=((st.enhanced&&st.enhanced.compounds)||[]).map(function(c){return c.id;}).filter(Boolean);
+  if(!ids.length){el.innerHTML='';return;}
+  var sig=_pctSig(st);
+  if(_pctCache[sig]){el.innerHTML=_renderPctPlanHtml(_pctCache[sig]);return;}
+  var sex=((typeof getData==='function'&&getData('pep-profile',null))||{}).sex||'male';
+  pctPlanFromAgent(ids,sex).then(function(res){
+    var el2=document.getElementById('pct-recovery-body');if(!el2)return;
+    if(res.ok&&res.plan){_pctCache[sig]=res.plan;el2.innerHTML=_renderPctPlanHtml(res.plan);}
+    else{el2.innerHTML='<div style="color:var(--muted2);font-size:12px;">Recovery plan unavailable'+(res.status?(' (HTTP '+res.status+')'):'')+'.</div>';}
+  });
 }
 
 // ── Enhanced advisor step (guided recommendation before the raw list) ────────
