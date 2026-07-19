@@ -286,7 +286,7 @@ function _blBuildLines(){
     var cycleLen = (st.cycle_length || 12) * 7;
     var startDate = st.cycle_start ? parseLocalDate(st.cycle_start) : new Date(NOW);
     var startDow  = startDate.getDay();
-    var stackLabel = st.name || ('Stack ' + (si + 1));
+    var stackLabel = st.name || ('Protocol ' + (si + 1));
     starts.push(startDate); compoundEnds.push(startDate.getTime() + cycleLen*86400000);
 
     // Peptides
@@ -730,11 +730,11 @@ function buildBloodLevels(){
       '<div style="font-size:15px;color:var(--text);font-weight:600;margin-bottom:6px">Nothing to plot yet</div>'+
       '<div style="font-size:13px;color:var(--muted2);line-height:1.6;max-width:280px;margin:0 auto 20px">'+
       (_hasStacks
-        ? 'Your stacks don’t have a compound with a dose to model. Add a dose in Plan, or track a supplement.'
-        : 'Levels charts the predicted plasma curve from your protocol. Add a stack with a dose to see it.')+
+        ? 'Your protocols don’t have a compound with a dose to model. Add a dose in Plan, or track a supplement.'
+        : 'Levels charts the predicted plasma curve from your protocol. Add a protocol with a dose to see it.')+
       '</div>'+
       '<button onclick="'+(_hasStacks?'switchPrimary(\'plan\')':'createNewStack()')+'" style="background:var(--accent);color:#000;border:none;border-radius:20px;padding:10px 24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">'+
-      (_hasStacks?'Go to Plan':'Build your first stack')+'</button></div>';
+      (_hasStacks?'Go to Plan':'Build your first protocol')+'</button></div>';
     return;
   }
   var html = '<div style="padding:12px 16px 6px;font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px">'+

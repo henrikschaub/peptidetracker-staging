@@ -2250,7 +2250,7 @@ async function _tcSetTargetStack(stackId){
     var _tgt=(typeof _userStacks!=='undefined'&&_userStacks)?_userStacks.find(function(s){return s&&s.id===stackId;}):null;
     if(_tgt&&typeof _stackHasConfigTrt==='function'&&_stackHasConfigTrt(_tgt)){
       var _ok=(typeof confirm!=='function')?true
-        :confirm('“'+(_tgt.name||'This stack')+'” already has testosterone from its TRT config. Replace it with the T-Calc source?');
+        :confirm('“'+(_tgt.name||'This protocol')+'” already has testosterone from its TRT config. Replace it with the T-Calc source?');
       if(!_ok){ if(typeof buildTCalc==='function')buildTCalc(); return; } // keep config; revert picker
       await _tcClearStackConfigTrt(_tgt);
     }
@@ -2280,9 +2280,9 @@ function _tcStackPickerHtml(){
   stacks.forEach(function(s,i){
     if(!s)return;
     var act=(typeof _isActiveStack==='function'&&_isActiveStack(i))?' ●':'';
-    opts+='<option value="'+_esc(s.id||'')+'"'+((cur&&cur===s.id)?' selected':'')+'>'+_esc(s.name||('Stack '+(i+1)))+act+'</option>';
+    opts+='<option value="'+_esc(s.id||'')+'"'+((cur&&cur===s.id)?' selected':'')+'>'+_esc(s.name||('Protocol '+(i+1)))+act+'</option>';
   });
-  return '<select onchange="_tcSetTargetStack(this.value)" title="Assign this testosterone to a stack (● = active)" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:10px;padding:5px 7px;font-family:inherit;max-width:132px">'+opts+'</select>';
+  return '<select onchange="_tcSetTargetStack(this.value)" title="Assign this testosterone to a protocol (● = active)" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:10px;padding:5px 7px;font-family:inherit;max-width:132px">'+opts+'</select>';
 }
 
 async function _tcSyncLogToBackend() {

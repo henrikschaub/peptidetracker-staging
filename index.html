@@ -31,7 +31,7 @@
   <div style="height:4px"></div>
   <div class="tabs">
     <div class="tab active" id="tab-btn-today"    onclick="switchTab('today',this)">Today</div>
-    <div class="tab"        id="tab-btn-stacks"   onclick="switchTab('stacks',this)">Stacks</div>
+    <div class="tab"        id="tab-btn-stacks"   onclick="switchTab('stacks',this)">Protocols</div>
     <div class="tab"        id="tab-btn-blood"    onclick="switchTab('blood',this)">Levels</div>
     <div class="tab"        id="tab-btn-tcalc"   onclick="switchTab('tcalc',this)">T-Calc</div>
     <div class="tab"        id="tab-btn-labs"    onclick="switchTab('labs',this)">Labs</div>
@@ -287,7 +287,7 @@ var _safetyDismissed={}; // session-only dismiss set (safety re-surfaces on a fr
 function _isActiveStack(i){return _activeStackIndices.indexOf(i)>=0;}
 let _stackViewTab='peptides';let _editInnerTab='peptides';
 let _reconStackIdx=0;let _reconStackPicked=false;let _reconState={};
-const TAB_LABELS=Object.assign({today:'Today',stacks:'Stacks',blood:'Levels',tcalc:'T-Calc',labs:'Labs',supplements:'Supplements',recon:'Recon',schedule:'Schedule',macros:'Macros',timeline:'Timeline',body:'Body Comp'},IS_STAGING?{storage:'Storage'}:{});
+const TAB_LABELS=Object.assign({today:'Today',stacks:'Protocols',blood:'Levels',tcalc:'T-Calc',labs:'Labs',supplements:'Supplements',recon:'Recon',schedule:'Schedule',macros:'Macros',timeline:'Timeline',body:'Body Comp'},IS_STAGING?{storage:'Storage'}:{});
 const TAB_DEFAULTS=Object.assign({today:true,stacks:true,blood:true,tcalc:true,labs:true,supplements:true,recon:true,schedule:false,macros:false,timeline:true,body:true},IS_STAGING?{storage:true}:{});
 // Two-tier navigation (usability study): 5 bottom "primary" tabs, each grouping
 // several of the existing destinations as a secondary sub-tab strip. Every legacy
@@ -296,7 +296,7 @@ const PRIMARY_GROUPS={today:['today','supplements','schedule'],plan:['stacks','t
 const PRIMARY_LABELS={today:'Today',plan:'Plan',levels:'Levels',labs:'Labs',more:'More'};
 const PRIMARY_ORDER=['today','plan','levels','labs','more'];
 // Human surface names for the sub-tabs (T-Calc→Testosterone, Recon→Reconstitution…).
-const SUBTAB_LABELS={today:'Today',supplements:'Supplements',schedule:'Schedule',stacks:'Stacks',timeline:'Timeline',recon:'Reconstitution',blood:'Blood Levels',tcalc:'Testosterone',labs:'Bloodwork',body:'Body Comp',macros:'Macros',settings:'Settings',storage:'Storage'};
+const SUBTAB_LABELS={today:'Today',supplements:'Supplements',schedule:'Schedule',stacks:'Protocols',timeline:'Timeline',recon:'Reconstitution',blood:'Blood Levels',tcalc:'Testosterone',labs:'Bloodwork',body:'Body Comp',macros:'Macros',settings:'Settings',storage:'Storage'};
 function primaryOf(id){for(var _p in PRIMARY_GROUPS){if(PRIMARY_GROUPS[_p].indexOf(id)>=0)return _p;}return '';}
 let _tabVis={};let _currentTab='today';let _currentPrimary='today';let _lastSub={};
 const GOOGLE_CLIENT_ID='580935445116-sovhqu5i940pjvb3co63af3tm0ekjds8.apps.googleusercontent.com';let _googleToken=localStorage.getItem('google_token')||'';let _sessionToken=localStorage.getItem('session_token')||'';function authHeaders(extra){const h={};const _t=_sessionToken||_googleToken;if(_t)h['Authorization']='Bearer '+_t;return extra?Object.assign({},h,extra):h;}var _tokenRefreshResolvers=[];function _onTokenRefreshed(){_tokenRefreshResolvers.forEach(function(r){r();});_tokenRefreshResolvers=[];}async function _ensureValidToken(){if(!_googleToken)return;try{var _tp=JSON.parse(atob(_googleToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));if((_tp.exp*1000)-Date.now()>30000)return;}catch(e){return;}return new Promise(function(resolve){_tokenRefreshResolvers.push(resolve);if(window.google&&google.accounts)google.accounts.id.prompt();setTimeout(function(){var _ti=_tokenRefreshResolvers.indexOf(resolve);if(_ti>=0)_tokenRefreshResolvers.splice(_ti,1);resolve();},3000);});}var _appUnlocked=false;function unlockApp(){if(_appUnlocked)return;_appUnlocked=true;document.getElementById('signin-screen').classList.add('hidden');document.body.classList.remove('locked');document.getElementById('app').classList.add('visible');init();}function onGoogleSignIn(resp){_googleToken=resp.credential;localStorage.setItem('google_token',_googleToken);try{var _jp=JSON.parse(atob(_googleToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));if(_jp&&_jp.email)localStorage.setItem('google_email',_jp.email);}catch(e){}fetch(AGENT_URL+'/auth/verify',{method:'POST',headers:{'Authorization':'Bearer '+_googleToken}}).then(function(r){if(r.ok)r.json().then(function(d){if(d&&d.session_token){_sessionToken=d.session_token;localStorage.setItem('session_token',d.session_token);}}).catch(function(){});}).catch(function(){});if(typeof _onTokenRefreshed==='function')_onTokenRefreshed();unlockApp();}function initGoogleAuth(){var _ih={client_id:GOOGLE_CLIENT_ID,callback:onGoogleSignIn,auto_select:true,cancel_on_tap_outside:false,locale:'en'};var _hl=localStorage.getItem('google_email')||'';if(_hl)_ih.login_hint=_hl;google.accounts.id.initialize(_ih);google.accounts.id.renderButton(document.getElementById('g_signin_container'),{theme:'filled_black',size:'large',shape:'pill',text:'sign_in_with',width:260});google.accounts.id.prompt();}function _loadGsi(){const _gs=document.createElement('script');_gs.src='https://accounts.google.com/gsi/client?hl=en';_gs.onload=initGoogleAuth;document.head.appendChild(_gs);}var _startToken=_sessionToken||_googleToken;if(_startToken){var _vt=_startToken,_vc=new AbortController();setTimeout(function(){_vc.abort();},5000);fetch(AGENT_URL+'/auth/verify',{method:'POST',headers:{'Authorization':'Bearer '+_vt},signal:_vc.signal}).then(function(r){if(r.ok){r.json().then(function(d){if(d&&d.session_token){_sessionToken=d.session_token;localStorage.setItem('session_token',d.session_token);}}).catch(function(){});unlockApp();}else if(r.status===401||r.status===403){localStorage.removeItem('session_token');_sessionToken='';localStorage.removeItem('google_token');_googleToken='';}}).catch(function(){if(_startToken===_vt)unlockApp();});}_loadGsi();setInterval(function(){if(!_googleToken||!_appUnlocked)return;try{var _pp=JSON.parse(atob(_googleToken.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));if((_pp.exp*1000)-Date.now()<300000&&window.google&&google.accounts)google.accounts.id.prompt();}catch(e){}},60000);
@@ -550,8 +550,8 @@ const STACK_RULES=[
   {id:'ghrh-ghrp-solo',check:function(p){var ids=p.map(function(x){return x.id;});var soloGHRH=ids.includes('cjc-nodac')||ids.includes('sermorelin');var hasGHRP=ids.includes('ipamorelin')||ids.includes('cjc-ipa');return soloGHRH&&!hasGHRP;},getConflicting:function(p){return p.filter(function(x){return['cjc-nodac','sermorelin'].includes(x.id);}).map(function(x){return x.id;});},level:'warn',title:'GHRH without GHRP',msg:'CJC-1295 (no DAC) and Sermorelin work best paired with a GHRP like Ipamorelin for synergistic GH pulses. Consider adding Ipamorelin or switching to the CJC+IPA blend.'},
   {id:'gh-hgh-overlap',check:function(p){var ids=p.map(function(x){return x.id;});var hasPep=ids.some(function(id){return['cjc-ipa','cjc-nodac','ipamorelin','sermorelin','tesamorelin'].includes(id);});return hasPep&&ids.includes('hgh');},getConflicting:function(p){return p.filter(function(x){return['cjc-ipa','cjc-nodac','ipamorelin','sermorelin','tesamorelin'].includes(x.id);}).map(function(x){return x.id;});},level:'err',title:'GH peptides redundant with HGH',msg:'Exogenous HGH bypasses the pituitary entirely — CJC-1295, Ipamorelin, Sermorelin and Tesamorelin have nothing to stimulate. Remove all GH-stimulating peptides when on HGH.'},
   {id:'healing-blend-overlap',check:function(p){var ids=p.map(function(x){return x.id;});var blends=['glow','glow-1','klow','bpc-tb'];return blends.filter(function(b){return ids.includes(b);}).length>1;},getConflicting:function(p){var blends=['glow','glow-1','klow','bpc-tb'];return p.filter(function(x){return blends.includes(x.id);}).map(function(x){return x.id;});},level:'err',title:'Multiple healing blends — redundant',msg:'Glow, Klow and BPC+TB blends all share BPC-157 and/or TB-500 and/or GHK-Cu. Running more than one doubles these compounds with no added benefit. Pick one blend only.'},
-  {id:'healing-blend-component',check:function(p){var ids=p.map(function(x){return x.id;});var blends=['glow','glow-1','klow','bpc-tb'];var parts=['bpc157','tb500','ghkcu'];return blends.some(function(b){return ids.includes(b);})&&parts.some(function(c){return ids.includes(c);});},getConflicting:function(p){var blends=['glow','glow-1','klow','bpc-tb'];var parts=['bpc157','tb500','ghkcu'];return p.filter(function(x){return blends.includes(x.id)||parts.includes(x.id);}).map(function(x){return x.id;});},level:'warn',title:'Healing blend + standalone component — double dose',msg:'Your stack includes a healing blend (Glow/Klow/BPC+TB) that already contains BPC-157, TB-500 and/or GHK-Cu. Adding the individual peptide alongside doubles that compound with no benefit. Remove the standalone or use the blend alone.'},
-  {id:'cjc-ipa-double',check:function(p){var ids=p.map(function(x){return x.id;});return ids.includes('cjc-ipa')&&ids.includes('ipamorelin');},getConflicting:function(p){return p.filter(function(x){return['cjc-ipa','ipamorelin'].includes(x.id);}).map(function(x){return x.id;});},level:'warn',title:'CJC/IPA blend + standalone Ipamorelin',msg:'The CJC/IPA blend already includes Ipamorelin. Adding it separately doubles your Ipamorelin dose with no benefit. Use the blend alone, or build the stack from CJC-1295 (no DAC) + Ipamorelin separately.'},
+  {id:'healing-blend-component',check:function(p){var ids=p.map(function(x){return x.id;});var blends=['glow','glow-1','klow','bpc-tb'];var parts=['bpc157','tb500','ghkcu'];return blends.some(function(b){return ids.includes(b);})&&parts.some(function(c){return ids.includes(c);});},getConflicting:function(p){var blends=['glow','glow-1','klow','bpc-tb'];var parts=['bpc157','tb500','ghkcu'];return p.filter(function(x){return blends.includes(x.id)||parts.includes(x.id);}).map(function(x){return x.id;});},level:'warn',title:'Healing blend + standalone component — double dose',msg:'Your protocol includes a healing blend (Glow/Klow/BPC+TB) that already contains BPC-157, TB-500 and/or GHK-Cu. Adding the individual peptide alongside doubles that compound with no benefit. Remove the standalone or use the blend alone.'},
+  {id:'cjc-ipa-double',check:function(p){var ids=p.map(function(x){return x.id;});return ids.includes('cjc-ipa')&&ids.includes('ipamorelin');},getConflicting:function(p){return p.filter(function(x){return['cjc-ipa','ipamorelin'].includes(x.id);}).map(function(x){return x.id;});},level:'warn',title:'CJC/IPA blend + standalone Ipamorelin',msg:'The CJC/IPA blend already includes Ipamorelin. Adding it separately doubles your Ipamorelin dose with no benefit. Use the blend alone, or build the protocol from CJC-1295 (no DAC) + Ipamorelin separately.'},
 ];
 // Cross-stack pharmacological axis clusters — compounds sharing the same axis conflict across stacks
 const CROSS_STACK_CLUSTERS={'ghrh':'gh-axis','ghrp':'gh-axis','hgh':'gh-axis','glp1':'glp1-axis'};
@@ -818,15 +818,15 @@ function _detectStackConflicts(newIdx){
     var st=_userStacks[si];if(!st)return;
     _getStackCompounds(st).forEach(function(c){
       if(newIds[c.id]){
-        conflictingSet[si]=st.name||('Stack '+(si+1));
-        conflicts.push({compoundId:c.id,compoundName:c.name||c.id,existingId:c.id,existingName:c.name||c.id,stackIdx:si,stackName:st.name||('Stack '+(si+1)),reason:'duplicate'});
+        conflictingSet[si]=st.name||('Protocol '+(si+1));
+        conflicts.push({compoundId:c.id,compoundName:c.name||c.id,existingId:c.id,existingName:c.name||c.id,stackIdx:si,stackName:st.name||('Protocol '+(si+1)),reason:'duplicate'});
       } else {
         (c.cg||[]).forEach(function(tag){
           var cl=CROSS_STACK_CLUSTERS[tag];
           if(cl&&newClusters[cl]){
             newClusters[cl].forEach(function(nc){
-              conflictingSet[si]=st.name||('Stack '+(si+1));
-              conflicts.push({compoundId:nc.id,compoundName:nc.name,existingId:c.id,existingName:c.name||c.id,stackIdx:si,stackName:st.name||('Stack '+(si+1)),reason:'axis',axisLabel:cl});
+              conflictingSet[si]=st.name||('Protocol '+(si+1));
+              conflicts.push({compoundId:nc.id,compoundName:nc.name,existingId:c.id,existingName:c.name||c.id,stackIdx:si,stackName:st.name||('Protocol '+(si+1)),reason:'axis',axisLabel:cl});
             });
           }
         });
@@ -851,7 +851,7 @@ function _calcLatestActiveEnd(excludeIdx){
 }
 function _showConflictModal(newIdx,conflicts,conflictingIdxs){
   var newSt=_userStacks[newIdx];
-  var newName=newSt?newSt.name||('Stack '+(newIdx+1)):'New stack';
+  var newName=newSt?newSt.name||('Protocol '+(newIdx+1)):'New protocol';
   var seenKeys={};
   var uniqConflicts=conflicts.filter(function(c){var key=c.compoundId+'|'+(c.existingId||'');if(seenKeys[key])return false;seenKeys[key]=true;return true;});
   var cStackNames={};conflicts.forEach(function(c){cStackNames[c.stackIdx]=c.stackName;});
@@ -884,12 +884,12 @@ function _showConflictModal(newIdx,conflicts,conflictingIdxs){
     +'<div style="font-size:12px;color:#fca5a5;margin-top:4px;">Activating <strong>'+newName+'</strong> creates duplicate dosing — resolve before continuing</div>'
     +'</div>'
     +'<div style="padding:16px 18px;">'
-    +'<div style="font-size:12px;color:var(--muted2);margin-bottom:8px">These compounds would be dosed from multiple stacks simultaneously:</div>'
+    +'<div style="font-size:12px;color:var(--muted2);margin-bottom:8px">These compounds would be dosed from multiple protocols simultaneously:</div>'
     +conflictsHtml
     +'<div style="font-size:12px;color:var(--muted2);margin-top:14px;margin-bottom:10px;font-weight:700;">Choose a resolution:</div>'
     +'<button onclick="_resolveConflict(\'deactivate\',null)" style="'+btn+'background:#7f1d1d;color:#fca5a5;">'
     +'🔴 Deactivate '+cStackList
-    +'<div style="font-size:11px;font-weight:400;opacity:0.8;margin-top:3px">Keep <em>'+newName+'</em> active, deactivate the conflicting stack(s)</div>'
+    +'<div style="font-size:11px;font-weight:400;opacity:0.8;margin-top:3px">Keep <em>'+newName+'</em> active, deactivate the conflicting protocol(s)</div>'
     +'</button>'
     +'<button onclick="_resolveConflict(\'remove\',null)" style="'+btn+'background:var(--surface2);color:var(--text);border:1px solid var(--border);">'
     +'✂️ Remove duplicates from <em>'+newName+'</em>'
@@ -986,7 +986,7 @@ async function useStack(idx){
 }
 // ── Delete a stack ───────────────────────────────────────────────────────────
 async function deleteStack(idx){
-  if(!confirm('Delete this stack? This cannot be undone.'))return;
+  if(!confirm('Delete this protocol? This cannot be undone.'))return;
   if(idx>=0&&idx<_userStacks.length){
     _userStacks.splice(idx,1);
     _activeStackIndices=_activeStackIndices.filter(function(i){return i!==idx;}).map(function(i){return i>idx?i-1:i;});
@@ -1047,7 +1047,7 @@ async function _reconcileStackTestoSource(stack){
   if(typeof _tcp==='undefined'||!_tcp||_tcp.targetStackId!==stack.id)return; // not the T-Calc target
   if(!_stackHasConfigTrt(stack))return;                                      // no config testo → no conflict
   var _switch=(typeof confirm!=='function')?true
-    :confirm('“'+(stack.name||'This stack')+'” already gets testosterone from T-Calc. Replace it with this TRT config?');
+    :confirm('“'+(stack.name||'This protocol')+'” already gets testosterone from T-Calc. Replace it with this TRT config?');
   if(_switch){
     if(typeof _tcSetTargetStack==='function')await _tcSetTargetStack(''); // unassign T-Calc → config wins
   }else{
@@ -1086,7 +1086,7 @@ function buildStackStore(){
     html+='<div class="stack-card-header">';
     html+='<div style="flex:1;min-width:0;">';
     html+='<div onclick="event.stopPropagation();toggleStack('+i+')" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-bottom:5px;"><div style="width:34px;height:18px;border-radius:9px;background:'+(isActive?'var(--accent)':'rgba(255,255,255,0.15)')+';position:relative;flex-shrink:0;"><div style="position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:'+(isActive?'18px':'2px')+';box-shadow:0 1px 3px rgba(0,0,0,0.35);"></div></div><span style="font-size:10px;font-weight:600;color:'+(isActive?'var(--accent)':'var(--muted2)')+';letter-spacing:0.3px;">'+(isActive?'Active':'Inactive')+'</span></div>';
-    html+='<div class="stack-card-name">'+_esc(st.name||'Stack '+(i+1))+'</div>';
+    html+='<div class="stack-card-name">'+_esc(st.name||'Protocol '+(i+1))+'</div>';
     var _csDisp=st.cycle_start||'';
     if(_csDisp){var _csdD=parseLocalDate(_csDisp);if(st.cycle_length){var _cedD=new Date(_csdD.getTime()+st.cycle_length*7*86400000);html+='<div style="font-size:10px;color:var(--muted2);margin-top:2px;">'+fmtDate(_csdD)+' → '+fmtDate(_cedD)+'</div>';}else{html+='<div style="font-size:10px;color:var(--muted2);margin-top:2px;">'+fmtDate(_csdD)+' → ongoing</div>';}}
     html+='</div>';
@@ -1108,7 +1108,7 @@ function buildStackStore(){
     html+='<div class="stack-card-empty">';
     if(firstEmpty){
       html+='<button onclick="createNewStack()" style="background:none;border:none;color:var(--muted2);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:inherit;font-size:12px;padding:8px;line-height:1;">';
-      html+='<span style="font-size:22px;font-weight:300;">+</span><span>Add Stack</span>';
+      html+='<span style="font-size:22px;font-weight:300;">+</span><span>Add Protocol</span>';
       html+='</button>';
       firstEmpty=false;
     }
@@ -1226,7 +1226,7 @@ function _calcEnhancementCartItem(c,weeks){
 function _renderCartModal(){
   var inner=document.getElementById('cart-modal-inner');if(!inner)return;
   var st=_userStacks[_cartStackIdx];
-  if(!st){inner.innerHTML='<div style="padding:20px;color:var(--muted2)">No stack selected</div>';return;}
+  if(!st){inner.innerHTML='<div style="padding:20px;color:var(--muted2)">No protocol selected</div>';return;}
   var weeks=_cartWeeks;
   var ins='padding:8px 12px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:14px;font-family:inherit';
   var h='<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">';
@@ -1234,7 +1234,7 @@ function _renderCartModal(){
   h+='<button onclick="closeCartModal()" style="background:none;border:none;color:var(--muted2);font-size:20px;cursor:pointer;padding:0;line-height:1">&#x2715;</button>';
   h+='</div>';
   h+='<div style="padding:16px 20px 20px">';
-  h+='<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:14px">'+_esc(st.name||'Stack '+(_cartStackIdx+1))+'</div>';
+  h+='<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:14px">'+_esc(st.name||'Protocol '+(_cartStackIdx+1))+'</div>';
   h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:12px;color:var(--muted2)">';
   h+='Cycle length: <input type="number" min="1" max="52" value="'+weeks+'" oninput="_cartWeeks=Math.max(1,parseInt(this.value)||12);_renderCartModal()" style="'+ins+';width:64px;text-align:center"> weeks';
   h+='</div>';
@@ -1248,7 +1248,7 @@ function _renderCartModal(){
       h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">';
       h+='<div style="font-size:13px;font-weight:600;color:var(--text);flex:1">'+_esc(item.name)+'</div>';
       h+='</div>';
-      if(item.noData){h+='<div style="font-size:11px;color:var(--muted2);margin-top:4px">Set dose in Stack to calculate</div>';}
+      if(item.noData){h+='<div style="font-size:11px;color:var(--muted2);margin-top:4px">Set dose in Protocol to calculate</div>';}
       else if(item.vials!=null){
         h+='<div style="font-size:11px;color:var(--muted2);line-height:1.9;margin-top:4px">';
         h+='Total: '+item.total+' '+item.unit+' · <span style="font-weight:600;color:var(--text)">'+item.vials+' vial'+(item.vials===1?'':'s')+'</span>';
@@ -1278,7 +1278,7 @@ function _renderCartModal(){
     });
   }
   if(!hasItems&&!peptides.length&&!enhanceCmpds.length){
-    h+='<div style="text-align:center;padding:24px 0;color:var(--muted2);font-size:13px">Add peptides to this stack to see your shopping list.</div>';
+    h+='<div style="text-align:center;padding:24px 0;color:var(--muted2);font-size:13px">Add peptides to this protocol to see your shopping list.</div>';
   }
   h+='</div>';
   inner.innerHTML=h;

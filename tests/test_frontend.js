@@ -240,15 +240,15 @@ check('initWizard: stackName is string',   typeof G._wiz.stackName==='string'&&G
 // ── _nextStackName: new stacks bump Cycle N (not always "Cycle 1") ──
 if(typeof G._nextStackName==='function'){
   var _nsSaved=G._userStacks;
-  G._userStacks=[];                       check('_nextStackName: first stack = Cycle 1', G._nextStackName()==='Cycle 1');
-  G._userStacks=[{name:'Cycle 1'}];       check('_nextStackName: after Cycle 1 = Cycle 2', G._nextStackName()==='Cycle 2');
-  G._userStacks=[{name:'Cycle 1'},{name:'Cycle 2'},{name:'Cycle 3'}]; check('_nextStackName: bumps to Cycle 4', G._nextStackName()==='Cycle 4');
-  G._userStacks=[{name:'Cycle 1'},{name:'Cycle 3'}]; check('_nextStackName: past highest Cycle N (no collision)', G._nextStackName()==='Cycle 4');
-  G._userStacks=[{name:'Cutting Stack'},{name:'Bulking'}]; check('_nextStackName: non-cycle names → next slot', G._nextStackName()==='Cycle 3');
+  G._userStacks=[];                       check('_nextStackName: first protocol = Protocol 1', G._nextStackName()==='Protocol 1');
+  G._userStacks=[{name:'Protocol 1'}];    check('_nextStackName: after Protocol 1 = Protocol 2', G._nextStackName()==='Protocol 2');
+  G._userStacks=[{name:'Protocol 1'},{name:'Protocol 2'},{name:'Protocol 3'}]; check('_nextStackName: bumps to Protocol 4', G._nextStackName()==='Protocol 4');
+  G._userStacks=[{name:'Protocol 1'},{name:'Protocol 3'}]; check('_nextStackName: past highest Protocol N (no collision)', G._nextStackName()==='Protocol 4');
+  G._userStacks=[{name:'Cutting Stack'},{name:'Bulking'}]; check('_nextStackName: non-numbered names → next slot', G._nextStackName()==='Protocol 3');
   G._userStacks=_nsSaved;
   // initWizard uses it for a fresh (non-edit) stack
-  G._userStacks=[{name:'Cycle 1'}]; G.initWizard();
-  check('initWizard: default name bumps (Cycle 2)', G._wiz.stackName==='Cycle 2');
+  G._userStacks=[{name:'Protocol 1'}]; G.initWizard();
+  check('initWizard: default name bumps (Protocol 2)', G._wiz.stackName==='Protocol 2');
   G._userStacks=_nsSaved;
 }
 
@@ -1595,7 +1595,7 @@ console.log('\n── dose dedup migration ────────────�
 
   // Empty-state coaching: a user with no active stack is offered a first action,
   // not a dead "nothing scheduled"; a rest day on an active stack still reads calm.
-  check('Today empty state coaches first-timers to build a stack', todayJs.includes('Build your first stack') && todayJs.includes('createNewStack()'));
+  check('Today empty state coaches first-timers to build a protocol', todayJs.includes('Build your first protocol') && todayJs.includes('createNewStack()'));
   check('Today empty state keeps "Nothing scheduled today" for active-stack rest days', todayJs.includes('Nothing scheduled today'));
   check('Today empty state branches on an active stack', todayJs.includes('_hasActive'));
   check('Today empty state offers a template when templates loaded', todayJs.includes('openTemplatePicker()') && todayJs.includes('_protocolTemplates'));
@@ -1606,7 +1606,7 @@ console.log('\n── dose dedup migration ────────────�
     const _bloodJs2 = fs.readFileSync(path.join(__dirname, '../tab-blood.js'), 'utf8');
     const _tlJs2 = fs.readFileSync(path.join(__dirname, '../tab-timeline.js'), 'utf8');
     check('Levels empty state has a CTA (build stack / go to Plan)',
-      _bloodJs2.includes('Build your first stack') && /switchPrimary\(\\?'plan\\?'\)/.test(_bloodJs2) && _bloodJs2.includes('createNewStack()'));
+      _bloodJs2.includes('Build your first protocol') && /switchPrimary\(\\?'plan\\?'\)/.test(_bloodJs2) && _bloodJs2.includes('createNewStack()'));
     check('Levels empty state branches on whether stacks exist', _bloodJs2.includes('_hasStacks'));
     check('Timeline empty state coaches with a CTA',
       _tlJs2.includes('No milestones yet') && /switchPrimary\(\\?'plan\\?'\)/.test(_tlJs2) && _tlJs2.includes('createNewStack()'));
@@ -2195,7 +2195,7 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
       G._wiz.enhanced.enabled=true;
       var revBody2={innerHTML:''};var revFoot2={innerHTML:''};
       G.wizStepReview(revBody2,revFoot2);
-      check('wizStepReview: enhanced compound without peptide errors → Save Stack label', revFoot2.innerHTML.includes('Save Stack'));
+      check('wizStepReview: enhanced compound without peptide errors → Save Protocol label', revFoot2.innerHTML.includes('Save Protocol'));
     }
   }
 
@@ -2436,10 +2436,10 @@ console.log('\n── Wizard step render tests ───────────
   var rvB={innerHTML:''};var rvF={innerHTML:''};
   G.wizStepReview(rvB,rvF);
   check('wizStepReview empty: body not empty', rvB.innerHTML.length>0);
-  check('wizStepReview empty: shows Stack Name input', rvB.innerHTML.includes('Stack Name'));
+  check('wizStepReview empty: shows Protocol Name input', rvB.innerHTML.includes('Protocol Name'));
   check('wizStepReview empty: shows Summary section', rvB.innerHTML.includes('Summary'));
   check('wizStepReview empty: no peptides message', rvB.innerHTML.includes('No peptides'));
-  check('wizStepReview empty: footer has Save Stack', rvF.innerHTML.includes('Save Stack'));
+  check('wizStepReview empty: footer has Save Protocol', rvF.innerHTML.includes('Save Protocol'));
 
   // wizStepReview: Enhanced-only flow — no "No peptides selected." shown
   G._userTier=3;
