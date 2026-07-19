@@ -1823,10 +1823,10 @@ function _tcOptimize() {
   var hasHCG = _tcp.inventory.some(function(inv){ return inv.compId === 'hcg'; });
   result.suggestions.push(hasHCG ? {
     type: 'hcg-included', priority: 0,
-    message: 'HCG in inventory — run 500–1000 IU 2×/week alongside TRT to maintain testicular function.'
+    message: 'HCG in inventory — run 250–500 IU 2×/week alongside TRT to maintain testicular function.'
   } : {
     type: 'hcg-missing', priority: 1,
-    message: 'Add HCG (500–1000 IU 2×/week) to prevent testicular atrophy and preserve intratesticular testosterone.'
+    message: 'Add HCG (250–500 IU 2×/week) to prevent testicular atrophy and preserve intratesticular testosterone.'
   });
 
   var testInv = _tcp.inventory.filter(function(inv){ return inv.compId !== 'hcg'; });

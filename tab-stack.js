@@ -1466,7 +1466,7 @@ function _renderEnhancedViewTab(st){
       html+='</div>';
     });
     // Recovery & PCT panel — filled async from the backend by _ensurePctPanel(st)
-    html+='<div class="wiz-section" style="margin-top:18px;">Recovery &amp; PCT</div>';
+    html+='<div class="wiz-section" style="margin-top:18px;">On-cycle &amp; recovery</div>';
     html+='<div id="pct-recovery-body"><div style="color:var(--muted2);font-size:12px;padding:8px 0;">Loading recovery plan…</div></div>';
   }
   return html;
@@ -1487,10 +1487,15 @@ function _renderPctPlanHtml(plan){
   if(!plan)return '<div style="color:var(--muted2);font-size:12px;">Recovery plan unavailable.</div>';
   if(plan.applicable===false){return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px;color:var(--muted2);line-height:1.5;">'+_esc((plan.notes&&plan.notes[0])||'Not applicable.')+'</div>';}
   var h='';
-  (plan.on_cycle||[]).forEach(function(o){h+='<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:8px 10px;margin-bottom:8px;"><div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">On-cycle · '+_esc(o.agent||'')+'</div><div style="font-size:12px;color:var(--text);line-height:1.5;">'+_esc(o.message||'')+'</div></div>';});
+  // ── On-cycle support (runs DURING the cycle) ──
+  if(plan.on_cycle&&plan.on_cycle.length){
+    h+='<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent);text-transform:uppercase;margin:0 0 6px;">On-cycle support</div>';
+    plan.on_cycle.forEach(function(o){h+='<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:8px 10px;margin-bottom:8px;"><div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px;">＋ '+_esc(o.agent||'')+'</div><div style="font-size:12px;color:var(--muted2);line-height:1.5;">'+_esc(o.message||'')+'</div></div>';});
+  }
   var p=plan.pct;
   if(p){
-    h+='<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin:10px 0 4px;">Start PCT</div>';
+    h+='<div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin:16px 0 6px;border-top:1px solid var(--border);padding-top:12px;">Post-cycle (PCT)</div>';
+    h+='<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin:4px 0 4px;">Start PCT</div>';
     h+='<div style="font-size:12px;color:var(--text);line-height:1.5;margin-bottom:8px;">'+_esc(p.start||'')+'</div>';
     if(p.serm){
       var sm=p.serm;
@@ -1525,18 +1530,32 @@ function _ensurePctPanel(st){
 var _ADV_OBJECTIVES=[['lean_mass','Lean mass'],['mass','Mass / bulk'],['recomp','Recomposition'],['cut','Cutting'],['contest','Contest prep'],['strength','Strength']];
 var _ADV_FLAGS=[['hair_loss','Hair-loss prone'],['hypertension_hct','High BP / hematocrit'],['lipids','Poor lipids (low HDL)'],['mood','Mood sensitive'],['fertility','Preserve fertility']];
 
+// Cycle-stage selector — maps to the backend experience tiers. 'curious' collapses
+// to 'first' (starting an enhanced protocol = at least a first cycle).
+var _ADV_EXPERIENCE=[['first','First cycle'],['experienced','2nd–few cycles'],['advanced','Advanced / many']];
+function _advNormExp(e){e=(e||'').toLowerCase();return e==='curious'?'first':(['first','experienced','advanced'].indexOf(e)>=0?e:'first');}
 function _wizAdviseState(){
-  if(!_wiz.advise)_wiz.advise={objective:'lean_mass',flags:{},result:null,loading:false,error:'',fetched:false,_seeded:false};
+  if(!_wiz.advise){
+    var prof=(typeof getData==='function')?getData('pep-profile',null):null;
+    var exp0=_advNormExp((typeof _pepExpTier==='function'&&_pepExpTier())||(prof&&prof.experience)||'first');
+    _wiz.advise={objective:'lean_mass',experience:exp0,flags:{},result:null,loading:false,error:'',fetched:false,_seeded:false};
+  }
   return _wiz.advise;
 }
 function _wizAdviseInputs(){
   var st=_wizAdviseState();
   var prof=(typeof getData==='function')?getData('pep-profile',null):null;
   var sex=(prof&&prof.sex)||(typeof _userProfile==='function'&&_userProfile().sex)||'male';
-  var exp=(typeof _pepExpTier==='function'&&_pepExpTier())||(prof&&prof.experience)||'first';
   var bfEntry=(typeof _latestBodyFat==='function')?_latestBodyFat():null;
   var bf=(bfEntry&&typeof bfEntry.bf==='number')?bfEntry.bf:(typeof bfEntry==='number'?bfEntry:null);
-  return {experience:exp,sex:sex,objective:st.objective,body_fat:bf,flags:st.flags||{}};
+  return {experience:_advNormExp(st.experience),sex:sex,objective:st.objective,body_fat:bf,flags:st.flags||{}};
+}
+function wizAdviseSetExperience(v){
+  var st=_wizAdviseState();st.experience=v;st.result=null;st.fetched=false;st._seeded=false;
+  // Persist the correction so it isn't stale here or elsewhere in the app.
+  try{var p=(typeof getData==='function'&&getData('pep-profile',null))||{};p.experience=v;if(typeof setData==='function')setData('pep-profile',p);
+      if(typeof pushPepSettingsToAgent==='function')pushPepSettingsToAgent({'pep-experience':v});}catch(e){}
+  wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
 }
 async function enhancedAdvisorFromAgent(inp){
   var ctrl=new AbortController();var tid=setTimeout(function(){ctrl.abort();},10000);
@@ -1560,11 +1579,13 @@ async function wizAdviseFetch(){
 function wizAdviseSetObjective(v){var st=_wizAdviseState();st.objective=v;st.result=null;st.fetched=false;st._seeded=false;wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));}
 function wizAdviseToggleFlag(k){var st=_wizAdviseState();if(!st.flags)st.flags={};st.flags[k]=!st.flags[k];st.result=null;st.fetched=false;st._seeded=false;wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));}
 function _wizAdviseCompoundRow(item,kind){
-  var accent=kind==='avoid'?'#f59e0b':(kind==='primary'?'var(--accent)':'var(--muted2)');
-  var icon=kind==='avoid'?'✕':(kind==='primary'?'✓':'○');
-  return '<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid '+accent+';border-radius:6px;padding:8px 10px;margin-bottom:6px;">'
-    +'<div style="display:flex;align-items:center;gap:8px;"><span style="color:'+accent+';font-weight:700;font-size:12px;">'+icon+'</span><span style="font-size:13px;font-weight:700;color:var(--text);">'+_esc(item.name||item.id)+'</span></div>'
-    +(item.reason?'<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-top:3px;">'+_esc(item.reason)+'</div>':'')
+  var map={best:['var(--accent)','★'],primary:['var(--accent)','✓'],consider:['var(--muted2)','○'],later:['#7a8899','⏱'],avoid:['#f59e0b','✕'],oncycle:['var(--accent)','＋']};
+  var m=map[kind]||map.consider;var accent=m[0],icon=m[1];
+  var bg=kind==='best'?'rgba(232,255,60,0.06)':'var(--surface2)';
+  var badge=kind==='best'?'<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:#0a0a0a;background:var(--accent);border-radius:4px;padding:1px 6px;margin-left:auto;text-transform:uppercase;">Best pick</span>':'';
+  return '<div style="background:'+bg+';border:1px solid var(--border);border-left:3px solid '+accent+';border-radius:6px;padding:8px 10px;margin-bottom:6px;">'
+    +'<div style="display:flex;align-items:center;gap:8px;"><span style="color:'+accent+';font-weight:700;font-size:12px;">'+icon+'</span><span style="font-size:13px;font-weight:700;color:var(--text);">'+_esc(item.name||item.agent||item.id)+'</span>'+badge+'</div>'
+    +(item.reason||item.message?'<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-top:3px;">'+_esc(item.reason||item.message)+'</div>':'')
     +'</div>';
 }
 function _wizAdviseSection(title,items,kind){
@@ -1598,12 +1619,17 @@ function wizAdviseNext(){wizApplyAdviseRecommendations();wizNext();}
 function wizStepAdvise(body,footer){
   var st=_wizAdviseState();
   var inp=_wizAdviseInputs();
-  var expLabel={curious:'Just curious',first:'First cycle',experienced:'Experienced',advanced:'Advanced'}[inp.experience]||inp.experience;
-  var html='<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;line-height:1.5;">Answer a couple of questions and we\'ll recommend which compounds fit — and which to avoid — for you. You can still pick anything on the next step.</div>';
-  // Prefilled profile summary
+  var html='<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;line-height:1.5;">Tell us where you are and what you\'re after — we\'ll recommend which compound to add (and what to save for later). You can still pick anything on the next step.</div>';
+  // Profile summary (sex + BF are read from your profile)
   html+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--muted2);">'
-    +'Using your profile: <b style="color:var(--text)">'+_esc(expLabel)+'</b> · <b style="color:var(--text)">'+_esc(inp.sex)+'</b>'
+    +'From your profile: <b style="color:var(--text)">'+_esc(inp.sex)+'</b>'
     +(inp.body_fat!=null?(' · <b style="color:var(--text)">'+Math.round(inp.body_fat)+'% BF</b>'):' · <span style="color:var(--muted2)">body-fat not logged</span>')+'</div>';
+  // Experience / cycle stage (drives the whole recommendation — editable here)
+  html+='<div class="wiz-section" style="margin-bottom:8px;">Where are you at?</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">';
+  _ADV_EXPERIENCE.forEach(function(e){var sel=_advNormExp(st.experience)===e[0];
+    html+='<div onclick="wizAdviseSetExperience(\''+e[0]+'\')" style="padding:8px 12px;border:1px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'rgba(232,255,60,0.08)':'transparent')+';color:'+(sel?'var(--accent)':'var(--text)')+';border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;">'+e[1]+'</div>';
+  });
+  html+='</div>';
   // Objective
   html+='<div class="wiz-section" style="margin-bottom:8px;">Primary objective</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">';
   _ADV_OBJECTIVES.forEach(function(o){var sel=st.objective===o[0];
@@ -1622,9 +1648,18 @@ function wizStepAdvise(body,footer){
   if(st.error){html+='<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:#f59e0b;">'+_esc(st.error)+'</div>';}
   else if(st.result){
     var res=st.result;
+    // Headline — the plain-language answer up top.
+    if(res.headline){html+='<div style="background:rgba(232,255,60,0.06);border:1px solid rgba(232,255,60,0.3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--text);line-height:1.5;">'+_esc(res.headline)+'</div>';}
     if(res.base){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">Required base</div>'+_wizAdviseCompoundRow({name:res.base.name,reason:res.base.note},'primary')+'</div>';}
-    html+=_wizAdviseSection('Recommended for you',res.primary,'primary');
+    // Best addition (the single top pick), then the rest of primary.
+    var bestId=res.best_addition&&res.best_addition.id;
+    var restPrimary=(res.primary||[]).filter(function(p){return p.id!==bestId;});
+    if(res.best_addition){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">Best addition</div>'+_wizAdviseCompoundRow(res.best_addition,'best')+'</div>';}
+    if(restPrimary.length)html+=_wizAdviseSection(res.best_addition?'Also recommended':'Recommended for you',restPrimary,'primary');
     html+=_wizAdviseSection('Worth considering',res.consider,'consider');
+    // On-cycle support (e.g. HCG) — this runs DURING the cycle, not in PCT.
+    if(res.on_cycle&&res.on_cycle.length){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">On-cycle support</div>'+res.on_cycle.map(function(o){return _wizAdviseCompoundRow(o,'oncycle');}).join('')+'</div>';}
+    html+=_wizAdviseSection('Save for a later cycle',res.save_for_later,'later');
     html+=_wizAdviseSection('Not recommended for you',res.avoid,'avoid');
     if(res.guardrails&&res.guardrails.length){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">Guardrails</div>'+res.guardrails.map(function(g){return '<div style="font-size:11px;color:var(--text);line-height:1.5;padding:2px 0;">• '+_esc(g)+'</div>';}).join('')+'</div>';}
     if(res.notes&&res.notes.length){html+=res.notes.map(function(n){return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:6px;font-size:11px;color:var(--muted2);line-height:1.5;">ℹ '+_esc(n)+'</div>';}).join('');}
