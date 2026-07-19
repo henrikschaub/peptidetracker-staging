@@ -2265,6 +2265,18 @@ console.log('\n── Edit Enhanced tab — stack editor regression ────
     var viewHtml=G._renderEnhancedViewTab({enhanced:{enabled:true,compounds:[{id:testId2,name:'Test Compound',dose:'250',unit:'mg',days:[1,3],dot:'#e05050'}]}});
     check('_renderEnhancedViewTab: contains compound name', viewHtml.includes('Test Compound'));
     check('_renderEnhancedViewTab: contains dose', viewHtml.includes('250mg'));
+    check('_renderEnhancedViewTab: includes Recovery & PCT panel when compounds present', viewHtml.includes('Recovery &amp; PCT') && viewHtml.includes('pct-recovery-body'));
+
+    // _renderPctPlanHtml renders a backend plan (no network — pass a mock plan)
+    check('_renderPctPlanHtml defined', typeof G._renderPctPlanHtml==='function');
+    var _pctMock={applicable:true,on_cycle:[{agent:'HCG',message:'HCG 500–1000 IU 2×/week.'}],pct:{start:'≈2 week(s) after the last injection.',serm:{primary:{agent:'Tamoxifen (Nolvadex)',schedule:[{weeks:'1–2',dose:'20 mg/day'}]},alternative:{agent:'Clomiphene (Clomid)',schedule:[{weeks:'1–2',dose:'50 mg/day'}]},note:'HCG primes before, never during.'},confirm_labs:['LH and FSH']},notes:['n'],guardrails:['g']};
+    var _pctHtml=G._renderPctPlanHtml(_pctMock);
+    check('_renderPctPlanHtml: shows on-cycle HCG', _pctHtml.includes('HCG'));
+    check('_renderPctPlanHtml: shows SERM restart (Tamoxifen)', _pctHtml.includes('Tamoxifen'));
+    check('_renderPctPlanHtml: shows PCT start timing', _pctHtml.includes('after the last injection'));
+    check('_renderPctPlanHtml: shows confirm labs', _pctHtml.includes('LH and FSH'));
+    var _pctFemale=G._renderPctPlanHtml({applicable:false,notes:['female note']});
+    check('_renderPctPlanHtml: female/non-applicable shows note', _pctFemale.includes('female note'));
 
     var viewEmpty=G._renderEnhancedViewTab({enhanced:{enabled:false,compounds:[]}});
     check('_renderEnhancedViewTab empty: shows no compounds message', viewEmpty.includes('No enhancement compounds'));
