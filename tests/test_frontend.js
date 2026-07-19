@@ -393,17 +393,29 @@ check('_wizFlow: peps+TRT ends with review', pepTrtFlow[pepTrtFlow.length-1]==='
 // _wizFlow: TRT + Enhanced (T3, trt enabled, enhanced goal, no pep goals)
 G._userTier=3;G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['enhanced'];
 var trtEnhFlow=G._wizFlow();
-check('_wizFlow: TRT+enhanced has 6 steps', trtEnhFlow.length===6, 'got '+trtEnhFlow.length);
-check('_wizFlow: TRT+enhanced steps', trtEnhFlow.join(',')===('cycle,goals,trt,enhanced,validate,review'));
+check('_wizFlow: TRT+enhanced has 7 steps', trtEnhFlow.length===7, 'got '+trtEnhFlow.length);
+check('_wizFlow: TRT+enhanced steps', trtEnhFlow.join(',')===('cycle,goals,trt,advise,enhanced,validate,review'));
+check('_wizFlow: advise precedes enhanced', trtEnhFlow.indexOf('advise')===trtEnhFlow.indexOf('enhanced')-1);
 // _wizFlow: Peps + TRT + Enhanced (T3, all tiers)
 G._userTier=3;G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['enhanced','muscle'];
 var allFlow=G._wizFlow();
-check('_wizFlow: peps+TRT+enhanced has 9 steps', allFlow.length===9, 'got '+allFlow.length);
+check('_wizFlow: peps+TRT+enhanced has 10 steps', allFlow.length===10, 'got '+allFlow.length);
+check('_wizFlow: peps+TRT+enhanced has advise', allFlow.includes('advise'));
 check('_wizFlow: peps+TRT+enhanced has peptides', allFlow.includes('peptides'));
 check('_wizFlow: peps+TRT+enhanced has trt',      allFlow.includes('trt'));
 check('_wizFlow: peps+TRT+enhanced has enhanced',  allFlow.includes('enhanced'));
 check('_wizFlow: peps+TRT+enhanced has validate',  allFlow.includes('validate'));
+// wizStepAdvise: renders the guidance step without throwing (network only fires on button click)
+G._userTier=3;G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['enhanced'];
+var _advBody={innerHTML:''}, _advFooter={innerHTML:''}, _advThrew=false;
+try{ G.wizStepAdvise(_advBody,_advFooter); }catch(e){ _advThrew=true; }
+check('wizStepAdvise: renders without throwing', !_advThrew);
+check('wizStepAdvise: shows objective picker', _advBody.innerHTML.includes('Primary objective'));
+check('wizStepAdvise: has a Get recommendations action', _advBody.innerHTML.includes('Get recommendations'));
+check('wizStepAdvise: Next button proceeds via wizAdviseNext', _advFooter.innerHTML.includes('wizAdviseNext'));
+check('wizAdviseSetObjective updates advise state', (G.wizAdviseSetObjective('cut'), G._wiz.advise.objective==='cut'));
 // wizNext / wizBack
+G._userTier=1;G.initWizard();
 G._userTier=1;G.initWizard();
 G.wizNext();check('wizNext: 0→1', G._wiz.step===1);
 G.wizNext();check('wizNext: 1→2', G._wiz.step===2);
@@ -417,12 +429,14 @@ G.wizNext();G.wizNext();G.wizNext();
 check('wizNext: TRT-only after 3 calls = step 3 (review)', G._wiz.step===3);
 G.wizNext();check('wizNext: TRT-only does not exceed step 3', G._wiz.step===3);
 G.wizBack();check('wizBack: TRT-only 3→2 (trt)', G._wiz.step===2);
-// TRT+Enhanced (no peps): step through
+// TRT+Enhanced (no peps): step through — flow is cycle,goals,trt,advise,enhanced,validate,review
 G._userTier=3;G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['enhanced'];
-G.wizNext();G.wizNext();G.wizNext();G.wizNext();G.wizNext();
-check('wizNext: TRT+enhanced after 5 calls = step 5 (review)', G._wiz.step===5);
-G.wizBack();check('wizBack: TRT+enhanced 5→4 (validate)', G._wiz.step===4);
-G.wizBack();check('wizBack: TRT+enhanced 4→3 (enhanced)', G._wiz.step===3);
+G.wizNext();G.wizNext();G.wizNext();G.wizNext();G.wizNext();G.wizNext();
+check('wizNext: TRT+enhanced after 6 calls = step 6 (review)', G._wiz.step===6);
+G.wizNext();check('wizNext: TRT+enhanced does not exceed step 6', G._wiz.step===6);
+G.wizBack();check('wizBack: TRT+enhanced 6→5 (validate)', G._wiz.step===5);
+G.wizBack();check('wizBack: TRT+enhanced 5→4 (enhanced)', G._wiz.step===4);
+G.wizBack();check('wizBack: TRT+enhanced 4→3 (advise)', G._wiz.step===3);
 G.wizBack();check('wizBack: TRT+enhanced 3→2 (trt)', G._wiz.step===2);
 // Peps+TRT: validate step appears
 G._userTier=2;G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['muscle'];
@@ -2070,7 +2084,8 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
   // Flow 4: TRT + Enhanced (T3, trt.enabled, enhanced goal, no pep goals)
   G._userTier=3;G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['enhanced'];
   var f4=G._wizFlow();
-  check('flow TRT+enhanced: 6 steps', f4.length===6, 'got '+f4.length);
+  check('flow TRT+enhanced: 7 steps', f4.length===7, 'got '+f4.length);
+  check('flow TRT+enhanced: has advise before enhanced', f4.indexOf('advise')===f4.indexOf('enhanced')-1);
   check('flow TRT+enhanced: has enhanced', f4.includes('enhanced'));
   check('flow TRT+enhanced: has validate', f4.includes('validate'));
   check('flow TRT+enhanced: no peptides step', !f4.includes('peptides'));
@@ -2078,7 +2093,7 @@ console.log('\n── Three-tier wizard — HGH & tier-aware steps ────�
   // Flow 5: Peps + TRT + Enhanced (T3, all tiers)
   G._userTier=3;G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['enhanced','muscle'];
   var f5=G._wizFlow();
-  check('flow peps+TRT+enhanced: 9 steps', f5.length===9, 'got '+f5.length);
+  check('flow peps+TRT+enhanced: 10 steps', f5.length===10, 'got '+f5.length);
   check('flow peps+TRT+enhanced: has all tiers', f5.includes('peptides')&&f5.includes('trt')&&f5.includes('enhanced'));
   check('flow peps+TRT+enhanced: has validate', f5.includes('validate'));
 

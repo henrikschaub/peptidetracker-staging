@@ -59,14 +59,16 @@ function _wizFlow(){
   var steps=['cycle','goals'];
   if(hasPeps){steps.push('peptides');steps.push('check');steps.push('configure');}
   if(hasTRT)steps.push('trt');
-  if(hasEnhanced)steps.push('enhanced');
+  // 'advise' (guided recommendation) precedes the raw Enhanced compound list.
+  if(hasEnhanced){steps.push('advise');steps.push('enhanced');}
   // VALIDATE when combining 2+ tiers so cross-tier conflicts are caught
   var tierCount=[hasPeps,hasTRT,hasEnhanced].filter(Boolean).length;
   if(tierCount>=2)steps.push('validate');
   steps.push('review');
   return steps;
 }
-var _WIZ_RENDERERS={cycle:function(b,f){wizStep1(b,f);},goals:wizStepGoals,peptides:wizStepPeptides,check:wizStepCheck,configure:wizStepConfig,trt:wizStepTRT,enhanced:wizStepEnhanced,validate:wizStepValidate,review:wizStepReview};
+var _WIZ_STEP_LABELS={advise:'GUIDANCE'};
+var _WIZ_RENDERERS={cycle:function(b,f){wizStep1(b,f);},goals:wizStepGoals,peptides:wizStepPeptides,check:wizStepCheck,configure:wizStepConfig,trt:wizStepTRT,advise:wizStepAdvise,enhanced:wizStepEnhanced,validate:wizStepValidate,review:wizStepReview};
 function wizRender(){
   var flow=_wizFlow();
   var idx=Math.min(_wiz.step,flow.length-1);
@@ -77,7 +79,7 @@ function wizRender(){
     prog+='<div class="wiz-dot '+cls+'"></div>';
   }
   document.getElementById('wiz-progress').innerHTML=prog;
-  document.getElementById('wiz-title').textContent=(_wiz.editMode?'EDIT ':'BUILD ')+flow[idx].toUpperCase();
+  document.getElementById('wiz-title').textContent=(_wiz.editMode?'EDIT ':'BUILD ')+((_WIZ_STEP_LABELS&&_WIZ_STEP_LABELS[flow[idx]])||flow[idx].toUpperCase());
   var body=document.getElementById('wiz-body');
   var footer=document.getElementById('wiz-footer');
   body.scrollTop=0;
@@ -1466,6 +1468,119 @@ function _renderEnhancedViewTab(st){
   return html;
 }
 
+// ── Enhanced advisor step (guided recommendation before the raw list) ────────
+var _ADV_OBJECTIVES=[['lean_mass','Lean mass'],['mass','Mass / bulk'],['recomp','Recomposition'],['cut','Cutting'],['contest','Contest prep'],['strength','Strength']];
+var _ADV_FLAGS=[['hair_loss','Hair-loss prone'],['hypertension_hct','High BP / hematocrit'],['lipids','Poor lipids (low HDL)'],['mood','Mood sensitive'],['fertility','Preserve fertility']];
+
+function _wizAdviseState(){
+  if(!_wiz.advise)_wiz.advise={objective:'lean_mass',flags:{},result:null,loading:false,error:'',fetched:false,_seeded:false};
+  return _wiz.advise;
+}
+function _wizAdviseInputs(){
+  var st=_wizAdviseState();
+  var prof=(typeof getData==='function')?getData('pep-profile',null):null;
+  var sex=(prof&&prof.sex)||(typeof _userProfile==='function'&&_userProfile().sex)||'male';
+  var exp=(typeof _pepExpTier==='function'&&_pepExpTier())||(prof&&prof.experience)||'first';
+  var bfEntry=(typeof _latestBodyFat==='function')?_latestBodyFat():null;
+  var bf=(bfEntry&&typeof bfEntry.bf==='number')?bfEntry.bf:(typeof bfEntry==='number'?bfEntry:null);
+  return {experience:exp,sex:sex,objective:st.objective,body_fat:bf,flags:st.flags||{}};
+}
+async function enhancedAdvisorFromAgent(inp){
+  var ctrl=new AbortController();var tid=setTimeout(function(){ctrl.abort();},10000);
+  try{
+    var r=await fetch(AGENT_URL+'/compounds/enhanced-advisor',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(inp||{}),signal:ctrl.signal});
+    clearTimeout(tid);
+    if(!r.ok){if(typeof _logHttp==='function')_logHttp('advisor',r.status,'/compounds/enhanced-advisor');return{ok:false,status:r.status};}
+    var d=await r.json();return{ok:true,advice:(d&&d.advice)||null};
+  }catch(e){clearTimeout(tid);if(typeof _logErr==='function')_logErr('advisor',e);return{ok:false,status:null,msg:String(e&&e.message||e)};}
+}
+async function wizAdviseFetch(){
+  var st=_wizAdviseState();
+  st.loading=true;st.error='';st._seeded=false;
+  wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
+  var res=await enhancedAdvisorFromAgent(_wizAdviseInputs());
+  st.loading=false;st.fetched=true;
+  if(res.ok&&res.advice){st.result=res.advice;}
+  else{st.result=null;st.error='Could not load recommendations'+(res.status?(' (HTTP '+res.status+')'):'')+'.';}
+  if(_wizFlow()[_wiz.step]==='advise')wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
+}
+function wizAdviseSetObjective(v){var st=_wizAdviseState();st.objective=v;st.result=null;st.fetched=false;st._seeded=false;wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));}
+function wizAdviseToggleFlag(k){var st=_wizAdviseState();if(!st.flags)st.flags={};st.flags[k]=!st.flags[k];st.result=null;st.fetched=false;st._seeded=false;wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));}
+function _wizAdviseCompoundRow(item,kind){
+  var accent=kind==='avoid'?'#f59e0b':(kind==='primary'?'var(--accent)':'var(--muted2)');
+  var icon=kind==='avoid'?'✕':(kind==='primary'?'✓':'○');
+  return '<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid '+accent+';border-radius:6px;padding:8px 10px;margin-bottom:6px;">'
+    +'<div style="display:flex;align-items:center;gap:8px;"><span style="color:'+accent+';font-weight:700;font-size:12px;">'+icon+'</span><span style="font-size:13px;font-weight:700;color:var(--text);">'+_esc(item.name||item.id)+'</span></div>'
+    +(item.reason?'<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-top:3px;">'+_esc(item.reason)+'</div>':'')
+    +'</div>';
+}
+function _wizAdviseSection(title,items,kind){
+  if(!items||!items.length)return '';
+  return '<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">'+title+'</div>'
+    +items.map(function(it){return _wizAdviseCompoundRow(it,kind);}).join('')+'</div>';
+}
+function wizApplyAdviseRecommendations(){
+  var st=_wizAdviseState();var res=st.result;
+  if(!res||st._seeded)return;
+  st._seeded=true;
+  if(!_wiz.enhanced)_wiz.enhanced={enabled:false,compounds:[]};
+  if(!_wiz.enhanced.compounds)_wiz.enhanced.compounds=[];
+  // Only seed when the user hasn't already built a selection, so we never
+  // overwrite manual choices (respects "only fix what was asked").
+  if(_wiz.enhanced.compounds.length)return;
+  var picks=[];
+  if(res.base&&res.base.id)picks.push(res.base.id);
+  (res.primary||[]).forEach(function(p){if(p&&p.id)picks.push(p.id);});
+  picks.forEach(function(id){
+    if(_wiz.enhanced.compounds.some(function(c){return c.id===id;}))return;
+    var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(c){return c.id===id;});
+    if(!cat)return;
+    var e={id:cat.id,name:cat.name,dose:String(cat.defaultDose||''),unit:cat.unit||'mg',days:cat.defaultDays?cat.defaultDays.slice():[0,1,2,3,4,5,6],dot:cat.dot};
+    if(cat.amPm){e.amPm=true;e.dose_am=String(cat.defaultDoseAm||'');e.dose_pm=String(cat.defaultDosePm||'');}
+    _wiz.enhanced.compounds.push(e);
+  });
+  _wiz.enhanced.enabled=_wiz.enhanced.compounds.length>0;
+}
+function wizAdviseNext(){wizApplyAdviseRecommendations();wizNext();}
+function wizStepAdvise(body,footer){
+  var st=_wizAdviseState();
+  var inp=_wizAdviseInputs();
+  var expLabel={curious:'Just curious',first:'First cycle',experienced:'Experienced',advanced:'Advanced'}[inp.experience]||inp.experience;
+  var html='<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;line-height:1.5;">Answer a couple of questions and we\'ll recommend which compounds fit — and which to avoid — for you. You can still pick anything on the next step.</div>';
+  // Prefilled profile summary
+  html+='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--muted2);">'
+    +'Using your profile: <b style="color:var(--text)">'+_esc(expLabel)+'</b> · <b style="color:var(--text)">'+_esc(inp.sex)+'</b>'
+    +(inp.body_fat!=null?(' · <b style="color:var(--text)">'+Math.round(inp.body_fat)+'% BF</b>'):' · <span style="color:var(--muted2)">body-fat not logged</span>')+'</div>';
+  // Objective
+  html+='<div class="wiz-section" style="margin-bottom:8px;">Primary objective</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">';
+  _ADV_OBJECTIVES.forEach(function(o){var sel=st.objective===o[0];
+    html+='<div onclick="wizAdviseSetObjective(\''+o[0]+'\')" style="padding:8px 12px;border:1px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'rgba(232,255,60,0.08)':'transparent')+';color:'+(sel?'var(--accent)':'var(--text)')+';border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;">'+o[1]+'</div>';
+  });
+  html+='</div>';
+  // Sensitivity flags
+  html+='<div class="wiz-section" style="margin-bottom:8px;">Any of these apply?</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">';
+  _ADV_FLAGS.forEach(function(fl){var sel=!!(st.flags&&st.flags[fl[0]]);
+    html+='<div onclick="wizAdviseToggleFlag(\''+fl[0]+'\')" style="padding:8px 12px;border:1px solid '+(sel?'#f59e0b':'var(--border)')+';background:'+(sel?'rgba(245,158,11,0.10)':'transparent')+';color:'+(sel?'#f59e0b':'var(--text)')+';border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;">'+(sel?'✓ ':'')+fl[1]+'</div>';
+  });
+  html+='</div>';
+  // Fetch button
+  html+='<button onclick="wizAdviseFetch()" '+(st.loading?'disabled ':'')+'style="width:100%;background:var(--accent);color:#0a0a0a;border:none;border-radius:10px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:0.5px;margin-bottom:14px;'+(st.loading?'opacity:0.6;':'')+'">'+(st.loading?'Getting recommendations…':(st.fetched?'Update recommendations':'Get recommendations'))+'</button>';
+  // Results
+  if(st.error){html+='<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:#f59e0b;">'+_esc(st.error)+'</div>';}
+  else if(st.result){
+    var res=st.result;
+    if(res.base){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">Required base</div>'+_wizAdviseCompoundRow({name:res.base.name,reason:res.base.note},'primary')+'</div>';}
+    html+=_wizAdviseSection('Recommended for you',res.primary,'primary');
+    html+=_wizAdviseSection('Worth considering',res.consider,'consider');
+    html+=_wizAdviseSection('Not recommended for you',res.avoid,'avoid');
+    if(res.guardrails&&res.guardrails.length){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">Guardrails</div>'+res.guardrails.map(function(g){return '<div style="font-size:11px;color:var(--text);line-height:1.5;padding:2px 0;">• '+_esc(g)+'</div>';}).join('')+'</div>';}
+    if(res.notes&&res.notes.length){html+=res.notes.map(function(n){return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:6px;font-size:11px;color:var(--muted2);line-height:1.5;">ℹ '+_esc(n)+'</div>';}).join('');}
+    html+='<div style="font-size:11px;color:var(--muted2);margin-top:8px;line-height:1.5;">Recommended compounds will be pre-selected on the next step — you can change anything.</div>';
+    html+=_renderSafetyNote('enhanced');
+  }
+  body.innerHTML=html;
+  footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizAdviseNext()">Next →</button>';
+}
 function wizStepEnhanced(body,footer){
   if(!_wiz.enhanced)_wiz.enhanced={enabled:false,compounds:[]};
   // Catalogue not yet loaded — show a visible loading state and auto-fetch
