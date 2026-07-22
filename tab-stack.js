@@ -64,11 +64,12 @@ function _wizFlow(){
   // VALIDATE when combining 2+ tiers so cross-tier conflicts are caught
   var tierCount=[hasPeps,hasTRT,hasEnhanced].filter(Boolean).length;
   if(tierCount>=2)steps.push('validate');
+  steps.push('nutrition');
   steps.push('review');
   return steps;
 }
-var _WIZ_STEP_LABELS={advise:'GUIDANCE'};
-var _WIZ_RENDERERS={cycle:function(b,f){wizStep1(b,f);},goals:wizStepGoals,peptides:wizStepPeptides,check:wizStepCheck,configure:wizStepConfig,trt:wizStepTRT,advise:wizStepAdvise,enhanced:wizStepEnhanced,validate:wizStepValidate,review:wizStepReview};
+var _WIZ_STEP_LABELS={advise:'GUIDANCE',nutrition:'MACROS'};
+var _WIZ_RENDERERS={cycle:function(b,f){wizStep1(b,f);},goals:wizStepGoals,peptides:wizStepPeptides,check:wizStepCheck,configure:wizStepConfig,trt:wizStepTRT,advise:wizStepAdvise,enhanced:wizStepEnhanced,validate:wizStepValidate,nutrition:wizStepNutrition,review:wizStepReview};
 function wizRender(){
   var flow=_wizFlow();
   var idx=Math.min(_wiz.step,flow.length-1);
@@ -1350,6 +1351,9 @@ function wizStepTRT(body,footer){
   var hasNebido=selIds.includes('nebido');
   var maxReached=hasNebido?(sel.length>=2):(sel.length>=1);
   var html='<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;">Select your testosterone compound and configure the protocol.</div>';
+  if((_wiz.goals||[]).includes('enhanced')){
+    html+='<div style="background:rgba(224,80,80,0.06);border-left:3px solid #e05050;border-radius:8px;padding:11px 13px;margin-bottom:12px;font-size:11.5px;color:var(--muted2);line-height:1.6"><b style="color:var(--text)">Combined cycle</b> — with a second anabolic driving growth, testosterone is often run at a <b>physiological base</b> (the Standard TRT tier below) to hold libido, mood and function while limiting dose-dependent sides (estrogen, haematocrit). Testosterone is dose-dependently anabolic (Bhasin 2001), so a lower base still contributes to the load. <i>The reduce-test-while-stacking approach is common practice but has no controlled-trial evidence — treat it as guidance, not fact.</i></div>';
+  }
   if(hasNebido&&sel.length===1){
     html+='<div style="font-size:11px;color:var(--muted2);margin-bottom:8px;">Nebido selected — you can add one short-acting compound for loading or bridging.</div>';
   }
@@ -1827,6 +1831,26 @@ function wizStepValidate(body,footer){
   body.innerHTML=html;
   footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
 }
+// Compound-aware macros as part of stack creation. Targets auto-adjust to the
+// stack tier (injected androgens lower the fat floor); phase is the user override.
+function wizStepNutrition(body,footer){
+  var bw=parseDec(localStorage.getItem('user_weight'))||0;
+  var onAndrogens=!!(_wiz&&((_wiz.trt&&_wiz.trt.enabled)||(_wiz.goals||[]).includes('enhanced')));
+  var html='<div style="font-size:12px;color:var(--muted2);margin-bottom:12px;">Macro targets for this protocol'+(onAndrogens?' — adjusted for injected hormones':'')+'. These also drive the Macros tab.</div>';
+  if(!bw){
+    html+='<div style="background:rgba(232,255,60,0.06);border-left:3px solid var(--accent);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--muted2);line-height:1.6">Set your body weight in the <b>Weights</b> tab to see calorie and macro targets here.</div>';
+    body.innerHTML=html;footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';return;
+  }
+  var phases=[{id:'reset',label:'Reset'},{id:'cut',label:'Cut'},{id:'recomp',label:'Recomp'}];
+  html+='<div style="display:flex;gap:6px;margin-bottom:12px">'+phases.map(function(p){var s=_macrosPhase===p.id;return'<button onclick="wizSetMacroPhase(\''+p.id+'\')" style="flex:1;background:'+(s?'var(--accent)':'var(--surface2)')+';color:'+(s?'#000':'var(--muted2)')+';border:1px solid '+(s?'var(--accent)':'var(--border)')+';border-radius:20px;padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'+p.label+'</button>';}).join('')+'</div>';
+  var m=calcMacros(bw,_macrosPhase,onAndrogens);
+  var mi=[{l:'Calories',v:m.kcal,u:'kcal'},{l:'Protein',v:m.protein,u:'g'},{l:'Carbs',v:m.carbs,u:'g'},{l:'Fat',v:m.fat,u:'g'}];
+  html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">'+mi.map(function(x,i){return'<div style="padding:14px 6px;text-align:center'+(i<3?';border-right:1px solid var(--border)':'')+'"><div style="font-family:var(--font-mono);font-size:22px;line-height:1;color:var(--text)">'+x.v+'</div><div style="font-size:9px;color:var(--muted2);text-transform:uppercase;margin-top:3px">'+x.u+'</div><div style="font-size:9px;color:var(--muted2)">'+x.l+'</div></div>';}).join('')+'</div>';
+  html+='<div style="background:rgba(60,255,160,0.06);border-left:3px solid var(--accent3);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--muted2);line-height:1.6">'+_macrosFatNote(onAndrogens)+'</div>';
+  body.innerHTML=html;
+  footer.innerHTML='<button class="btn btn-primary" style="flex:1" onclick="wizNext()">Next →</button>';
+}
+function wizSetMacroPhase(p){_macrosPhase=p;wizRender();}
 function wizStepReview(body,footer){
   var pepObjs=_wiz.peptides.map(function(p){return PEPTIDE_CAT.find(function(c){return c.id===p.id;})||{id:p.id,cg:[]};});
   var hasErrors=checkStack(pepObjs).some(function(i){return i.level==='err';});

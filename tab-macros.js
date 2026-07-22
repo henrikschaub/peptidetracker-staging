@@ -1,21 +1,41 @@
 /* ── MACROS ── */
 var _macrosPhase='recomp';
-function loadMacros(){var bw=parseDec(localStorage.getItem('user_weight'))||0;renderMacros(bw);}
+function loadMacros(){var bw=parseDec(localStorage.getItem('user_weight'))||0;renderMacros(bw,_macrosOnAndrogens());}
 function switchMacrosPhase(p){_macrosPhase=p;loadMacros();}
-function calcMacros(bw,phase){
+function calcMacros(bw,phase,onAndrogens){
   var protein=Math.round(bw*2.2);
   var kcalBase=Math.round(bw*31);
   var kcal=phase==='cut'?kcalBase-300:phase==='reset'?kcalBase:kcalBase+100;
-  var fat=Math.round(bw*0.9);
+  // On exogenous androgens the endogenous-T-protection reason for higher fat is moot
+  // (Whittaker 2021), so fat can run down to a ~0.5–0.6 g/kg essential-fat floor;
+  // otherwise keep ~0.9 g/kg (~25–30% kcal). See docs/enhanced-bodybuilding/08.
+  var fat=Math.round(bw*(onAndrogens?0.6:0.9));
   var carbs=Math.max(0,Math.round((kcal-protein*4-fat*9)/4));
-  return {protein:protein,carbs:carbs,fat:fat,kcal:kcal};
+  return {protein:protein,carbs:carbs,fat:fat,kcal:kcal,onAndrogens:!!onAndrogens};
+}
+// True when the user's active stack(s) include any injected androgen (TRT or Enhanced),
+// which lowers the dietary-fat floor (see calcMacros). Read-only over the active stacks.
+function _macrosOnAndrogens(){
+  try{
+    var idxs=(typeof _activeStackIndices!=='undefined'&&_activeStackIndices&&_activeStackIndices.length)?_activeStackIndices:[];
+    for(var i=0;i<idxs.length;i++){var s=(typeof _userStacks!=='undefined')?_userStacks[idxs[i]]:null;if(!s)continue;
+      if(s.trt&&s.trt.enabled&&s.trt.compounds&&s.trt.compounds.length)return true;
+      if(s.enhanced&&s.enhanced.compounds&&s.enhanced.compounds.length)return true;}
+  }catch(e){}
+  return false;
+}
+// Evidence-backed macro note; branches on whether injected androgens are present.
+function _macrosFatNote(onAndrogens){
+  return onAndrogens
+    ? 'Protein 2.2 g/kg (upper end of the evidence-based range, Morton 2018). <b>Fat set lower</b> (~0.5–0.6 g/kg): on injected hormones the main reason to keep fat high — protecting your own testosterone — no longer applies (low-fat diets cut endogenous T ~10–15%, Whittaker 2021; your testes are already suppressed on-cycle). Kept at an essential-fat floor for fatty acids and satiety; carbs take the freed calories around training.'
+    : 'Protein 2.2 g/kg — upper end of the evidence-based range for muscle retention (Morton 2018). Keep fat ~0.9 g/kg (≈25–30% kcal) to protect endogenous testosterone (low-fat diets cut it ~10–15%, Whittaker 2021). Adjust carbs and fat around training windows, not randomly.';
 }
 function saveMacrosTrainTime(val){localStorage.setItem('macros-train-time',val);pushPepSettingsToAgent({'macros-train-time':val});loadMacros();}
 function saveMacrosTrainDur(val){localStorage.setItem('macros-train-dur',String(val));pushPepSettingsToAgent({'macros-train-dur':val});loadMacros();}
-function renderMacros(bw){
+function renderMacros(bw,onAndrogens){
   var body=document.getElementById('macros-body');if(!body)return;
   if(!bw){body.innerHTML='<div style="padding:40px 20px;text-align:center;color:var(--muted2)"><div style="font-size:32px;margin-bottom:12px">⚖️</div><div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px">Set your body weight</div><div style="font-size:13px;line-height:1.5">Log your weight in the <b>Weights</b> tab so macros can be calculated for you.</div></div>';return;}
-  var m=calcMacros(bw,_macrosPhase);
+  var m=calcMacros(bw,_macrosPhase,onAndrogens);
   var phases=[{id:'reset',label:'Reset',color:'var(--accent4)'},{id:'cut',label:'Cut',color:'var(--accent2)'},{id:'recomp',label:'Recomp',color:'var(--accent3)'}];
   var trainTime=localStorage.getItem('macros-train-time')||'17:00';
   var trainDur=parseInt(localStorage.getItem('macros-train-dur'))||60;
@@ -31,7 +51,7 @@ function renderMacros(bw){
   h+='<div style="display:grid;grid-template-columns:repeat(4,1fr)">';
   var mi=[{l:'Calories',v:m.kcal,u:'kcal',c:'var(--accent)'},{l:'Protein',v:m.protein,u:'g',c:'var(--accent3)'},{l:'Carbs',v:m.carbs,u:'g',c:'var(--accent2)'},{l:'Fat',v:m.fat,u:'g',c:'var(--accent4)'}];
   mi.forEach(function(x,i){h+='<div style="padding:16px 6px;text-align:center'+(i<3?';border-right:1px solid var(--border)':'')+'">';h+='<div style="font-family:var(--font-mono);font-size:26px;line-height:1;color:'+x.c+'">'+x.v+'</div>';h+='<div style="font-size:9px;color:var(--muted2);text-transform:uppercase;letter-spacing:0.5px;margin-top:3px">'+x.u+'</div>';h+='<div style="font-size:9px;color:var(--muted2)">'+x.l+'</div></div>';});
-  h+='</div><div class="card-body"><div style="font-size:11px;color:var(--muted2);line-height:1.5">Protein 2.2 g/kg — non-negotiable for muscle retention. Adjust carbs and fat around training windows, not randomly.</div></div></div>';
+  h+='</div><div class="card-body"><div style="font-size:11px;color:var(--muted2);line-height:1.5">'+_macrosFatNote(onAndrogens)+'</div></div></div>';
   h+='<div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">MEAL TIMING</div></div></div>';
   h+='<div class="card-body" style="gap:12px">';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
