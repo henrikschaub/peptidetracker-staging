@@ -73,21 +73,29 @@ function _thCalFT(acc, measuredFT, birthYear) {
   return mean > 0 ? ft / mean : 0;
 }
 
-// Full series for rendering: {firstMs,totalDays,lastDay,ft:[pmol/L per day],maxFt,injDays[]}
+// Full series for rendering: {firstMs,totalDays,lastDay,ft:[pmol/L per day],maxFt,injDays[]}.
+// Uses the SAME free-T model as the T-Calc and Blood Levels tabs (_tcFreeTSeries) so the
+// curve carries the user's endogenous baseline (it starts at their measured/estimated free
+// T and rises with injections — not from zero). Day index t = days since the first logged
+// injection, identical to the model's own indexing. Curve ends at the last injection
+// (_TH_TAIL_DAYS = 0), so the model's washout tail is clipped off.
 function _thSeries() {
   var sorted = _thLog();
-  var acc = _thAccumulate(sorted, _TH_TAIL_DAYS);
-  if (!acc) return null;
-  var cal = _thCalFT(acc, (typeof _tcp !== 'undefined' && _tcp) ? _tcp.measuredFT : 0,
-                          (typeof _tcp !== 'undefined' && _tcp) ? _tcp.birthYear : 0);
-  var ft = new Float64Array(acc.totalDays + 1), maxFt = 0;
-  for (var t = 0; t <= acc.totalDays; t++) { ft[t] = acc.total[t] * cal; if (ft[t] > maxFt) maxFt = ft[t]; }
+  if (!sorted.length || typeof _tcFreeTSeries !== 'function') return null;
+  var _S = _tcFreeTSeries(sorted, {});
+  if (!_S || !_S.total) return null;
+  var firstMs = new Date(sorted[0].date + 'T12:00:00').getTime();
+  var lastDay = Math.round((new Date(sorted[sorted.length - 1].date + 'T12:00:00').getTime() - firstMs) / 86400000);
+  var scaleAt = function(k){ k = Math.max(0, Math.min(_S.totalDays, k)); return _S.total[k] * (_S.calFT_arr ? _S.calFT_arr[k] : _S.scale); };
+  var horizon = lastDay + _TH_TAIL_DAYS;
+  var ft = new Float64Array(horizon + 1), maxFt = 0;
+  for (var t = 0; t <= horizon; t++) { ft[t] = scaleAt(t); if (ft[t] > maxFt) maxFt = ft[t]; }
   var injDays = sorted.map(function(e){
-    return { day: Math.round((new Date(e.date + 'T12:00:00').getTime() - acc.firstMs) / 86400000),
+    return { day: Math.round((new Date(e.date + 'T12:00:00').getTime() - firstMs) / 86400000),
              date: e.date, compId: e.compId, doseMg: parseDec(e.doseMg) };
   });
-  return { firstMs: acc.firstMs, totalDays: acc.totalDays, lastDay: acc.lastDay,
-           ft: ft, maxFt: maxFt, calibrated: cal > 0, injections: injDays, count: sorted.length };
+  return { firstMs: firstMs, totalDays: horizon, lastDay: lastDay,
+           ft: ft, maxFt: maxFt, calibrated: (_S.unitLabel === 'pmol/L'), injections: injDays, count: sorted.length };
 }
 
 function _thDayToMs(series, day){ return series.firstMs + day * 86400000; }
