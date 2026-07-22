@@ -70,7 +70,7 @@ const sandbox = vm.createContext({
 vm.runInContext(patchedScript, sandbox);
 // Load tab files so their functions/vars are available in the same sandbox
 const tabFiles = ['tab-cycles.js','tab-macros.js','tab-stack.js','tab-today.js',
-                  'tab-schedule.js','tab-timeline.js','tab-body.js','tab-recon.js','tab-blood.js','tab-tcalc.js','tab-labs.js','tab-supplements.js'];
+                  'tab-schedule.js','tab-timeline.js','tab-body.js','tab-recon.js','tab-blood.js','tab-tcalc.js','tab-thist.js','tab-labs.js','tab-supplements.js'];
 const dir = path.dirname(path.resolve(htmlPath));
 tabFiles.forEach(f => {
   const tabPath = path.join(dir, f);
@@ -5507,10 +5507,10 @@ if (typeof G.switchPrimary === 'function' && typeof G.primaryOf === 'function') 
   // Regression: legacy per-tab settings that hid EVERY sub-tab in a group must not
   // leave the primary empty/unreachable — it falls back to the whole group.
   var _svVis = G._tabVis;
-  G._tabVis = { blood:false, tcalc:false }; _cap = null; G._lastSub = {};
+  G._tabVis = { blood:false, tcalc:false, thist:false }; _cap = null; G._lastSub = {};
   G.switchPrimary('levels'); check('switchPrimary: all sub-tabs hidden → still opens the group (fallback)', _cap === 'blood');
   if (typeof G._groupVisibleSubs === 'function') {
-    check('_groupVisibleSubs: falls back to full group when all hidden', G._groupVisibleSubs('levels').length === 2);
+    check('_groupVisibleSubs: falls back to full group when all hidden', G._groupVisibleSubs('levels').length === 3);
   }
   G._tabVis = _svVis;
   G.switchTab = _origSwitch;
@@ -6022,6 +6022,33 @@ if(typeof G.caliperBF==='function'){
 if(typeof G._bcEntryDetail==='function'){
   check('entry detail: tape entry shows Neck', /Neck/.test(G._bcEntryDetail({method:'navy',neck:42,belly:94})));
   check('entry detail: caliper entry shows method label', /Jackson-Pollock 3-site/.test(G._bcEntryDetail({method:'jp3',skinfolds:{chest:10,abdomen:18,thigh:14}})));
+}
+
+// ── T-Historical (read-only free-T from logged injections) ─────────────────
+console.log('\n── T-Historical (read-only free-T) ────────────────────────');
+if(typeof G._thAccumulate==='function'){
+  var _thInj=[{compId:'testo',doseMg:'100',date:'2026-01-01'},{compId:'testo',doseMg:'100',date:'2026-01-08'}];
+  var _acc=G._thAccumulate(_thInj,14);
+  check('accumulate: lastDay = span between injections', !!_acc && _acc.lastDay===7, _acc?String(_acc.lastDay):'null');
+  check('accumulate: horizon = lastDay + 14-day tail', !!_acc && _acc.totalDays===21, _acc?String(_acc.totalDays):'null');
+  check('accumulate: curve rises after an injection', !!_acc && _acc.total[3]>0);
+  check('accumulate: single-injection log valid (tail only)', (function(){var a=G._thAccumulate([{compId:'testo',doseMg:'80',date:'2026-02-01'}],14);return !!a&&a.lastDay===0&&a.totalDays===14;})());
+  check('accumulate: empty log → null', G._thAccumulate([],14)===null);
+  var _cal=G._thCalFT(_acc,'400',0);
+  check('calFT positive with a measured free-T', _cal>0, String(_cal));
+  check('calFT positive via age-band default too', G._thCalFT(_acc,'',1990)>0);
+}
+if(typeof G._thSeries==='function'){
+  G._tcp=G._tcp||{};
+  G._tcp.manualLog=[{compId:'testo',doseMg:'100',date:'2026-01-08'},{compId:'testo',doseMg:'100',date:'2026-01-01'},{compId:'x',doseMg:'0',date:'2026-01-15'},{compId:'y',date:'2026-01-20'}];
+  G._tcp.measuredFT='400'; G._tcp.birthYear='1990';
+  var _s=G._thSeries();
+  check('series: filters invalid (0/undefined dose) + sorts → 2 valid', !!_s && _s.count===2, _s?String(_s.count):'null');
+  check('series: horizon ends 14d after last injection', !!_s && _s.totalDays===_s.lastDay+14);
+  check('series: calibrated to pmol/L when measured FT present', !!_s && _s.calibrated===true && _s.maxFt>0);
+  check('series: earliest injection is day 0 after sort', !!_s && _s.injections.length===2 && _s.injections[0].day===0);
+  G._tcp.manualLog=[];
+  check('series: empty log → null (drives empty state)', G._thSeries()===null);
 }
 
 console.log('\n───────────────────────────────────────────────────────────');
