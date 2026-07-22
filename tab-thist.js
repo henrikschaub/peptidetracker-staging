@@ -4,13 +4,13 @@
  * planning sub-tab — it only reads manualLog and reuses the T-Calc's pure PK
  * primitives (_tcCompInfo / _tcKa / _tcPkConc / _tcDefaultFT) so the curve shape
  * matches the rest of the app. The historical curve is drawn from the first
- * injection to 14 days after the last injection, with a date slider to scrub the
- * as-of day and week / month / year / all zoom levels.
+ * injection to the last injection, with a date slider to scrub the as-of day and
+ * week / month / year / all zoom levels.
  * ------------------------------------------------------------------------- */
 
 var _thZoom = 'all';       // 'week' | 'month' | 'year' | 'all'
 var _thFocusDay = null;    // as-of day index (days from first injection); null → last injection
-var _TH_TAIL_DAYS = 14;    // horizon: chart ends this many days after the last injection
+var _TH_TAIL_DAYS = 0;     // horizon: chart ends at the last injection (no post-injection tail)
 var _thInjections;         // cached /injections rows (undefined until first fetch)
 
 // Sorted testosterone injections that were actually LOGGED (checked in the Today
@@ -125,14 +125,14 @@ function _thRender(host) {
   var zooms = [{id:'week',label:'W'},{id:'month',label:'M'},{id:'year',label:'Y'},{id:'all',label:'All'}];
   var zBtns = zooms.map(function(z){
     var sel = _thZoom === z.id;
-    return '<button id="th-zoom-'+z.id+'" onclick="_thSetZoom(\''+z.id+'\')" style="flex:1;background:'+(sel?'rgba(102,136,204,0.25)':'none')+';color:'+(sel?'#6688cc':'var(--muted2)')+';border:1px solid '+(sel?'#6688cc66':'var(--border)')+';border-radius:8px;padding:7px 4px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'+z.label+'</button>';
+    return '<button id="th-zoom-'+z.id+'" onclick="_thSetZoom(\''+z.id+'\')" style="flex:1;background:'+(sel?'rgba(224,80,80,0.22)':'none')+';color:'+(sel?'#e05050':'var(--muted2)')+';border:1px solid '+(sel?'#e0505066':'var(--border)')+';border-radius:8px;padding:7px 4px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'+z.label+'</button>';
   }).join('');
   var h = '<div style="display:flex;flex-direction:column;gap:14px;padding:16px 20px">';
-  h += '<div style="font-size:11px;color:var(--muted2);line-height:1.5">Historical free-T from the testosterone injections you checked off in Today. Curve ends '+_TH_TAIL_DAYS+' days after the last injection. Read-only.</div>';
+  h += '<div style="font-size:11px;color:var(--muted2);line-height:1.5">Historical free-T from the testosterone injections you checked off in Today. Read-only.</div>';
   h += '<div style="display:flex;gap:6px">'+zBtns+'</div>';
   h += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:14px">';
   h += '<canvas id="th-chart" style="width:100%;display:block"></canvas>';
-  h += '<div style="margin-top:12px"><input id="th-slider" type="range" min="0" max="'+series.totalDays+'" value="'+_thFocusDay+'" step="1" oninput="_thSetFocusDay(this.value)" style="width:100%;accent-color:#6688cc"></div>';
+  h += '<div style="margin-top:12px"><input id="th-slider" type="range" min="0" max="'+series.totalDays+'" value="'+_thFocusDay+'" step="1" oninput="_thSetFocusDay(this.value)" style="width:100%;accent-color:#e05050"></div>';
   h += '<div id="th-readout" style="margin-top:8px;font-size:12px;color:var(--text);text-align:center;min-height:16px"></div>';
   h += '</div>';
   if (!series.calibrated) h += '<div style="font-size:11px;color:var(--muted2);line-height:1.5">Add a measured free-T value (and birth year) in T-Calc to calibrate the vertical scale to pmol/L. Showing relative shape until then.</div>';
@@ -141,7 +141,7 @@ function _thRender(host) {
   _thRedraw();
 }
 
-function _thSetZoom(z){ _thZoom = z; ['week','month','year','all'].forEach(function(zz){ var b=document.getElementById('th-zoom-'+zz); if(!b)return; var sel=zz===z; b.style.background=sel?'rgba(102,136,204,0.25)':'none'; b.style.color=sel?'#6688cc':'var(--muted2)'; b.style.borderColor=sel?'#6688cc66':'var(--border)'; }); _thRedraw(); }
+function _thSetZoom(z){ _thZoom = z; ['week','month','year','all'].forEach(function(zz){ var b=document.getElementById('th-zoom-'+zz); if(!b)return; var sel=zz===z; b.style.background=sel?'rgba(224,80,80,0.22)':'none'; b.style.color=sel?'#e05050':'var(--muted2)'; b.style.borderColor=sel?'#e0505066':'var(--border)'; }); _thRedraw(); }
 function _thSetFocusDay(v){ _thFocusDay = parseInt(v,10) || 0; _thRedraw(); }
 
 function _thRedraw() {
@@ -154,7 +154,7 @@ function _thRedraw() {
     var ftv = series.ft[Math.max(0, Math.min(series.totalDays, _thFocusDay))] || 0;
     var focusMs = _thDayToMs(series, _thFocusDay);
     var val = series.calibrated ? (Math.round(ftv) + ' pmol/L') : (Math.round(ftv*10)/10 + ' (rel.)');
-    ro.innerHTML = '<span style="color:var(--muted2)">As of</span> <b>' + _thFmtDate(focusMs) + '</b> · <span style="color:#6688cc;font-weight:700">' + val + '</span> free T';
+    ro.innerHTML = '<span style="color:var(--muted2)">As of</span> <b>' + _thFmtDate(focusMs) + '</b> · <span style="color:#e05050;font-weight:700">' + val + '</span> free T';
   }
 }
 
@@ -183,16 +183,16 @@ function _thDrawChart(canvasId, series, zoom, focusDay) {
   ctx.fillStyle = '#777'; ctx.font = '9px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
   for (var g = 0; g <= 3; g++) { var gy = PAD.top + cH/3*g; ctx.beginPath(); ctx.moveTo(PAD.left, gy); ctx.lineTo(PAD.left+cW, gy); ctx.stroke(); var lv = yMax - (yMax-yMin)*(g/3); ctx.fillText(series.calibrated ? String(Math.round(lv)) : (Math.round(lv*10)/10).toFixed(1), PAD.left-4, gy+3); }
   // injection tick marks (bottom)
-  series.injections.forEach(function(inj){ if (inj.day < winStart || inj.day > winEnd) return; var x = xOf(inj.day); ctx.strokeStyle = '#6688cc55'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, PAD.top+cH); ctx.stroke(); ctx.fillStyle = '#6688cc'; ctx.beginPath(); ctx.moveTo(x, PAD.top+cH-4); ctx.lineTo(x-3, PAD.top+cH+2); ctx.lineTo(x+3, PAD.top+cH+2); ctx.closePath(); ctx.fill(); });
+  series.injections.forEach(function(inj){ if (inj.day < winStart || inj.day > winEnd) return; var x = xOf(inj.day); ctx.strokeStyle = '#e0505055'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, PAD.top+cH); ctx.stroke(); ctx.fillStyle = '#e05050'; ctx.beginPath(); ctx.moveTo(x, PAD.top+cH-4); ctx.lineTo(x-3, PAD.top+cH+2); ctx.lineTo(x+3, PAD.top+cH+2); ctx.closePath(); ctx.fill(); });
   // curve (fill + line) across window
   var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top+cH);
-  grad.addColorStop(0, '#6688cc44'); grad.addColorStop(1, '#6688cc00');
+  grad.addColorStop(0, '#e0505044'); grad.addColorStop(1, '#e0505000');
   ctx.beginPath(); ctx.moveTo(xOf(winStart), PAD.top+cH);
   for (var d = winStart; d <= winEnd; d++) ctx.lineTo(xOf(d), yOf(series.ft[d] || 0));
   ctx.lineTo(xOf(winEnd), PAD.top+cH); ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
   ctx.beginPath();
   for (var d2 = winStart; d2 <= winEnd; d2++) { var x2 = xOf(d2), y2 = yOf(series.ft[d2] || 0); if (d2 === winStart) ctx.moveTo(x2, y2); else ctx.lineTo(x2, y2); }
-  ctx.strokeStyle = '#6688cc'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.strokeStyle = '#e05050'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
   // focus marker (as-of)
   if (focusDay >= winStart && focusDay <= winEnd) {
     var fx = xOf(focusDay), fy = yOf(series.ft[focusDay] || 0);
@@ -203,5 +203,5 @@ function _thDrawChart(canvasId, series, zoom, focusDay) {
   ctx.fillStyle = '#777'; ctx.font = '9px -apple-system,system-ui,sans-serif';
   ctx.textAlign = 'left';   ctx.fillText(_thFmtDate(_thDayToMs(series, winStart)), PAD.left, PAD.top+cH+16);
   ctx.textAlign = 'right';  ctx.fillText(_thFmtDate(_thDayToMs(series, winEnd)), PAD.left+cW, PAD.top+cH+16);
-  ctx.textAlign = 'right';  ctx.fillStyle = '#6688cc'; ctx.fillText(series.calibrated ? 'pmol/L' : 'rel.', PAD.left+cW, PAD.top+8);
+  ctx.textAlign = 'right';  ctx.fillStyle = '#e05050'; ctx.fillText(series.calibrated ? 'pmol/L' : 'rel.', PAD.left+cW, PAD.top+8);
 }

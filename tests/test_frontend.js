@@ -6067,7 +6067,7 @@ if(typeof G._thSeries==='function'){
   ];
   var _s=G._thSeries();
   check('series: only logged TRT injections feed it (excludes unchecked/non-T/zero) → 2', !!_s && _s.count===2, _s?String(_s.count):'null');
-  check('series: horizon ends 14d after last injection', !!_s && _s.totalDays===_s.lastDay+14);
+  check('series: curve ends at the last injection (no tail)', !!_s && _s.totalDays===_s.lastDay);
   check('series: calibrated to pmol/L when measured FT present', !!_s && _s.calibrated===true && _s.maxFt>0);
   check('series: earliest injection is day 0 after sort', !!_s && _s.injections.length===2 && _s.injections[0].day===0);
   G._thInjections=[];
