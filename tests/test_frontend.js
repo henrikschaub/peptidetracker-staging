@@ -6078,6 +6078,38 @@ if(typeof G._thSeries==='function'){
   check('series: empty log → null (drives empty state)', G._thSeries()===null);
 }
 
+// ── T-History calibration: the anchor override pins the completed-cycle fix ─────
+// Regression for the "free-T blown up ~50×" / "squashed vs T-Calc" incidents.
+console.log('\n── T-History calibration (anchor override) ────────────────');
+if(typeof G._tcFreeTSeries==='function'){
+  var _coFT=G._tcp.measuredFT, _coDose=G._tcp.currentDoseMgWk, _coBw=G._tcBwEntries, _coBY=G._tcp.birthYear;
+  // Completed cycle: 10 twice-weekly enanthate shots, all dates in the past vs the real clock,
+  // so "today" is past the last injection — the exact condition that degenerated the day-0 anchor.
+  var _coLog=[]; for(var _ci=0;_ci<10;_ci++){ var _cd=new Date(new Date('2026-01-05').getTime()+_ci*3.5*86400000);
+    _coLog.push({compId:'enanthate',doseMg:'100',date:_cd.getFullYear()+'-'+String(_cd.getMonth()+1).padStart(2,'0')+'-'+String(_cd.getDate()).padStart(2,'0')}); }
+  var _coLast=Math.round((new Date(_coLog[_coLog.length-1].date)-new Date(_coLog[0].date))/86400000);
+  var _coMax=function(S){ if(!S||!S.total)return 0; var m=0,c=Math.min(_coLast,S.totalDays); for(var k=0;k<=c;k++){ var v=S.total[k]*(S.calFT_arr?S.calFT_arr[k]:S.scale); if(isFinite(v)&&v>m)m=v; } return m; };
+  var _coAt=function(S,k){ if(!S||!S.total)return 0; k=Math.max(0,Math.min(S.totalDays,k)); var v=S.total[k]*(S.calFT_arr?S.calFT_arr[k]:S.scale); return isFinite(v)?v:0; };
+
+  // Case A — NO bloodwork: default day-0 anchor blows the completed cycle up; anchorDay fixes it.
+  G._tcp.measuredFT='217'; G._tcp.currentDoseMgWk=''; G._tcp.birthYear='1990'; G._tcBwEntries=null;
+  var _Ano=null,_Ayes=null,_AThrew=false;
+  try{ _Ano=G._tcFreeTSeries(_coLog,{}); _Ayes=G._tcFreeTSeries(_coLog,{anchorDay:_coLast}); }catch(e){ _AThrew=true; console.error('  caseA threw:',e.message); }
+  check('anchorOverride A: no crash', !_AThrew && !!_Ano && !!_Ayes);
+  check('anchorOverride A: anchorDay engages without bloodwork (re-anchors calibration)', !_AThrew && Math.abs(_coMax(_Ano)-_coMax(_Ayes))>1, 'day0='+Math.round(_coMax(_Ano))+' anchored='+Math.round(_coMax(_Ayes)));
+  check('anchorOverride A: anchored scale is physiological (0<max<1500) — the anti-blow-up guard', !_AThrew && _coMax(_Ayes)>0 && _coMax(_Ayes)<1500, 'max='+Math.round(_coMax(_Ayes)));
+
+  // Case B — bloodwork present: anchorDay must NOT clobber the bloodwork anchor (so T-History == T-Calc).
+  G._tcBwEntries=[{date:'2025-12-20', free_t:217}];   // pre-cycle baseline draw
+  var _Bno=null,_Bover=null,_BThrew=false;
+  try{ _Bno=G._tcFreeTSeries(_coLog,{}); _Bover=G._tcFreeTSeries(_coLog,{anchorDay:_coLast}); }catch(e){ _BThrew=true; console.error('  caseB threw:',e.message); }
+  check('anchorOverride B: no crash', !_BThrew && !!_Bno && !!_Bover);
+  check('anchorOverride B: bloodwork anchor NOT clobbered by anchorDay (peaks identical)', !_BThrew && Math.abs(_coMax(_Bno)-_coMax(_Bover))<1e-6, 'no='+Math.round(_coMax(_Bno))+' over='+Math.round(_coMax(_Bover)));
+  check('anchorOverride B: curve rises above baseline (end > start), matching the T-Calc shape', !_BThrew && _coAt(_Bover,_coLast) > _coAt(_Bover,0), 'start='+Math.round(_coAt(_Bover,0))+' end='+Math.round(_coAt(_Bover,_coLast)));
+
+  G._tcp.measuredFT=_coFT; G._tcp.currentDoseMgWk=_coDose; G._tcBwEntries=_coBw; G._tcp.birthYear=_coBY;
+}
+
 // ── Compound-aware macros (Batch 2) ────────────────────────────────────────
 console.log('\n── Compound-aware macros ──────────────────────────────────');
 if(typeof G.calcMacros==='function'){

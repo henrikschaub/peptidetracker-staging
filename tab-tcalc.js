@@ -1205,12 +1205,13 @@ function _tcFreeTSeries(sorted, hooks) {
     var _adD = new Date(firstDate.getTime() + _anchorDay * 86400000);
     _anchorCutoffDate = _adD.getFullYear() + '-' + String(_adD.getMonth() + 1).padStart(2, '0') + '-' + String(_adD.getDate()).padStart(2, '0');
   }
-  // Opt-in anchor override (used only by the T-History tab). A completed cycle has no on-cycle
-  // bloodwork and its last injection is before "today", so the default no-bloodwork anchor falls
-  // to day 0 and the calibration degenerates (the whole curve blew up ~50×). Passing the last
-  // injection day here anchors calFT at the settled steady state instead. Existing callers
-  // (T-Calc, Blood Levels) never pass anchorDay, so their behaviour is unchanged.
-  if (hooks && hooks.anchorDay != null && isFinite(hooks.anchorDay)) {
+  // Opt-in anchor override (used only by the T-History tab), and ONLY when there is no bloodwork
+  // to anchor on. With a bloodwork entry the model already calibrates correctly (that is what
+  // gives the T-Calc curve its shape), so the override must NOT clobber it — otherwise T-History
+  // diverges from the T-Calc. Without bloodwork, a completed cycle (last injection before "today")
+  // falls to the degenerate day-0 anchor and the curve blows up ~50×; passing the last-injection
+  // day anchors calFT at the settled steady state instead. Other callers never pass anchorDay.
+  if (hooks && hooks.anchorDay != null && isFinite(hooks.anchorDay) && _bwAnchorDay === null) {
     _anchorDay = Math.max(0, Math.min(totalDays, Math.round(hooks.anchorDay)));
     var _adH = new Date(firstDate.getTime() + _anchorDay * 86400000);
     _anchorCutoffDate = _adH.getFullYear() + '-' + String(_adH.getMonth() + 1).padStart(2, '0') + '-' + String(_adH.getDate()).padStart(2, '0');
