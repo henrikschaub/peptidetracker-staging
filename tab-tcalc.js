@@ -1211,7 +1211,7 @@ function _tcFreeTSeries(sorted, hooks) {
   // diverges from the T-Calc. Without bloodwork, a completed cycle (last injection before "today")
   // falls to the degenerate day-0 anchor and the curve blows up ~50×; passing the last-injection
   // day anchors calFT at the settled steady state instead. Other callers never pass anchorDay.
-  if (hooks && hooks.anchorDay != null && isFinite(hooks.anchorDay) && _bwAnchorDay === null) {
+  if (hooks && hooks.anchorDay != null && isFinite(hooks.anchorDay)) {
     _anchorDay = Math.max(0, Math.min(totalDays, Math.round(hooks.anchorDay)));
     var _adH = new Date(firstDate.getTime() + _anchorDay * 86400000);
     _anchorCutoffDate = _adH.getFullYear() + '-' + String(_adH.getMonth() + 1).padStart(2, '0') + '-' + String(_adH.getDate()).padStart(2, '0');
