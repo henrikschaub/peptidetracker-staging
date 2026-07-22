@@ -1992,7 +1992,34 @@ function _genInjBatches(stack,cycleId,fromDate){
     });
   }
 
+  // Stamp a self-contained pharmacology snapshot (ester label + numeric half-life)
+  // on every generated injection so a logged shot is a complete historical record
+  // (T-History free-T view, future per-compound history). Snapshotted from the
+  // catalogue here; readers fall back to the catalogue for older rows that lack it.
+  batches.forEach(function(b){b.entries.forEach(function(e){var m=_injPkMeta(e.tier,e.compound_id);e.ester=m.ester;e.half_life_days=m.half_life_days;});});
   return batches;
+}
+
+// Resolve {ester, half_life_days} for an injection from the compound catalogues.
+// TRT: half-life is the app's canonical PK value (_tcCompInfo), ester parsed from
+// the TRT_GUIDE half-life string. Enhanced: half-life parsed from ENHANCEMENT_COMPOUNDS.
+// Peptide: half-lives are sub-day / mixed (GHRH+GHRP) — not PK-modelled here → null.
+function _injPkMeta(tier,id){
+  var ester=null,hl=null;
+  try{
+    if(tier==='trt'){
+      var g=(typeof TRT_GUIDE!=='undefined')?TRT_GUIDE[id]:null;
+      if(g&&g.halfLife){
+        var m=String(g.halfLife).match(/\(([^)]+)\)/);
+        if(m){ester=m[1].replace(/\s*ester\b.*/i,'').trim();if(/\+/.test(ester))ester='blend';}
+      }
+      if(typeof _tcCompInfo==='function')hl=_tcCompInfo(id).halfLifeDays;
+    }else if(tier==='enhanced'){
+      var ec=(typeof ENHANCEMENT_COMPOUNDS!=='undefined')?(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===id;}):null;
+      if(ec&&ec.halfLife&&typeof _parseHalfLifeDays==='function')hl=_parseHalfLifeDays(ec.halfLife);
+    }
+  }catch(e){}
+  return {ester:ester,half_life_days:(hl&&isFinite(hl)&&hl>0)?hl:null};
 }
 
 async function generateAndPushInjections(stack,fromDate){

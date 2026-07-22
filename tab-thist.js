@@ -11,13 +11,23 @@
 var _thZoom = 'all';       // 'week' | 'month' | 'year' | 'all'
 var _thFocusDay = null;    // as-of day index (days from first injection); null → last injection
 var _TH_TAIL_DAYS = 14;    // horizon: chart ends this many days after the last injection
+var _thInjections;         // cached /injections rows (undefined until first fetch)
 
-// Sorted, valid logged injections — read-only view of the T-Calc manual log.
+// Sorted testosterone injections that were actually LOGGED (checked in the Today
+// view), read from the /injections store (window._thInjections). Only tier 'trt'
+// (testosterone) feeds the free-T curve — other androgens don't become free T.
+// Each row carries its own snapshotted half_life_days; readers fall back to the
+// catalogue via _tcCompInfo for older rows that predate the snapshot.
 function _thLog() {
-  var log = (typeof _tcp !== 'undefined' && _tcp && _tcp.manualLog) ? _tcp.manualLog : [];
-  return log.filter(function(e){ return e && e.date && e.doseMg && parseDec(e.doseMg) > 0; })
-            .slice()
-            .sort(function(a,b){ return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  var rows = _thInjections || [];
+  return rows.filter(function(e){
+      return e && e.logged && e.tier === 'trt' && e.date && parseDec(e.dose) > 0;
+    })
+    .map(function(e){
+      return { compId: e.compound_id, doseMg: parseDec(e.dose), date: e.date,
+               half_life_days: (e.half_life_days > 0 ? e.half_life_days : null) };
+    })
+    .sort(function(a,b){ return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
 }
 
 // Pure PK accumulation from an ascending injection log. tailDays = extra days drawn
@@ -31,7 +41,7 @@ function _thAccumulate(sorted, tailDays) {
   var total = new Float64Array(totalDays + 1);
   sorted.forEach(function(e) {
     var cd    = _tcCompInfo(e.compId);
-    var hl    = cd.halfLifeDays || 1;
+    var hl    = (e.half_life_days > 0 ? e.half_life_days : (cd.halfLifeDays || 1));
     var bioav = cd.bioavailability || 1;
     var ke    = Math.LN2 / hl;
     var ka    = _tcKa(hl);
@@ -85,15 +95,29 @@ function _thFmtDate(ms){ var d = new Date(ms); var M=['Jan','Feb','Mar','Apr','M
 
 var _TH_ZOOM_DAYS = { week: 7, month: 30, year: 365 };
 
+// Fetch the full logged-injection history, then render. Called on tab open;
+// re-renders when fresh data arrives so newly checked doses appear.
 function buildTHist() {
   var host = document.getElementById('thist-body');
+  if (!host) return;
+  if (_thInjections === undefined)
+    host.innerHTML = '<div style="padding:48px;text-align:center"><div class="today-spinner"><div class="today-spinner-dot"></div></div></div>';
+  else _thRender(host);
+  fetch(AGENT_URL + '/injections?active_only=false', { headers: authHeaders() })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){ _thInjections = Array.isArray(rows) ? rows : []; if (_currentTab === 'thist') { var h = document.getElementById('thist-body'); if (h) _thRender(h); } })
+    .catch(function(){ if (_thInjections === undefined) _thInjections = []; if (_currentTab === 'thist') { var h = document.getElementById('thist-body'); if (h) _thRender(h); } });
+}
+
+function _thRender(host) {
+  if (!host) host = document.getElementById('thist-body');
   if (!host) return;
   var series = _thSeries();
   if (!series) {
     host.innerHTML = '<div style="padding:48px 24px;text-align:center;color:var(--muted2)">' +
       '<div style="font-size:34px;margin-bottom:12px">📉</div>' +
-      '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px">No testosterone injections logged</div>' +
-      '<div style="font-size:13px;line-height:1.5">Log injections in the <b>T-Calc</b> tab (＋ Add Injection). Your full injection history will then appear here as a free-T curve.</div>' +
+      '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px">No testosterone injections logged yet</div>' +
+      '<div style="font-size:13px;line-height:1.5">Check off your testosterone injections in the <b>Today</b> view as you take them. Your full injection history will then appear here as a free-T curve.</div>' +
       '</div>';
     return;
   }
@@ -104,7 +128,7 @@ function buildTHist() {
     return '<button id="th-zoom-'+z.id+'" onclick="_thSetZoom(\''+z.id+'\')" style="flex:1;background:'+(sel?'rgba(102,136,204,0.25)':'none')+';color:'+(sel?'#6688cc':'var(--muted2)')+';border:1px solid '+(sel?'#6688cc66':'var(--border)')+';border-radius:8px;padding:7px 4px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'+z.label+'</button>';
   }).join('');
   var h = '<div style="display:flex;flex-direction:column;gap:14px;padding:16px 20px">';
-  h += '<div style="font-size:11px;color:var(--muted2);line-height:1.5">Historical free-T from your logged injections. Curve ends '+_TH_TAIL_DAYS+' days after the last injection. Read-only — logging happens in T-Calc.</div>';
+  h += '<div style="font-size:11px;color:var(--muted2);line-height:1.5">Historical free-T from the testosterone injections you checked off in Today. Curve ends '+_TH_TAIL_DAYS+' days after the last injection. Read-only.</div>';
   h += '<div style="display:flex;gap:6px">'+zBtns+'</div>';
   h += '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:14px">';
   h += '<canvas id="th-chart" style="width:100%;display:block"></canvas>';
