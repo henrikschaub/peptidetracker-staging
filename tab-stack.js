@@ -1571,27 +1571,63 @@ async function wizAdviseFetch(){
   st.loading=true;st.error='';st._seeded=false;
   wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
   var res=await enhancedAdvisorFromAgent(_wizAdviseInputs());
-  st.loading=false;st.fetched=true;
+  st.loading=false;st.fetched=true;st._autoSel=false;
   if(res.ok&&res.advice){st.result=res.advice;}
   else{st.result=null;st.error='Could not load recommendations'+(res.status?(' (HTTP '+res.status+')'):'')+'.';}
   if(_wizFlow()[_wiz.step]==='advise')wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
 }
 function wizAdviseSetObjective(v){var st=_wizAdviseState();st.objective=v;st.result=null;st.fetched=false;st._seeded=false;wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));}
 function wizAdviseToggleFlag(k){var st=_wizAdviseState();if(!st.flags)st.flags={};st.flags[k]=!st.flags[k];st.result=null;st.fetched=false;st._seeded=false;wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));}
-function _wizAdviseCompoundRow(item,kind){
+function _wizAdviseCompoundRow(item,kind,opts){
+  opts=opts||{};
   var map={best:['var(--accent)','★'],primary:['var(--accent)','✓'],consider:['var(--muted2)','○'],later:['#7a8899','⏱'],avoid:['#f59e0b','✕'],oncycle:['var(--accent)','＋']};
   var m=map[kind]||map.consider;var accent=m[0],icon=m[1];
+  var selectable=!!opts.selectable,selected=!!opts.selected;
   var bg=kind==='best'?'rgba(232,255,60,0.06)':'var(--surface2)';
-  var badge=kind==='best'?'<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:#0a0a0a;background:var(--accent);border-radius:4px;padding:1px 6px;margin-left:auto;text-transform:uppercase;">Best pick</span>':'';
-  return '<div style="background:'+bg+';border:1px solid var(--border);border-left:3px solid '+accent+';border-radius:6px;padding:8px 10px;margin-bottom:6px;">'
-    +'<div style="display:flex;align-items:center;gap:8px;"><span style="color:'+accent+';font-weight:700;font-size:12px;">'+icon+'</span><span style="font-size:13px;font-weight:700;color:var(--text);">'+_esc(item.name||item.agent||item.id)+'</span>'+badge+'</div>'
+  var border=(selectable&&selected)?'var(--accent)':'var(--border)';
+  var bestBadge=kind==='best'?'<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:#0a0a0a;background:var(--accent);border-radius:4px;padding:1px 6px;text-transform:uppercase;">Best pick</span>':'';
+  var chk=selectable?('<span style="width:18px;height:18px;border-radius:50%;border:1.5px solid '+(selected?'var(--accent)':'var(--border)')+';background:'+(selected?'var(--accent)':'transparent')+';display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">'+(selected?'<svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="#0a0a0a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')+'</span>'):'';
+  var right=(bestBadge||chk)?('<span style="margin-left:auto;display:flex;align-items:center;gap:6px;">'+bestBadge+chk+'</span>'):'';
+  var click=selectable?(' onclick="wizAdviseToggleCompound(\''+_esc(item.id||'')+'\')"'):'';
+  var cursor=selectable?'cursor:pointer;':'';
+  return '<div'+click+' style="'+cursor+'background:'+bg+';border:1px solid '+border+';border-left:3px solid '+accent+';border-radius:6px;padding:8px 10px;margin-bottom:6px;">'
+    +'<div style="display:flex;align-items:center;gap:8px;"><span style="color:'+accent+';font-weight:700;font-size:12px;">'+icon+'</span><span style="font-size:13px;font-weight:700;color:var(--text);">'+_esc(item.name||item.agent||item.id)+'</span>'+right+'</div>'
     +(item.reason||item.message?'<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-top:3px;">'+_esc(item.reason||item.message)+'</div>':'')
     +'</div>';
 }
-function _wizAdviseSection(title,items,kind){
+function _wizAdviseSection(title,items,kind,selIds){
   if(!items||!items.length)return '';
+  var selectable=(kind==='best'||kind==='primary'||kind==='consider');selIds=selIds||[];
   return '<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">'+title+'</div>'
-    +items.map(function(it){return _wizAdviseCompoundRow(it,kind);}).join('')+'</div>';
+    +items.map(function(it){return _wizAdviseCompoundRow(it,kind,{selectable:selectable,selected:selIds.indexOf(it.id)>=0});}).join('')+'</div>';
+}
+// Tap a recommended compound to add/remove it from the protocol (same store the
+// Enhanced step uses) — so the guidance is directly actionable.
+function wizAdviseToggleCompound(id){
+  if(!_wiz.enhanced)_wiz.enhanced={enabled:false,compounds:[]};
+  if(!_wiz.enhanced.compounds)_wiz.enhanced.compounds=[];
+  var idx=_wiz.enhanced.compounds.findIndex(function(c){return c.id===id;});
+  if(idx!==-1){_wiz.enhanced.compounds.splice(idx,1);}
+  else{var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(c){return c.id===id;});
+    if(cat){var e={id:cat.id,name:cat.name,dose:String(cat.defaultDose||''),unit:cat.unit||'mg',days:cat.defaultDays?cat.defaultDays.slice():[0,1,2,3,4,5,6],dot:cat.dot};if(cat.amPm){e.amPm=true;e.dose_am=String(cat.defaultDoseAm||'');e.dose_pm=String(cat.defaultDosePm||'');}_wiz.enhanced.compounds.push(e);}}
+  _wiz.enhanced.enabled=_wiz.enhanced.compounds.length>0;
+  wizStepAdvise(document.getElementById('wiz-body'),document.getElementById('wiz-footer'));
+}
+function _wizAdviseAdd(id){
+  if(!id)return;if(!_wiz.enhanced)_wiz.enhanced={enabled:false,compounds:[]};if(!_wiz.enhanced.compounds)_wiz.enhanced.compounds=[];
+  if(_wiz.enhanced.compounds.some(function(c){return c.id===id;}))return;
+  var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(c){return c.id===id;});if(!cat)return;
+  var e={id:cat.id,name:cat.name,dose:String(cat.defaultDose||''),unit:cat.unit||'mg',days:cat.defaultDays?cat.defaultDays.slice():[0,1,2,3,4,5,6],dot:cat.dot};
+  if(cat.amPm){e.amPm=true;e.dose_am=String(cat.defaultDoseAm||'');e.dose_pm=String(cat.defaultDosePm||'');}
+  _wiz.enhanced.compounds.push(e);
+}
+// Default selection when a fresh recommendation loads: keep the base, and pre-tick
+// the best addition only if the user hasn't already chosen a non-base compound.
+function _wizAdviseDefaultSelect(res){
+  if(res.base)_wizAdviseAdd(res.base.id);
+  var hasNonBase=((_wiz.enhanced&&_wiz.enhanced.compounds)||[]).some(function(c){var cat=(ENHANCEMENT_COMPOUNDS||[]).find(function(x){return x.id===c.id;});return cat&&cat.cls!=='base';});
+  if(!hasNonBase&&res.best_addition)_wizAdviseAdd(res.best_addition.id);
+  if(_wiz.enhanced)_wiz.enhanced.enabled=(_wiz.enhanced.compounds||[]).length>0;
 }
 function wizApplyAdviseRecommendations(){
   var st=_wizAdviseState();var res=st.result;
@@ -1648,22 +1684,28 @@ function wizStepAdvise(body,footer){
   if(st.error){html+='<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:#f59e0b;">'+_esc(st.error)+'</div>';}
   else if(st.result){
     var res=st.result;
+    // Default-select base + best addition once per fresh recommendation.
+    if(!st._autoSel){st._autoSel=true;_wizAdviseDefaultSelect(res);}
+    var selIds=((_wiz.enhanced&&_wiz.enhanced.compounds)||[]).map(function(c){return c.id;});
     // Headline — the plain-language answer up top.
-    if(res.headline){html+='<div style="background:rgba(232,255,60,0.06);border:1px solid rgba(232,255,60,0.3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--text);line-height:1.5;">'+_esc(res.headline)+'</div>';}
-    if(res.base){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">Required base</div>'+_wizAdviseCompoundRow({name:res.base.name,reason:res.base.note},'primary')+'</div>';}
-    // Best addition (the single top pick), then the rest of primary.
+    if(res.headline){html+='<div style="background:rgba(232,255,60,0.06);border:1px solid rgba(232,255,60,0.3);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;font-weight:600;color:var(--text);line-height:1.5;">'+_esc(res.headline)+'</div>';}
+    // Selection is live here — tap to add/remove.
+    if((res.primary&&res.primary.length)||(res.consider&&res.consider.length)||res.best_addition){
+      html+='<div style="font-size:11px;color:var(--muted2);margin-bottom:10px;line-height:1.5;">Tap a compound to add or remove it — ✓ means it\'s in your protocol. Your picks carry to the next step.</div>';}
+    if(res.base){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">Required base (always included)</div>'+_wizAdviseCompoundRow({name:res.base.name,reason:res.base.note},'primary',{selectable:false})+'</div>';}
+    // Best addition (the single top pick), then the rest of primary — all tappable.
     var bestId=res.best_addition&&res.best_addition.id;
     var restPrimary=(res.primary||[]).filter(function(p){return p.id!==bestId;});
-    if(res.best_addition){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">Best addition</div>'+_wizAdviseCompoundRow(res.best_addition,'best')+'</div>';}
-    if(restPrimary.length)html+=_wizAdviseSection(res.best_addition?'Also recommended':'Recommended for you',restPrimary,'primary');
-    html+=_wizAdviseSection('Worth considering',res.consider,'consider');
+    if(res.best_addition){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">Best addition</div>'+_wizAdviseCompoundRow(res.best_addition,'best',{selectable:true,selected:selIds.indexOf(bestId)>=0})+'</div>';}
+    if(restPrimary.length)html+=_wizAdviseSection(res.best_addition?'Also recommended':'Recommended for you',restPrimary,'primary',selIds);
+    html+=_wizAdviseSection('Worth considering',res.consider,'consider',selIds);
     // On-cycle support (e.g. HCG) — this runs DURING the cycle, not in PCT.
     if(res.on_cycle&&res.on_cycle.length){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">On-cycle support</div>'+res.on_cycle.map(function(o){return _wizAdviseCompoundRow(o,'oncycle');}).join('')+'</div>';}
     html+=_wizAdviseSection('Save for a later cycle',res.save_for_later,'later');
     html+=_wizAdviseSection('Not recommended for you',res.avoid,'avoid');
     if(res.guardrails&&res.guardrails.length){html+='<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:6px;">Guardrails</div>'+res.guardrails.map(function(g){return '<div style="font-size:11px;color:var(--text);line-height:1.5;padding:2px 0;">• '+_esc(g)+'</div>';}).join('')+'</div>';}
     if(res.notes&&res.notes.length){html+=res.notes.map(function(n){return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:6px;font-size:11px;color:var(--muted2);line-height:1.5;">ℹ '+_esc(n)+'</div>';}).join('');}
-    html+='<div style="font-size:11px;color:var(--muted2);margin-top:8px;line-height:1.5;">Recommended compounds will be pre-selected on the next step — you can change anything.</div>';
+    html+='<div style="font-size:11px;color:var(--muted2);margin-top:8px;line-height:1.5;">You can fine-tune doses and add anything else on the next step.</div>';
     html+=_renderSafetyNote('enhanced');
   }
   body.innerHTML=html;

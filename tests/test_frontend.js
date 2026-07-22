@@ -427,6 +427,20 @@ check('wizStepAdvise result: shows headline', _advB2.innerHTML.includes('Add ONE
 check('wizStepAdvise result: shows Best addition', _advB2.innerHTML.includes('Best addition') && _advB2.innerHTML.includes('Best pick'));
 check('wizStepAdvise result: shows Save for a later cycle', _advB2.innerHTML.includes('Save for a later cycle'));
 check('wizStepAdvise result: shows On-cycle support (HCG)', _advB2.innerHTML.includes('On-cycle support') && _advB2.innerHTML.includes('HCG'));
+// Recommendation cards are TAPPABLE (the reported bug: could not pick a different compound)
+check('wizStepAdvise result: recommendation cards are tappable', _advB2.innerHTML.includes('wizAdviseToggleCompound'));
+// Tap-to-select actually toggles the protocol store, and default-select pre-ticks base + best
+G._userTier=3;G.initWizard();G._wiz.trt.enabled=true;G._wiz.goals=['enhanced'];
+G.ENHANCEMENT_COMPOUNDS=[{id:'test_e',name:'Testosterone Enanthate',cls:'base',defaultDose:300,unit:'mg/week',defaultDays:[1,4],dot:'#e05050'},{id:'primo',name:'Primobolan',cls:'dht',defaultDose:500,unit:'mg/week',defaultDays:[1,4],dot:'#3cffa0'},{id:'deca',name:'Deca',cls:'19nor',defaultDose:300,unit:'mg/week',defaultDays:[1,4],dot:'#888'}];
+G._wiz.advise=G._wizAdviseState();
+G._wiz.advise.result={headline:'h',base:{id:'test_e',name:'Testosterone Enanthate'},best_addition:{id:'primo',name:'Primobolan'},primary:[{id:'primo',name:'Primobolan'}],consider:[{id:'deca',name:'Deca'}],save_for_later:[],avoid:[],on_cycle:[]};
+var _advB3={innerHTML:''},_advF3={innerHTML:''};
+G.wizStepAdvise(_advB3,_advF3); // triggers default-select
+var _ids=function(){return ((G._wiz.enhanced&&G._wiz.enhanced.compounds)||[]).map(function(c){return c.id;});};
+check('advisor default-selects base + best addition', _ids().indexOf('test_e')>=0 && _ids().indexOf('primo')>=0);
+G.wizAdviseToggleCompound('deca'); check('tapping a different compound adds it', _ids().indexOf('deca')>=0);
+G.wizAdviseToggleCompound('primo'); check('tapping the best pick removes it', _ids().indexOf('primo')<0);
+check('after swapping, deca is still selected (choice sticks)', _ids().indexOf('deca')>=0);
 G.initWizard();
 // wizNext / wizBack
 G._userTier=1;G.initWizard();
