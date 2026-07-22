@@ -6024,6 +6024,17 @@ if(typeof G._bcEntryDetail==='function'){
   check('entry detail: caliper entry shows method label', /Jackson-Pollock 3-site/.test(G._bcEntryDetail({method:'jp3',skinfolds:{chest:10,abdomen:18,thigh:14}})));
 }
 
+// ── Injection pharmacology stamp (_injPkMeta) ──────────────────────────────
+if(typeof G._injPkMeta==='function'){
+  console.log('\n── Injection pharmacology stamp ───────────────────────────');
+  var _mE=G._injPkMeta('trt','enanthate');
+  check('_injPkMeta trt enanthate: ester parsed + numeric half-life', _mE.ester==='enanthate' && _mE.half_life_days>0, JSON.stringify(_mE));
+  var _mN=G._injPkMeta('trt','nebido');
+  check('_injPkMeta trt nebido: undecanoate ester', _mN.ester==='undecanoate', JSON.stringify(_mN));
+  var _mP=G._injPkMeta('peptide','ipamorelin');
+  check('_injPkMeta peptide: null ester + null half-life (not PK-modelled)', _mP.ester===null && _mP.half_life_days===null, JSON.stringify(_mP));
+}
+
 // ── T-Historical (read-only free-T from logged injections) ─────────────────
 console.log('\n── T-Historical (read-only free-T) ────────────────────────');
 if(typeof G._thAccumulate==='function'){
@@ -6038,16 +6049,28 @@ if(typeof G._thAccumulate==='function'){
   check('calFT positive with a measured free-T', _cal>0, String(_cal));
   check('calFT positive via age-band default too', G._thCalFT(_acc,'',1990)>0);
 }
+if(typeof G._thLog==='function'){
+  G._thInjections=[{compound_id:'enanthate',dose:'125',date:'2026-02-01',tier:'trt',logged:true,half_life_days:4.5}];
+  var _l=G._thLog();
+  check('_thLog maps logged TRT injection → {compId,doseMg,date,half_life_days}', _l.length===1 && _l[0].compId==='enanthate' && _l[0].doseMg===125 && _l[0].half_life_days===4.5);
+  G._thInjections=[{compound_id:'ipamorelin',dose:'200',date:'2026-02-01',tier:'peptide',logged:true}];
+  check('_thLog excludes non-TRT tier (peptides)', G._thLog().length===0);
+}
 if(typeof G._thSeries==='function'){
-  G._tcp=G._tcp||{};
-  G._tcp.manualLog=[{compId:'testo',doseMg:'100',date:'2026-01-08'},{compId:'testo',doseMg:'100',date:'2026-01-01'},{compId:'x',doseMg:'0',date:'2026-01-15'},{compId:'y',date:'2026-01-20'}];
-  G._tcp.measuredFT='400'; G._tcp.birthYear='1990';
+  G._tcp=G._tcp||{}; G._tcp.measuredFT='400'; G._tcp.birthYear='1990';
+  G._thInjections=[
+    {compound_id:'enanthate',dose:'100',date:'2026-01-08',tier:'trt',logged:true,half_life_days:4.5},
+    {compound_id:'enanthate',dose:'100',date:'2026-01-01',tier:'trt',logged:true,half_life_days:4.5},
+    {compound_id:'enanthate',dose:'100',date:'2026-01-15',tier:'trt',logged:false,half_life_days:4.5}, // scheduled, not checked
+    {compound_id:'nandrolone',dose:'100',date:'2026-01-10',tier:'enhanced',logged:true,half_life_days:7}, // not testosterone
+    {compound_id:'enanthate',dose:'0',date:'2026-01-20',tier:'trt',logged:true} // zero dose
+  ];
   var _s=G._thSeries();
-  check('series: filters invalid (0/undefined dose) + sorts → 2 valid', !!_s && _s.count===2, _s?String(_s.count):'null');
+  check('series: only logged TRT injections feed it (excludes unchecked/non-T/zero) → 2', !!_s && _s.count===2, _s?String(_s.count):'null');
   check('series: horizon ends 14d after last injection', !!_s && _s.totalDays===_s.lastDay+14);
   check('series: calibrated to pmol/L when measured FT present', !!_s && _s.calibrated===true && _s.maxFt>0);
   check('series: earliest injection is day 0 after sort', !!_s && _s.injections.length===2 && _s.injections[0].day===0);
-  G._tcp.manualLog=[];
+  G._thInjections=[];
   check('series: empty log → null (drives empty state)', G._thSeries()===null);
 }
 
