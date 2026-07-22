@@ -83,28 +83,48 @@ function _thCalFT(acc, measuredFT, birthYear) {
 }
 
 // Full series for rendering: {firstMs,totalDays,lastDay,ft:[per day],maxFt,injDays[],calibrated}.
-// Self-contained: raw PK accumulation scaled so the settled steady state equals the user's
-// measured/estimated free T (pmol/L), or a relative 100-scale when no free-T value exists.
-// Curve ends at the last injection (_TH_TAIL_DAYS = 0). NOTE: this is the injection-driven
-// free-T contribution and rises from 0 at the first shot — it is deliberately NOT run through
-// the T-Calc's day-0-anchored model, whose anchor degenerates (and the scale explodes) for a
-// completed cycle where "today" is past the last injection.
+// Uses the SAME model + assumptions as the T-Calc and Blood Levels tabs (_tcFreeTSeries):
+// time-varying SHBG suppression from BOTH the testosterone dose and SHBG-lowering supplements
+// (GH peptides, Boron), calibrated from the single measured free T (or the age-based population
+// estimate when none is entered) — the same educated guess the T-Calc makes.
+//
+// The T-Calc model anchors its ABSOLUTE scale at day 0, which degenerates for a completed cycle
+// (today past the last injection) and blows the values up ~50×. So we keep the model's full
+// free-T shape (which already carries the SHBG time-variation) and only RE-ANCHOR the absolute
+// scale at the settled steady state — the scale factor cancels, the SHBG-driven shape is kept.
+// Curve ends at the last injection (_TH_TAIL_DAYS = 0).
 function _thSeries() {
   var sorted = _thLog();
-  var acc = _thAccumulate(sorted, _TH_TAIL_DAYS);
-  if (!acc) return null;
+  if (!sorted.length || typeof _tcFreeTSeries !== 'function') return null;
+  var _S = _tcFreeTSeries(sorted, {});
+  if (!_S || !_S.total) return null;
+  var firstMs = new Date(sorted[0].date + 'T12:00:00').getTime();
+  var lastDay = Math.round((new Date(sorted[sorted.length - 1].date + 'T12:00:00').getTime() - firstMs) / 86400000);
+  if (lastDay < 0) return null;
+  // Model free T per day, including SHBG time-variation (calFT_arr) but with the model's own
+  // day-0-anchored absolute scale (which is unreliable for a completed cycle).
+  var modelAt = function(k){ k = Math.max(0, Math.min(_S.totalDays, k));
+    var v = _S.total[k] * (_S.calFT_arr ? _S.calFT_arr[k] : _S.scale);
+    return isFinite(v) ? v : 0; };
+  // Settled steady state of the model output = stable re-anchor point (never ≈0).
+  var mid = Math.max(0, Math.floor(lastDay / 2)), pk = 0, tr = Infinity;
+  for (var s = mid; s <= lastDay; s++) { var v = modelAt(s); if (v > pk) pk = v; if (v < tr) tr = v; }
+  if (pk === 0) { for (var i = 0; i <= lastDay; i++) { var v2 = modelAt(i); if (v2 > pk) pk = v2; } tr = pk; }
+  if (tr === Infinity) tr = pk;
+  var ssModel = (pk + tr) / 2 || pk;
+  // Target free T for the steady state: the user's measured value, or the age-based population
+  // estimate (same fallback the T-Calc uses). If neither exists, show a relative 100-scale.
   var mft = (typeof _tcp !== 'undefined' && _tcp) ? parseDec(_tcp.measuredFT) : 0;
   if (!(mft > 0) && typeof _tcDefaultFT === 'function') mft = _tcDefaultFT(parseInt((_tcp && _tcp.birthYear) || 0) || 0);
   var calibrated = mft > 0;
-  var cal = _thCalFT(acc, (typeof _tcp !== 'undefined' && _tcp) ? _tcp.measuredFT : 0,
-                          (typeof _tcp !== 'undefined' && _tcp) ? _tcp.birthYear : 0);
-  var ft = new Float64Array(acc.totalDays + 1), maxFt = 0;
-  for (var t = 0; t <= acc.totalDays; t++) { ft[t] = acc.total[t] * cal; if (ft[t] > maxFt) maxFt = ft[t]; }
+  var renorm = (ssModel > 0) ? ((calibrated ? mft : 100) / ssModel) : 0;
+  var ft = new Float64Array(lastDay + 1), maxFt = 0;
+  for (var t = 0; t <= lastDay; t++) { ft[t] = modelAt(t) * renorm; if (ft[t] > maxFt) maxFt = ft[t]; }
   var injDays = sorted.map(function(e){
-    return { day: Math.round((new Date(e.date + 'T12:00:00').getTime() - acc.firstMs) / 86400000),
+    return { day: Math.round((new Date(e.date + 'T12:00:00').getTime() - firstMs) / 86400000),
              date: e.date, compId: e.compId, doseMg: parseDec(e.doseMg) };
   });
-  return { firstMs: acc.firstMs, totalDays: acc.totalDays, lastDay: acc.lastDay,
+  return { firstMs: firstMs, totalDays: lastDay, lastDay: lastDay,
            ft: ft, maxFt: maxFt, calibrated: calibrated, injections: injDays, count: sorted.length };
 }
 
