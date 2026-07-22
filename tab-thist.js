@@ -52,15 +52,12 @@ function _thAccumulate(sorted, tailDays) {
   return { firstMs: firstMs, totalDays: totalDays, lastDay: lastDay, total: total };
 }
 
-// Calibration factor mapping the raw accumulation → pmol/L free T, using the same
-// no-prior-dose approach as the T-Calc (calFT = measuredFT / settled-window mean).
-// The manual log is the full injection history, so there is no prior-protocol
-// residual to warm-start from. Returns a positive scale, or 0 if not calibratable.
-function _thCalFT(acc, measuredFT, birthYear) {
+// Settled steady-state level of the raw accumulation — the mean of peak & trough over
+// the second half of the log. This is the STABLE anchor for calibration: unlike the
+// day-0 value (≈0 at the first injection), it is never near zero, so dividing by it
+// can't blow the scale up. Returns 0 only when there is no accumulation at all.
+function _thSteadyState(acc) {
   if (!acc || acc.lastDay < 0) return 0;
-  var ft = (parseDec(measuredFT) > 0) ? parseDec(measuredFT)
-         : (typeof _tcDefaultFT === 'function' ? _tcDefaultFT(parseInt(birthYear) || 0) : 0);
-  if (!(ft > 0)) return 0;
   var mid = Math.max(0, Math.floor(acc.lastDay / 2));
   var peak = 0, trough = Infinity;
   for (var t = mid; t <= acc.lastDay; t++) {
@@ -69,33 +66,46 @@ function _thCalFT(acc, measuredFT, birthYear) {
   }
   if (peak === 0) { for (var i = 0; i <= acc.totalDays; i++) if (acc.total[i] > peak) peak = acc.total[i]; }
   if (trough === Infinity) trough = peak;
-  var mean = (peak + trough) / 2 || peak;
-  return mean > 0 ? ft / mean : 0;
+  return (peak + trough) / 2 || peak;
 }
 
-// Full series for rendering: {firstMs,totalDays,lastDay,ft:[pmol/L per day],maxFt,injDays[]}.
-// Uses the SAME free-T model as the T-Calc and Blood Levels tabs (_tcFreeTSeries) so the
-// curve carries the user's endogenous baseline (it starts at their measured/estimated free
-// T and rises with injections — not from zero). Day index t = days since the first logged
-// injection, identical to the model's own indexing. Curve ends at the last injection
-// (_TH_TAIL_DAYS = 0), so the model's washout tail is clipped off.
+// Scale factor: raw accumulation → pmol/L free T, anchored so the settled steady state
+// maps to the user's measured/estimated free T (calFT = FT / steady-state). Anchoring at
+// steady state (not day 0) keeps the scale physiological. If no free-T value is available
+// it falls back to a RELATIVE scale (steady state ≈ 100) so the curve still shows its shape
+// rather than collapsing to zero. Always > 0 when there is any accumulation.
+function _thCalFT(acc, measuredFT, birthYear) {
+  var ss = _thSteadyState(acc);
+  if (!(ss > 0)) return 0;
+  var ft = (parseDec(measuredFT) > 0) ? parseDec(measuredFT)
+         : (typeof _tcDefaultFT === 'function' ? _tcDefaultFT(parseInt(birthYear) || 0) : 0);
+  return (ft > 0) ? (ft / ss) : (100 / ss);
+}
+
+// Full series for rendering: {firstMs,totalDays,lastDay,ft:[per day],maxFt,injDays[],calibrated}.
+// Self-contained: raw PK accumulation scaled so the settled steady state equals the user's
+// measured/estimated free T (pmol/L), or a relative 100-scale when no free-T value exists.
+// Curve ends at the last injection (_TH_TAIL_DAYS = 0). NOTE: this is the injection-driven
+// free-T contribution and rises from 0 at the first shot — it is deliberately NOT run through
+// the T-Calc's day-0-anchored model, whose anchor degenerates (and the scale explodes) for a
+// completed cycle where "today" is past the last injection.
 function _thSeries() {
   var sorted = _thLog();
-  if (!sorted.length || typeof _tcFreeTSeries !== 'function') return null;
-  var _S = _tcFreeTSeries(sorted, {});
-  if (!_S || !_S.total) return null;
-  var firstMs = new Date(sorted[0].date + 'T12:00:00').getTime();
-  var lastDay = Math.round((new Date(sorted[sorted.length - 1].date + 'T12:00:00').getTime() - firstMs) / 86400000);
-  var scaleAt = function(k){ k = Math.max(0, Math.min(_S.totalDays, k)); return _S.total[k] * (_S.calFT_arr ? _S.calFT_arr[k] : _S.scale); };
-  var horizon = lastDay + _TH_TAIL_DAYS;
-  var ft = new Float64Array(horizon + 1), maxFt = 0;
-  for (var t = 0; t <= horizon; t++) { ft[t] = scaleAt(t); if (ft[t] > maxFt) maxFt = ft[t]; }
+  var acc = _thAccumulate(sorted, _TH_TAIL_DAYS);
+  if (!acc) return null;
+  var mft = (typeof _tcp !== 'undefined' && _tcp) ? parseDec(_tcp.measuredFT) : 0;
+  if (!(mft > 0) && typeof _tcDefaultFT === 'function') mft = _tcDefaultFT(parseInt((_tcp && _tcp.birthYear) || 0) || 0);
+  var calibrated = mft > 0;
+  var cal = _thCalFT(acc, (typeof _tcp !== 'undefined' && _tcp) ? _tcp.measuredFT : 0,
+                          (typeof _tcp !== 'undefined' && _tcp) ? _tcp.birthYear : 0);
+  var ft = new Float64Array(acc.totalDays + 1), maxFt = 0;
+  for (var t = 0; t <= acc.totalDays; t++) { ft[t] = acc.total[t] * cal; if (ft[t] > maxFt) maxFt = ft[t]; }
   var injDays = sorted.map(function(e){
-    return { day: Math.round((new Date(e.date + 'T12:00:00').getTime() - firstMs) / 86400000),
+    return { day: Math.round((new Date(e.date + 'T12:00:00').getTime() - acc.firstMs) / 86400000),
              date: e.date, compId: e.compId, doseMg: parseDec(e.doseMg) };
   });
-  return { firstMs: firstMs, totalDays: horizon, lastDay: lastDay,
-           ft: ft, maxFt: maxFt, calibrated: (_S.unitLabel === 'pmol/L'), injections: injDays, count: sorted.length };
+  return { firstMs: acc.firstMs, totalDays: acc.totalDays, lastDay: acc.lastDay,
+           ft: ft, maxFt: maxFt, calibrated: calibrated, injections: injDays, count: sorted.length };
 }
 
 function _thDayToMs(series, day){ return series.firstMs + day * 86400000; }

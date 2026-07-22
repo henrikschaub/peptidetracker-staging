@@ -6071,7 +6071,7 @@ if(typeof G._thSeries==='function'){
   check('series: only logged TRT injections feed it (excludes unchecked/non-T/zero) → 2', !!_s && _s.count===2, _s?String(_s.count):'null');
   check('series: curve ends at the last injection (no tail)', !!_s && _s.totalDays===_s.lastDay);
   check('series: calibrated to pmol/L when measured FT present', !!_s && _s.calibrated===true && _s.maxFt>0);
-  check('series: curve carries endogenous baseline (starts > 0, not pegged to zero)', !!_s && _s.ft[0] > 0, _s?String(_s.ft[0]):'null');
+  check('series: free-T scale stays physiological, not blown up (steady-state anchored)', !!_s && _s.maxFt>0 && _s.maxFt<3000, _s?String(_s.maxFt):'null');
   check('series: earliest injection is day 0 after sort', !!_s && _s.injections.length===2 && _s.injections[0].day===0);
   G._thInjections=[];
   check('series: empty log → null (drives empty state)', G._thSeries()===null);
