@@ -9,10 +9,10 @@ function bcDrawWeightLeanChart(){var days=_bcWeightWindow||90;var cutoff=new Dat
 function bcLoad(){try{return JSON.parse(localStorage.getItem(BC_KEY)||'[]');}catch{return[];}}
 function bcSave(arr){localStorage.setItem(BC_KEY,JSON.stringify(arr));}
 function navyBF(n,b,h,sex,hip){if(sex==='female'&&hip){return Math.round((495/(1.29579-0.35004*Math.log10(b+hip-n)+0.22100*Math.log10(h))-450)*10)/10;}return Math.round((495/(1.0324-0.19077*Math.log10(b-n)+0.15456*Math.log10(h))-450)*10)/10;}
-function setBioSex(sex){localStorage.setItem('user_sex',sex);pushPepSettingsToAgent({'user_sex':sex});document.querySelectorAll('#sex-chip-male,#sex-chip-female').forEach(function(el){el.classList.remove('sel');});var chip=document.getElementById('sex-chip-'+sex);if(chip)chip.classList.add('sel');var hr=document.getElementById('bc-hip-row');if(hr)hr.style.display=sex==='female'?'flex':'none';}
+function setBioSex(sex){localStorage.setItem('user_sex',sex);pushPepSettingsToAgent({'user_sex':sex});document.querySelectorAll('#sex-chip-male,#sex-chip-female').forEach(function(el){el.classList.remove('sel');});var chip=document.getElementById('sex-chip-'+sex);if(chip)chip.classList.add('sel');var hr=document.getElementById('bc-hip-row');if(hr)hr.style.display=sex==='female'?'flex':'none';if(typeof _bcMethod!=='undefined'&&_bcMethod==='caliper')renderCaliperInputs();}
 function parseVal(id){const raw=document.getElementById(id).value.trim().replace(',','.');const v=parseFloat(raw);return isNaN(v)?null:v;}
 function bcLog(){const sex=localStorage.getItem('user_sex')||'male';const h=parseInt(localStorage.getItem('user_height')||'182');const n=parseVal('bc-neck');const b=parseVal('bc-belly');const hip=sex==='female'?parseVal('bc-hip'):null;const err=document.getElementById('bc-err');err.textContent='';if(n===null){err.textContent='Enter neck circumference';return;}if(b===null){err.textContent='Enter waist circumference';return;}if(sex==='female'&&hip===null){err.textContent='Enter hip circumference';return;}if(n<20||n>60){err.textContent='Neck out of range';return;}if(b<50||b>200){err.textContent='Waist out of range';return;}if(sex==='female'&&hip!==null&&(hip<60||hip>200)){err.textContent='Hip out of range';return;}if(b<=n){err.textContent='Waist must be larger than neck';return;}const bf=navyBF(n,b,h,sex,hip);if(bf<3||bf>60){err.textContent='Result out of range — check measurements.';return;}const entry={date:dateKey(NOW),dateLabel:fmtDate(NOW),neck:n,belly:b,bf:bf,...(hip!==null?{hip}:{})};const arr=bcLoad();const idx=arr.findIndex(e=>e.date===entry.date);if(idx!==-1)arr[idx]=entry;else arr.push(entry);arr.sort((a,b)=>a.date.localeCompare(b.date));bcSave(arr);pushBodyCompToAgent(entry);document.getElementById('bc-neck').value=entry.neck;document.getElementById('bc-belly').value=entry.belly;if(sex==='female'&&entry.hip!=null){const he=document.getElementById('bc-hip');if(he)he.value=entry.hip;}bcRender();}
-function bcRender(){const _hcm=parseInt(localStorage.getItem('user_height')||'182');const _hdisp=document.getElementById('bc-height-display');if(_hdisp)_hdisp.textContent=_hcm+' cm';const stored=bcLoad();const storedDates=new Set(stored.map(e=>e.date));const raw=[...stored];for(const s of BC_SEED){if(!storedDates.has(s.date))raw.push(s);}raw.sort((a,b)=>new Date(a.date.replace(/-/g,'/'))-new Date(b.date.replace(/-/g,'/')));const arr=raw.map(e=>{const w=getWeightForDate(e.date);const bmi=w?Math.round(w/Math.pow(_hcm/100,2)*10)/10:null;const lean=w?Math.round(w*(1-e.bf/100)*10)/10:null;return{...e,resolvedWeight:w,bmi,lean};});document.getElementById('bc-date-badge').textContent=fmtDate(NOW).toUpperCase();bcDrawWeightLeanChart();bcRenderWeightHistory();if(!arr.length){document.getElementById('bc-results-card').style.display='none';document.getElementById('bc-chart-card').style.display='none';document.getElementById('bc-history-card').style.display='none';return;}const latest=arr[arr.length-1];document.getElementById('bc-results-card').style.display='';var _ra=document.getElementById('res-age');if(_ra)_ra.textContent=_bcAgeLabel(latest.date);document.getElementById('res-bf').textContent=latest.bf;const latestW=weights.length?weights[weights.length-1].weight:null;const latestBmi=latestW?Math.round(latestW/Math.pow(_hcm/100,2)*10)/10:null;const latestLean=latestW?Math.round(latestW*(1-latest.bf/100)*10)/10:null;document.getElementById('res-bmi').textContent=latestBmi?latestBmi.toFixed(1):'—';document.getElementById('res-weight').textContent=latestW?String(latestW):'—';document.getElementById('res-lean').textContent=latestLean?String(latestLean):'—';document.getElementById('res-neck-belly').textContent='Neck '+latest.neck+' cm · Waist '+latest.belly+' cm'+(latest.hip?' · Hip '+latest.hip+' cm':'');document.getElementById('bc-chart-card').style.display='';document.getElementById('bc-entries-badge').textContent=arr.length+' entr'+(arr.length===1?'y':'ies');bcDrawChart('chart-bf',arr.map(e=>e.bf),arr.map(e=>e.dateLabel),'#ff6b2b','%');const bmiData=arr.filter(e=>e.bmi);let bmiVals=bmiData.map(e=>e.bmi);let bmiLabels=bmiData.map(e=>e.dateLabel);if(latestW&&arr.length){const lastDate=arr[arr.length-1].date;const todayKey=dateKey(NOW);if(todayKey>lastDate){const todayBmi=Math.round(latestW/Math.pow(_hcm/100,2)*10)/10;bmiVals=[...bmiVals,todayBmi];bmiLabels=[...bmiLabels,fmtDate(NOW)];}}if(bmiVals.length>=1)bcDrawChart('chart-bmi',bmiVals,bmiLabels,'#3cffa0','');document.getElementById('bc-history-card').style.display='';const list=document.getElementById('bc-history-list');list.innerHTML='';[...arr].reverse().forEach((e,i)=>{const row=document.createElement('div');row.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;';if(i===arr.length-1)row.style.borderBottom='none';row.innerHTML=`<div><div style="font-weight:500;color:var(--text)">${e.dateLabel}</div><div style="color:var(--muted2);margin-top:2px;">Neck ${e.neck} · Waist ${e.belly}${e.hip?' · Hip '+e.hip:''}${e.resolvedWeight?' · '+e.resolvedWeight+'kg':''}</div></div><div style="display:flex;gap:12px;align-items:center;"><div style="text-align:center"><div style="font-family:var(--font-mono);font-size:20px;color:var(--accent2);line-height:1">${e.bf}%</div><div style="font-size:9px;color:var(--muted2);">BF</div></div>${e.lean!=null?`<div style="text-align:center"><div style="font-family:var(--font-mono);font-size:20px;color:var(--accent4);line-height:1">${e.lean}</div><div style="font-size:9px;color:var(--muted2);">lean kg</div></div>`:''}${e.bmi?`<div style="text-align:center"><div style="font-family:var(--font-mono);font-size:20px;color:var(--accent3);line-height:1">${e.bmi}</div><div style="font-size:9px;color:var(--muted2);">BMI</div></div>`:''}<button onclick="bcDeleteEntry('${e.date}')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;">✕</button></div>`;list.appendChild(row);});}
+function bcRender(){const _hcm=parseInt(localStorage.getItem('user_height')||'182');const _hdisp=document.getElementById('bc-height-display');if(_hdisp)_hdisp.textContent=_hcm+' cm';const stored=bcLoad();const storedDates=new Set(stored.map(e=>e.date));const raw=[...stored];for(const s of BC_SEED){if(!storedDates.has(s.date))raw.push(s);}raw.sort((a,b)=>new Date(a.date.replace(/-/g,'/'))-new Date(b.date.replace(/-/g,'/')));const arr=raw.map(e=>{const w=getWeightForDate(e.date);const bmi=w?Math.round(w/Math.pow(_hcm/100,2)*10)/10:null;const lean=w?Math.round(w*(1-e.bf/100)*10)/10:null;return{...e,resolvedWeight:w,bmi,lean};});document.getElementById('bc-date-badge').textContent=fmtDate(NOW).toUpperCase();bcDrawWeightLeanChart();bcRenderWeightHistory();if(!arr.length){document.getElementById('bc-results-card').style.display='none';document.getElementById('bc-chart-card').style.display='none';document.getElementById('bc-history-card').style.display='none';return;}const latest=arr[arr.length-1];document.getElementById('bc-results-card').style.display='';var _ra=document.getElementById('res-age');if(_ra)_ra.textContent=_bcAgeLabel(latest.date);document.getElementById('res-bf').textContent=latest.bf;const latestW=weights.length?weights[weights.length-1].weight:null;const latestBmi=latestW?Math.round(latestW/Math.pow(_hcm/100,2)*10)/10:null;const latestLean=latestW?Math.round(latestW*(1-latest.bf/100)*10)/10:null;document.getElementById('res-bmi').textContent=latestBmi?latestBmi.toFixed(1):'—';document.getElementById('res-weight').textContent=latestW?String(latestW):'—';document.getElementById('res-lean').textContent=latestLean?String(latestLean):'—';document.getElementById('res-neck-belly').textContent=(latest.method&&latest.method!=='navy')?_bcEntryDetail(latest):('Neck '+latest.neck+' cm · Waist '+latest.belly+' cm'+(latest.hip?' · Hip '+latest.hip+' cm':''));document.getElementById('bc-chart-card').style.display='';document.getElementById('bc-entries-badge').textContent=arr.length+' entr'+(arr.length===1?'y':'ies');bcDrawChart('chart-bf',arr.map(e=>e.bf),arr.map(e=>e.dateLabel),'#ff6b2b','%');const bmiData=arr.filter(e=>e.bmi);let bmiVals=bmiData.map(e=>e.bmi);let bmiLabels=bmiData.map(e=>e.dateLabel);if(latestW&&arr.length){const lastDate=arr[arr.length-1].date;const todayKey=dateKey(NOW);if(todayKey>lastDate){const todayBmi=Math.round(latestW/Math.pow(_hcm/100,2)*10)/10;bmiVals=[...bmiVals,todayBmi];bmiLabels=[...bmiLabels,fmtDate(NOW)];}}if(bmiVals.length>=1)bcDrawChart('chart-bmi',bmiVals,bmiLabels,'#3cffa0','');document.getElementById('bc-history-card').style.display='';const list=document.getElementById('bc-history-list');list.innerHTML='';[...arr].reverse().forEach((e,i)=>{const row=document.createElement('div');row.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;';if(i===arr.length-1)row.style.borderBottom='none';row.innerHTML=`<div><div style="font-weight:500;color:var(--text)">${e.dateLabel}</div><div style="color:var(--muted2);margin-top:2px;">${_bcEntryDetail(e)}${e.resolvedWeight?' · '+e.resolvedWeight+'kg':''}</div></div><div style="display:flex;gap:12px;align-items:center;"><div style="text-align:center"><div style="font-family:var(--font-mono);font-size:20px;color:var(--accent2);line-height:1">${e.bf}%</div><div style="font-size:9px;color:var(--muted2);">BF</div></div>${e.lean!=null?`<div style="text-align:center"><div style="font-family:var(--font-mono);font-size:20px;color:var(--accent4);line-height:1">${e.lean}</div><div style="font-size:9px;color:var(--muted2);">lean kg</div></div>`:''}${e.bmi?`<div style="text-align:center"><div style="font-family:var(--font-mono);font-size:20px;color:var(--accent3);line-height:1">${e.bmi}</div><div style="font-size:9px;color:var(--muted2);">BMI</div></div>`:''}<button onclick="bcDeleteEntry('${e.date}')" style="background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;">✕</button></div>`;list.appendChild(row);});}
 function bcDrawChart(canvasId,values,labels,color,unit){const canvas=document.getElementById(canvasId);if(!canvas)return;const dpr=window.devicePixelRatio||1;const cssW=canvas.offsetWidth||300;const cssH=120;canvas.width=cssW*dpr;canvas.height=cssH*dpr;canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);if(!values||values.length<1)return;const PAD={top:12,right:12,bottom:28,left:40};const cW=cssW-PAD.left-PAD.right;const cH=cssH-PAD.top-PAD.bottom;const minV=Math.min(...values);const maxV=Math.max(...values);const range=maxV-minV||1;const vMin=minV-range*0.15;const vMax=maxV+range*0.15;const xOf=i=>PAD.left+(values.length===1?cW/2:(i/(values.length-1))*cW);const yOf=v=>PAD.top+cH-((v-vMin)/(vMax-vMin))*cH;ctx.strokeStyle='#3A352B';ctx.lineWidth=0.5;for(let i=0;i<=3;i++){const y=PAD.top+(cH/3)*i;ctx.beginPath();ctx.moveTo(PAD.left,y);ctx.lineTo(PAD.left+cW,y);ctx.stroke();}ctx.fillStyle='#555';ctx.font='9px -apple-system,system-ui,sans-serif';ctx.textAlign='right';for(let i=0;i<=3;i++){const v=vMax-(vMax-vMin)*(i/3);const y=PAD.top+(cH/3)*i;ctx.fillText(v.toFixed(1)+(unit||''),PAD.left-4,y+3);}if(values.length===1){ctx.beginPath();ctx.arc(xOf(0),yOf(values[0]),4,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();return;}const grad=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);grad.addColorStop(0,color+'33');grad.addColorStop(1,color+'00');ctx.beginPath();ctx.moveTo(xOf(0),PAD.top+cH);values.forEach((v,i)=>ctx.lineTo(xOf(i),yOf(v)));ctx.lineTo(xOf(values.length-1),PAD.top+cH);ctx.closePath();ctx.fillStyle=grad;ctx.fill();ctx.beginPath();ctx.moveTo(xOf(0),yOf(values[0]));values.forEach((v,i)=>{if(i>0)ctx.lineTo(xOf(i),yOf(v));});ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.stroke();values.forEach((v,i)=>{const x=xOf(i),y=yOf(v);ctx.beginPath();ctx.arc(x,y,3.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.beginPath();ctx.arc(x,y,1.5,0,Math.PI*2);ctx.fillStyle='#000000';ctx.fill();if(i===0||i===values.length-1||i%Math.max(1,Math.floor(values.length/4))===0){ctx.fillStyle='#555';ctx.font='9px -apple-system,system-ui,sans-serif';ctx.textAlign='center';ctx.fillText(labels[i].split(' ').slice(0,2).join(' '),x,PAD.top+cH+18);}});}
 function bcDeleteEntry(date){const arr=bcLoad().filter(e=>e.date!==date);bcSave(arr);deleteBodyCompFromAgent(date);bcRender();}
 function bcClearAll(){if(!confirm('Delete all logged entries?'))return;localStorage.removeItem(BC_KEY);bcRender();}
@@ -32,4 +32,95 @@ function _bcAgeLabel(dateStr,refDate){
   if(days===1)return '1d ago';
   if(days<60)return days+'d ago';
   return Math.round(days/30)+'mo ago';
+}
+
+/* ── CALIPER (skinfold) body-fat — validated equations, see backend docs/08 ── */
+var _bcMethod='navy';     // 'navy' (tape/circumference) | 'caliper' (skinfold)
+var _bcCalMethod='jp3';   // 'jp3' | 'jp7' | 'dw4'
+var _BC_SITE_LABEL={chest:'Chest',abdomen:'Abdomen',thigh:'Thigh',triceps:'Triceps',suprailiac:'Suprailiac',axilla:'Midaxillary',subscapular:'Subscapular',biceps:'Biceps'};
+var _BC_CAL_LABEL={jp3:'Jackson-Pollock 3-site',jp7:'Jackson-Pollock 7-site',dw4:'Durnin-Womersley 4-site'};
+// Durnin-Womersley Density=C-M*log10(sum4) coefficients, by sex and age band (upper bound inclusive)
+var _DW_COEF={
+  male:  [{max:19,C:1.1620,M:0.0630},{max:29,C:1.1631,M:0.0632},{max:39,C:1.1422,M:0.0544},{max:49,C:1.1620,M:0.0700},{max:200,C:1.1715,M:0.0779}],
+  female:[{max:19,C:1.1549,M:0.0678},{max:29,C:1.1599,M:0.0717},{max:39,C:1.1423,M:0.0632},{max:49,C:1.1333,M:0.0612},{max:200,C:1.1339,M:0.0645}]
+};
+// Skinfold sites required for a given method+sex (JP3 differs by sex; JP7 & DW4 are the same for both)
+function _bcCalSites(method,sex){
+  if(method==='jp7')return['chest','axilla','triceps','subscapular','abdomen','suprailiac','thigh'];
+  if(method==='dw4')return['biceps','triceps','subscapular','suprailiac'];
+  return sex==='female'?['triceps','suprailiac','thigh']:['chest','abdomen','thigh'];
+}
+// Body density from the sum of skinfolds (mm). age in years.
+function _bcBodyDensity(method,sex,age,sum){
+  var s=sum,a=age,f=(sex==='female');
+  if(method==='jp7')return f?(1.097-0.00046971*s+0.00000056*s*s-0.00012828*a):(1.112-0.00043499*s+0.00000055*s*s-0.00028826*a);
+  if(method==='jp3')return f?(1.0994921-0.0009929*s+0.0000023*s*s-0.0001392*a):(1.10938-0.0008267*s+0.0000016*s*s-0.0002574*a);
+  var tbl=_DW_COEF[f?'female':'male'];var row=null;for(var i=0;i<tbl.length;i++){if(a<=tbl[i].max){row=tbl[i];break;}}if(!row)row=tbl[tbl.length-1];
+  return row.C-row.M*(Math.log(s)/Math.LN10);
+}
+// Siri (1961): BF% from body density
+function _siriBF(bd){return 495/bd-450;}
+// Full caliper BF% (0.1 rounded). vals = {site:mm}. Returns null on bad input.
+function caliperBF(method,sex,age,vals){
+  var sites=_bcCalSites(method,sex),sum=0;
+  for(var i=0;i<sites.length;i++){var v=vals[sites[i]];if(!(v>0))return null;sum+=v;}
+  var bd=_bcBodyDensity(method,sex,age,sum);if(!(bd>0))return null;
+  var bf=_siriBF(bd);if(!isFinite(bf))return null;
+  return Math.round(bf*10)/10;
+}
+// One-line detail string for a stored entry (tape vs caliper), used in results + history
+function _bcEntryDetail(e){
+  if(e&&e.method&&e.method!=='navy'){
+    var lbl=_BC_CAL_LABEL[e.method]||e.method,sum=0;
+    if(e.skinfolds){for(var k in e.skinfolds)sum+=(e.skinfolds[k]||0);}
+    return lbl+(sum>0?' · Σ'+(Math.round(sum*10)/10)+'mm':'');
+  }
+  return 'Neck '+(e?e.neck:'')+' · Waist '+(e?e.belly:'')+((e&&e.hip)?' · Hip '+e.hip:'');
+}
+function setBcMethod(m){
+  _bcMethod=m;
+  var nav=document.getElementById('bc-navy-section'),cal=document.getElementById('bc-caliper-section');
+  var cn=document.getElementById('bc-method-navy'),cc=document.getElementById('bc-method-caliper');
+  if(cn)cn.classList.toggle('sel',m==='navy');if(cc)cc.classList.toggle('sel',m==='caliper');
+  if(nav)nav.style.display=(m==='navy')?'flex':'none';
+  if(cal)cal.style.display=(m==='caliper')?'flex':'none';
+  var err=document.getElementById('bc-err');if(err)err.textContent='';
+  if(m==='caliper')renderCaliperInputs();
+}
+function setBcCalMethod(m){_bcCalMethod=m;renderCaliperInputs();}
+function renderCaliperInputs(){
+  var host=document.getElementById('bc-caliper-section');if(!host)return;
+  var sex=localStorage.getItem('user_sex')||'male';
+  var sites=_bcCalSites(_bcCalMethod,sex);
+  var methods=[{id:'jp3',label:'JP 3-site'},{id:'jp7',label:'JP 7-site'},{id:'dw4',label:'DW 4-site'}];
+  var h='<div style="display:flex;gap:6px">';
+  methods.forEach(function(mm){var sel=_bcCalMethod===mm.id;h+='<div onclick="setBcCalMethod(\''+mm.id+'\')" class="time-chip'+(sel?' sel':'')+'" style="flex:1;text-align:center;font-size:11px;cursor:pointer;user-select:none;">'+mm.label+'</div>';});
+  h+='</div>';
+  h+='<div style="font-size:11px;color:var(--muted2);line-height:1.5">'+_BC_CAL_LABEL[_bcCalMethod]+' · '+sites.length+' sites (mm). Take each pinch on the right side of the body; read 1–2s after the caliper settles. Needs your age (set above).</div>';
+  sites.forEach(function(site){
+    h+='<div style="display:flex;flex-direction:column;gap:4px;"><label class="info-label">'+(_BC_SITE_LABEL[site]||site)+' (mm)</label><input id="bc-sf-'+site+'" type="text" inputmode="decimal" placeholder="e.g. 12.0" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:16px;font-family:var(--font-ui);width:100%;outline:none;"></div>';
+  });
+  host.innerHTML=h;
+}
+function bcLogDispatch(){if(_bcMethod==='caliper')bcLogCaliper();else bcLog();}
+function bcLogCaliper(){
+  var err=document.getElementById('bc-err');if(err)err.textContent='';
+  var sex=localStorage.getItem('user_sex')||'male';
+  var age=parseInt(localStorage.getItem('user_age')||'',10);
+  if(!(age>=18&&age<=100)){var av=parseVal('bc-age-in');if(av!==null)age=Math.round(av);}
+  if(!(age>=18&&age<=100)){if(err)err.textContent='Enter your age (18–100) in the field above — required for skinfold equations.';return;}
+  var sites=_bcCalSites(_bcCalMethod,sex),vals={};
+  for(var i=0;i<sites.length;i++){
+    var v=parseVal('bc-sf-'+sites[i]);
+    if(v===null||!(v>0&&v<100)){if(err)err.textContent='Enter '+(_BC_SITE_LABEL[sites[i]]||sites[i])+' (1–99 mm).';return;}
+    vals[sites[i]]=Math.round(v*10)/10;
+  }
+  var bf=caliperBF(_bcCalMethod,sex,age,vals);
+  if(bf===null||bf<3||bf>60){if(err)err.textContent='Result out of range — check measurements.';return;}
+  var entry={date:dateKey(NOW),dateLabel:fmtDate(NOW),bf:bf,method:_bcCalMethod,skinfolds:vals};
+  var arr=bcLoad(),idx=arr.findIndex(function(e){return e.date===entry.date;});
+  if(idx!==-1)arr[idx]=entry;else arr.push(entry);
+  arr.sort(function(a,b){return a.date.localeCompare(b.date);});
+  bcSave(arr);pushBodyCompToAgent(entry);
+  bcRender();
 }
