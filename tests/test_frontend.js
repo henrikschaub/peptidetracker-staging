@@ -5999,6 +5999,31 @@ console.log('\n── SI units (µg not mcg) + % topical unit ──────
   }
 }
 
+// ── Caliper (skinfold) BF% ─────────────────────────────────────────────────
+console.log('\n── Caliper (skinfold) BF% ─────────────────────────────────');
+if(typeof G.caliperBF==='function'){
+  check('JP3 male sites = chest/abdomen/thigh', JSON.stringify(G._bcCalSites('jp3','male'))===JSON.stringify(['chest','abdomen','thigh']));
+  check('JP3 female sites = triceps/suprailiac/thigh', JSON.stringify(G._bcCalSites('jp3','female'))===JSON.stringify(['triceps','suprailiac','thigh']));
+  check('JP7 has 7 sites (both sexes)', G._bcCalSites('jp7','male').length===7 && G._bcCalSites('jp7','female').length===7);
+  check('DW4 has 4 sites, identical both sexes', G._bcCalSites('dw4','male').length===4 && JSON.stringify(G._bcCalSites('dw4','male'))===JSON.stringify(G._bcCalSites('dw4','female')));
+  check('Siri 1.05 g/ml ≈ 21.43%', Math.abs(G._siriBF(1.05)-21.4286)<0.01, String(G._siriBF(1.05)));
+  // Worked examples — expected values hand-computed from the published equations (±0.3 tol)
+  var _jp3=G.caliperBF('jp3','male',30,{chest:10,abdomen:18,thigh:14});
+  check('JP3 male worked example ≈12.7%', _jp3!==null && Math.abs(_jp3-12.7)<0.3, String(_jp3));
+  var _jp7=G.caliperBF('jp7','male',30,{chest:10,axilla:10,triceps:10,subscapular:10,abdomen:10,suprailiac:10,thigh:10});
+  check('JP7 male worked example ≈10.2%', _jp7!==null && Math.abs(_jp7-10.2)<0.3, String(_jp7));
+  var _dw4=G.caliperBF('dw4','male',25,{biceps:5,triceps:10,subscapular:12,suprailiac:13});
+  check('DW4 male 20-29 worked example ≈16.2%', _dw4!==null && Math.abs(_dw4-16.2)<0.3, String(_dw4));
+  check('DW4 age band selection changes result', G.caliperBF('dw4','male',45,{biceps:5,triceps:10,subscapular:12,suprailiac:13})!==_dw4);
+  check('BF rises with skinfold sum', G.caliperBF('jp3','male',30,{chest:20,abdomen:30,thigh:24})>G.caliperBF('jp3','male',30,{chest:8,abdomen:12,thigh:10}));
+  check('missing required site returns null', G.caliperBF('jp3','male',30,{chest:10,abdomen:18})===null);
+  check('sex changes JP3 result', G.caliperBF('jp3','female',30,{triceps:12,suprailiac:14,thigh:16})!==G.caliperBF('jp3','male',30,{chest:12,abdomen:14,thigh:16}));
+}
+if(typeof G._bcEntryDetail==='function'){
+  check('entry detail: tape entry shows Neck', /Neck/.test(G._bcEntryDetail({method:'navy',neck:42,belly:94})));
+  check('entry detail: caliper entry shows method label', /Jackson-Pollock 3-site/.test(G._bcEntryDetail({method:'jp3',skinfolds:{chest:10,abdomen:18,thigh:14}})));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
