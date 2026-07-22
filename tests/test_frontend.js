@@ -6072,6 +6072,7 @@ if(typeof G._thSeries==='function'){
   check('series: curve ends at the last injection (no tail)', !!_s && _s.totalDays===_s.lastDay);
   check('series: calibrated to pmol/L when measured FT present', !!_s && _s.calibrated===true && _s.maxFt>0);
   check('series: free-T scale stays physiological, not blown up (steady-state anchored)', !!_s && _s.maxFt>0 && _s.maxFt<3000, _s?String(_s.maxFt):'null');
+  check('series: curve starts at the endogenous baseline (ft[0] > 0), like the T-Calc', !!_s && _s.ft[0] > 0, _s?String(_s.ft[0]):'null');
   check('series: earliest injection is day 0 after sort', !!_s && _s.injections.length===2 && _s.injections[0].day===0);
   G._thInjections=[];
   check('series: empty log → null (drives empty state)', G._thSeries()===null);

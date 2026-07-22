@@ -1205,6 +1205,16 @@ function _tcFreeTSeries(sorted, hooks) {
     var _adD = new Date(firstDate.getTime() + _anchorDay * 86400000);
     _anchorCutoffDate = _adD.getFullYear() + '-' + String(_adD.getMonth() + 1).padStart(2, '0') + '-' + String(_adD.getDate()).padStart(2, '0');
   }
+  // Opt-in anchor override (used only by the T-History tab). A completed cycle has no on-cycle
+  // bloodwork and its last injection is before "today", so the default no-bloodwork anchor falls
+  // to day 0 and the calibration degenerates (the whole curve blew up ~50×). Passing the last
+  // injection day here anchors calFT at the settled steady state instead. Existing callers
+  // (T-Calc, Blood Levels) never pass anchorDay, so their behaviour is unchanged.
+  if (hooks && hooks.anchorDay != null && isFinite(hooks.anchorDay)) {
+    _anchorDay = Math.max(0, Math.min(totalDays, Math.round(hooks.anchorDay)));
+    var _adH = new Date(firstDate.getTime() + _anchorDay * 86400000);
+    _anchorCutoffDate = _adH.getFullYear() + '-' + String(_adH.getMonth() + 1).padStart(2, '0') + '-' + String(_adH.getDate()).padStart(2, '0');
+  }
 
   // Warm-start: pre-fill curve so the chart starts at the user's measured free T.
   if (calFT && _mftNum > 0) {
