@@ -5164,6 +5164,20 @@ if(typeof G._fmtTokExp==='function'){
   check('_fmtTokExp returns null for junk', G._fmtTokExp('not-a-jwt')===null);
   check('_renderAuthDebug defined; Session row present', typeof G._renderAuthDebug==='function' && html.includes('id="s-session"'));
 }
+// One-Tap must not fire while a valid backend session token exists (the fix for the
+// Google prompt popping up ~1h after login once the redundant Google ID token expires).
+if(typeof G._hasValidSession==='function'){
+  if(typeof G.atob!=='function')G.atob=function(s){return Buffer.from(s,'base64').toString('binary');};
+  var _mkSess=function(sec){return 'h.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+sec})).toString('base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_')+'.s';};
+  G.localStorage.setItem('session_token',_mkSess(3600));
+  check('_hasValidSession: true for a live session token', G._hasValidSession()===true);
+  G.localStorage.setItem('session_token',_mkSess(-60));
+  check('_hasValidSession: false once the session token has expired', G._hasValidSession()===false);
+  G.localStorage.setItem('session_token','');
+  check('_hasValidSession: false when absent', G._hasValidSession()===false);
+  check('One-Tap prompt gated behind !_hasValidSession() at sign-in init', html.includes('if(!_hasValidSession())google.accounts.id.prompt()'));
+  check('One-Tap refresh interval gated behind !_hasValidSession()', html.includes('<300000&&!_hasValidSession()&&window.google'));
+}
 
 // Macros moved into the Today primary group as a sub-tab; visible by default.
 check('Macros is a Today sub-tab (primaryOf)', typeof G.primaryOf==='function' && G.primaryOf('macros')==='today');
