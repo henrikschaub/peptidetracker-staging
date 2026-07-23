@@ -6099,9 +6099,10 @@ if(typeof G._thComputeFreeT==='function'){
     _coRows.push({compound_id:'enanthate',dose:'100',tier:'trt',logged:true,date:_cd.getFullYear()+'-'+String(_cd.getMonth()+1).padStart(2,'0')+'-'+String(_cd.getDate()).padStart(2,'0')}); }
   G._tcp.measuredFT='217'; G._tcp.currentDoseMgWk=''; G._tcp.birthYear='1990'; G._thInjections=_coRows;
   G._tcBwEntries=null;
+  var _coLastDate=_coRows[_coRows.length-1].date;
   var _cNo=G._thComputeFreeT();
   check('capture no-bloodwork: bounded, does not blow up (0 < max < 1500)', !!_cNo && _cNo.maxV>0 && _cNo.maxV<1500, _cNo?String(Math.round(_cNo.maxV)):'null');
-  check('capture: one entry per day incl. 14-day tail (first inj → last+14)', !!_cNo && _cNo.entries.length>=(31+14), _cNo?String(_cNo.entries.length):'null');
+  check('capture: curve ends AT the last injection — nothing plotted past it', !!_cNo && _cNo.entries[_cNo.entries.length-1].date===_coLastDate, _cNo?(_cNo.entries[_cNo.entries.length-1].date+' vs '+_coLastDate):'null');
   check('capture: entries carry marker=free_t and a date', !!_cNo && _cNo.entries[0].marker==='free_t' && /^\d{4}-\d{2}-\d{2}$/.test(_cNo.entries[0].date));
   G._tcBwEntries=[{date:'2025-12-20', free_t:217}];   // pre-cycle baseline draw — the case that exploded
   var _cBw=G._thComputeFreeT();
