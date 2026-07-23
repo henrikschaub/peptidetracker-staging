@@ -54,6 +54,7 @@
       <div class="checklist" id="today-checklist"><div class="empty"><div class="empty-icon">💉</div>Nothing scheduled</div></div>
     </div>
     <div id="today-supplements"></div>
+    <button class="reset-btn" onclick="openPastInjection()" style="margin-bottom:8px">+ Log a past injection</button>
     <button class="reset-btn" onclick="resetToday()">Reset Today's Log</button>
     <div class="card" id="today-checkin-card">
       <div class="card-header" style="cursor:pointer" onclick="toggleTodayCheckIn()"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent4)"></div><div class="card-title">DAILY CHECK-IN</div></div><div style="display:flex;align-items:center;gap:8px"><span class="card-badge badge-today" id="today-bf-badge">0 / 10</span><span id="today-checkin-chev" style="color:var(--muted2);font-size:18px">&#x25B8;</span></div></div>
@@ -769,6 +770,13 @@ async function refreshInjectionsCache(){
         if(!_injectionsCache[e.date])_injectionsCache[e.date]=[];
         _injectionsCache[e.date].push(e);
       }
+      return;
+    }
+    // Manually-added past injections (onboarding a mid-cycle user) are not tied to
+    // an active stack cycle — always show them.
+    if(_cyc==='manual'){
+      if(!_injectionsCache[e.date])_injectionsCache[e.date]=[];
+      _injectionsCache[e.date].push(e);
       return;
     }
     if(!activeCycleIds.has(e.cycle_id))return;
