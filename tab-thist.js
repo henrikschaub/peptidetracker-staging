@@ -119,15 +119,23 @@ function _thDayToMs(series, day){ return series.firstMs + day * 86400000; }
 function _thFmtDate(ms){ var d = new Date(ms); var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return d.getDate()+' '+M[d.getMonth()]+' '+String(d.getFullYear()).slice(2); }
 var _TH_ZOOM_DAYS = { week: 7, month: 30, year: 365 };
 
-// Which zoom levels are meaningful for a history spanning `span` days. A window
-// wider than the data would just show everything — identical to "All" — so a W/M/Y
-// level is offered only when its window is actually narrower than the data. "All"
-// is always offered. This is why Month/Year appear only once enough history exists.
-function _thZoomLevels(span) {
-  var defs = [{id:'week',label:'W',days:7},{id:'month',label:'M',days:30},{id:'year',label:'Y',days:365}];
-  var out = defs.filter(function(z){ return z.days < span; });
-  out.push({id:'all',label:'All'});
-  return out;
+// Zoom levels always available: a fixed 1-week / 1-month / 1-year window, plus
+// "All" (the full history). The window is exactly its calendar period regardless
+// of how much data exists (a shorter history simply sits inside the fixed window).
+function _thZoomLevels() {
+  return [{id:'week',label:'W'},{id:'month',label:'M'},{id:'year',label:'Y'},{id:'all',label:'All'}];
+}
+
+// The visible day window for a zoom level. Each period zoom is EXACTLY 1 week /
+// 1 month / 1 year wide (7 / 30 / 365 days), ending at the as-of day (the slider),
+// so it can extend earlier than the first data point (empty axis) but never past
+// the latest injection. "All" spans the whole history. Returns {winStart, winEnd}.
+function _thWindow(zoom, focusDay, totalDays) {
+  if (zoom === 'all') return { winStart: 0, winEnd: totalDays };
+  var period = _TH_ZOOM_DAYS[zoom] || totalDays;
+  var winEnd = Math.min(totalDays, (focusDay == null ? totalDays : focusDay));
+  var winStart = winEnd - period;   // exactly `period` days wide
+  return { winStart: winStart, winEnd: winEnd };
 }
 
 // Build the render series from the stored free-T values — no PK math. Returns
@@ -225,7 +233,7 @@ function _thRender(host) {
     return;
   }
   if (_thFocusDay === null || _thFocusDay < 0 || _thFocusDay > series.totalDays) _thFocusDay = series.lastDay;
-  var zooms = _thZoomLevels(series.totalDays);
+  var zooms = _thZoomLevels();
   if (!zooms.some(function(z){ return z.id === _thZoom; })) _thZoom = 'all';
   var zBtns = zooms.map(function(z){
     var sel = _thZoom === z.id;
@@ -269,14 +277,13 @@ function _thDrawChart(canvasId, series, zoom, focusDay) {
   var cssW = canvas.offsetWidth || 300, cssH = 150;
   canvas.width = cssW*dpr; canvas.height = cssH*dpr; canvas.style.width = cssW+'px'; canvas.style.height = cssH+'px';
   var ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
-  var span = (zoom === 'all') ? series.totalDays : Math.min(series.totalDays, _TH_ZOOM_DAYS[zoom] || series.totalDays);
-  var winStart, winEnd;
-  if (zoom === 'all') { winStart = 0; winEnd = series.totalDays; }
-  else {
-    winStart = Math.max(0, Math.min(series.totalDays - span, focusDay - Math.floor(span/2)));
-    winEnd = Math.min(series.totalDays, winStart + span);
-  }
+  var _w = _thWindow(zoom, focusDay, series.totalDays);
+  var winStart = _w.winStart, winEnd = _w.winEnd;
   if (winEnd <= winStart) winEnd = winStart + 1;
+  // The curve/ticks only exist within the data range [0, totalDays]; the axis may
+  // extend earlier (a fixed 1-month/1-year window on a shorter history) — draw the
+  // curve only where there is data so the empty part of the window stays blank.
+  var dStart = Math.max(winStart, 0), dEnd = Math.min(winEnd, series.totalDays);
   var PAD = {top:12, right:12, bottom:26, left:44};
   var cW = cssW - PAD.left - PAD.right, cH = cssH - PAD.top - PAD.bottom;
   var yMax = (series.maxFt > 0 ? series.maxFt : 1) * 1.12, yMin = 0;
@@ -285,16 +292,18 @@ function _thDrawChart(canvasId, series, zoom, focusDay) {
   ctx.strokeStyle = '#3A352B'; ctx.lineWidth = 0.5;
   ctx.fillStyle = '#777'; ctx.font = '9px -apple-system,system-ui,sans-serif'; ctx.textAlign = 'right';
   for (var g = 0; g <= 3; g++) { var gy = PAD.top + cH/3*g; ctx.beginPath(); ctx.moveTo(PAD.left, gy); ctx.lineTo(PAD.left+cW, gy); ctx.stroke(); var lv = yMax - (yMax-yMin)*(g/3); ctx.fillText(series.calibrated ? String(Math.round(lv)) : (Math.round(lv*10)/10).toFixed(1), PAD.left-4, gy+3); }
-  series.injections.forEach(function(inj){ if (inj.day < winStart || inj.day > winEnd) return; var x = xOf(inj.day); ctx.strokeStyle = '#e0505055'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, PAD.top+cH); ctx.stroke(); ctx.fillStyle = '#e05050'; ctx.beginPath(); ctx.moveTo(x, PAD.top+cH-4); ctx.lineTo(x-3, PAD.top+cH+2); ctx.lineTo(x+3, PAD.top+cH+2); ctx.closePath(); ctx.fill(); });
-  var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top+cH);
-  grad.addColorStop(0, '#e0505044'); grad.addColorStop(1, '#e0505000');
-  ctx.beginPath(); ctx.moveTo(xOf(winStart), PAD.top+cH);
-  for (var d = winStart; d <= winEnd; d++) ctx.lineTo(xOf(d), yOf(series.ft[d] || 0));
-  ctx.lineTo(xOf(winEnd), PAD.top+cH); ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
-  ctx.beginPath();
-  for (var d2 = winStart; d2 <= winEnd; d2++) { var x2 = xOf(d2), y2 = yOf(series.ft[d2] || 0); if (d2 === winStart) ctx.moveTo(x2, y2); else ctx.lineTo(x2, y2); }
-  ctx.strokeStyle = '#e05050'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
-  if (focusDay >= winStart && focusDay <= winEnd) {
+  series.injections.forEach(function(inj){ if (inj.day < dStart || inj.day > dEnd) return; var x = xOf(inj.day); ctx.strokeStyle = '#e0505055'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, PAD.top+cH); ctx.stroke(); ctx.fillStyle = '#e05050'; ctx.beginPath(); ctx.moveTo(x, PAD.top+cH-4); ctx.lineTo(x-3, PAD.top+cH+2); ctx.lineTo(x+3, PAD.top+cH+2); ctx.closePath(); ctx.fill(); });
+  if (dEnd > dStart) {
+    var grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top+cH);
+    grad.addColorStop(0, '#e0505044'); grad.addColorStop(1, '#e0505000');
+    ctx.beginPath(); ctx.moveTo(xOf(dStart), PAD.top+cH);
+    for (var d = dStart; d <= dEnd; d++) ctx.lineTo(xOf(d), yOf(series.ft[d] || 0));
+    ctx.lineTo(xOf(dEnd), PAD.top+cH); ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+    ctx.beginPath();
+    for (var d2 = dStart; d2 <= dEnd; d2++) { var x2 = xOf(d2), y2 = yOf(series.ft[d2] || 0); if (d2 === dStart) ctx.moveTo(x2, y2); else ctx.lineTo(x2, y2); }
+    ctx.strokeStyle = '#e05050'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+  }
+  if (focusDay >= dStart && focusDay <= dEnd) {
     var fx = xOf(focusDay), fy = yOf(series.ft[focusDay] || 0);
     ctx.strokeStyle = '#e8ff3c'; ctx.lineWidth = 1; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(fx, PAD.top); ctx.lineTo(fx, PAD.top+cH); ctx.stroke(); ctx.setLineDash([]);
     ctx.beginPath(); ctx.arc(fx, fy, 4, 0, Math.PI*2); ctx.fillStyle = '#e8ff3c'; ctx.fill(); ctx.beginPath(); ctx.arc(fx, fy, 1.8, 0, Math.PI*2); ctx.fillStyle = '#000'; ctx.fill();
