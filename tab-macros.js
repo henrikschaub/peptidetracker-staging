@@ -3,7 +3,14 @@ var _macrosPhase='recomp';
 function loadMacros(){var bw=parseDec(localStorage.getItem('user_weight'))||0;renderMacros(bw,_macrosOnAndrogens());}
 function switchMacrosPhase(p){_macrosPhase=p;loadMacros();}
 function calcMacros(bw,phase,onAndrogens){
-  var protein=Math.round(bw*2.2);
+  // Protein is phase-aware. In a caloric deficit, lean resistance-trained athletes
+  // need MORE protein to preserve muscle — 2.3–3.1 g/kg fat-free mass (Helms 2014),
+  // ~2.5 g/kg total bodyweight for a lean build — so a cut targets 2.5 g/kg; a
+  // maintenance/surplus phase stays at the 2.2 g/kg upper-athletic bound (Morton 2018).
+  // Androgens improve nitrogen retention, so being on-cycle does not raise the
+  // requirement further — the driver is the deficit, not the compounds.
+  var proteinPerKg=phase==='cut'?2.5:2.2;
+  var protein=Math.round(bw*proteinPerKg);
   var kcalBase=Math.round(bw*31);
   var kcal=phase==='cut'?kcalBase-300:phase==='reset'?kcalBase:kcalBase+100;
   // On exogenous androgens the endogenous-T-protection reason for higher fat is moot
@@ -24,11 +31,15 @@ function _macrosOnAndrogens(){
   }catch(e){}
   return false;
 }
-// Evidence-backed macro note; branches on whether injected androgens are present.
-function _macrosFatNote(onAndrogens){
+// Evidence-backed macro note; branches on the cut/deficit phase (protein) and on
+// whether injected androgens are present (fat).
+function _macrosFatNote(onAndrogens,phase){
+  var protein=phase==='cut'
+    ? 'Protein <b>2.5 g/kg</b> — raised for the cut: in a caloric deficit, lean trained athletes need more protein to preserve muscle (2.3–3.1 g/kg fat-free mass, Helms 2014).'
+    : 'Protein 2.2 g/kg — upper end of the evidence-based range for muscle retention (Morton 2018).';
   return onAndrogens
-    ? 'Protein 2.2 g/kg (upper end of the evidence-based range, Morton 2018). <b>Fat set lower</b> (~0.5–0.6 g/kg): on injected hormones the main reason to keep fat high — protecting your own testosterone — no longer applies (low-fat diets cut endogenous T ~10–15%, Whittaker 2021; your testes are already suppressed on-cycle). Kept at an essential-fat floor for fatty acids and satiety; carbs take the freed calories around training.'
-    : 'Protein 2.2 g/kg — upper end of the evidence-based range for muscle retention (Morton 2018). Keep fat ~0.9 g/kg (≈25–30% kcal) to protect endogenous testosterone (low-fat diets cut it ~10–15%, Whittaker 2021). Adjust carbs and fat around training windows, not randomly.';
+    ? protein+' <b>Fat set lower</b> (~0.5–0.6 g/kg): on injected hormones the main reason to keep fat high — protecting your own testosterone — no longer applies (low-fat diets cut endogenous T ~10–15%, Whittaker 2021; your testes are already suppressed on-cycle). Kept at an essential-fat floor for fatty acids and satiety; carbs take the freed calories around training.'
+    : protein+' Keep fat ~0.9 g/kg (≈25–30% kcal) to protect endogenous testosterone (low-fat diets cut it ~10–15%, Whittaker 2021). Adjust carbs and fat around training windows, not randomly.';
 }
 function saveMacrosTrainTime(val){localStorage.setItem('macros-train-time',val);pushPepSettingsToAgent({'macros-train-time':val});loadMacros();}
 function saveMacrosTrainDur(val){localStorage.setItem('macros-train-dur',String(val));pushPepSettingsToAgent({'macros-train-dur':val});loadMacros();}
@@ -51,7 +62,7 @@ function renderMacros(bw,onAndrogens){
   h+='<div style="display:grid;grid-template-columns:repeat(4,1fr)">';
   var mi=[{l:'Calories',v:m.kcal,u:'kcal',c:'var(--accent)'},{l:'Protein',v:m.protein,u:'g',c:'var(--accent3)'},{l:'Carbs',v:m.carbs,u:'g',c:'var(--accent2)'},{l:'Fat',v:m.fat,u:'g',c:'var(--accent4)'}];
   mi.forEach(function(x,i){h+='<div style="padding:16px 6px;text-align:center'+(i<3?';border-right:1px solid var(--border)':'')+'">';h+='<div style="font-family:var(--font-mono);font-size:26px;line-height:1;color:'+x.c+'">'+x.v+'</div>';h+='<div style="font-size:9px;color:var(--muted2);text-transform:uppercase;letter-spacing:0.5px;margin-top:3px">'+x.u+'</div>';h+='<div style="font-size:9px;color:var(--muted2)">'+x.l+'</div></div>';});
-  h+='</div><div class="card-body"><div style="font-size:11px;color:var(--muted2);line-height:1.5">'+_macrosFatNote(onAndrogens)+'</div></div></div>';
+  h+='</div><div class="card-body"><div style="font-size:11px;color:var(--muted2);line-height:1.5">'+_macrosFatNote(onAndrogens,_macrosPhase)+'</div></div></div>';
   h+='<div class="card"><div class="card-header"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent2)"></div><div class="card-title">MEAL TIMING</div></div></div>';
   h+='<div class="card-body" style="gap:12px">';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';

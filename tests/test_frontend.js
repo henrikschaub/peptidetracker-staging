@@ -6162,11 +6162,20 @@ console.log('\n── Compound-aware macros ────────────
 if(typeof G.calcMacros==='function'){
   var _mOff=G.calcMacros(90,'recomp',false);
   var _mOn =G.calcMacros(90,'recomp',true);
-  check('calcMacros protein = 2.2 g/kg', _mOff.protein===Math.round(90*2.2), String(_mOff.protein));
+  check('calcMacros protein = 2.2 g/kg in a non-cut phase', _mOff.protein===Math.round(90*2.2), String(_mOff.protein));
   check('calcMacros fat lower on injected androgens', _mOn.fat < _mOff.fat, _mOn.fat+' vs '+_mOff.fat);
   check('calcMacros carbs energy-balanced & non-negative', _mOn.carbs>=0 && _mOff.carbs>=0);
   check('calcMacros cut < recomp kcal', G.calcMacros(90,'cut',true).kcal < G.calcMacros(90,'recomp',true).kcal);
   check('calcMacros flags onAndrogens through', G.calcMacros(90,'recomp',true).onAndrogens===true && _mOff.onAndrogens===false);
+  // Phase-aware protein: a cut raises protein (deficit preserves muscle — Helms 2014),
+  // and being on androgens does NOT raise it further (nitrogen retention is already better).
+  check('calcMacros cut protein = 2.5 g/kg (raised for the deficit)', G.calcMacros(90,'cut',false).protein===Math.round(90*2.5), String(G.calcMacros(90,'cut',false).protein));
+  check('calcMacros cut protein > recomp protein', G.calcMacros(90,'cut',false).protein > G.calcMacros(90,'recomp',false).protein);
+  check('calcMacros protein independent of androgens within a phase', G.calcMacros(90,'cut',true).protein===G.calcMacros(90,'cut',false).protein);
+  if(typeof G._macrosFatNote==='function'){
+    check('_macrosFatNote cut mentions the raised protein + Helms', /2\.5 g\/kg/.test(G._macrosFatNote(false,'cut')) && /Helms 2014/.test(G._macrosFatNote(false,'cut')));
+    check('_macrosFatNote non-cut keeps 2.2 g/kg', /2\.2 g\/kg/.test(G._macrosFatNote(false,'recomp')));
+  }
 }
 if(typeof G._macrosOnAndrogens==='function'){
   G._userStacks=[{trt:{enabled:true,compounds:[{id:'enanthate'}]},enhanced:{compounds:[]}}]; G._activeStackIndices=[0];
