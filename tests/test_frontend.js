@@ -6176,23 +6176,16 @@ if(typeof G.calcMacros==='function'){
     check('_macrosFatNote cut mentions the raised protein + Helms', /2\.5 g\/kg/.test(G._macrosFatNote(false,'cut')) && /Helms 2014/.test(G._macrosFatNote(false,'cut')));
     check('_macrosFatNote non-cut keeps 2.2 g/kg', /2\.2 g\/kg/.test(G._macrosFatNote(false,'recomp')));
   }
-  // Personalised calorie model: Mifflin-St Jeor BMR × NEAT + measured training kcal,
-  // with the legacy 31 kcal/kg fallback when height/age/sex are missing.
-  if(typeof G._mifflinBMR==='function'){
-    check('_mifflinBMR male 90kg/183cm/40y ≈ 1849', Math.abs(G._mifflinBMR(90,183,40,'male')-1848.75)<0.5, String(G._mifflinBMR(90,183,40,'male')));
-    check('_mifflinBMR female is 166 lower than male (same anthropometrics)', Math.round(G._mifflinBMR(90,183,40,'male')-G._mifflinBMR(90,183,40,'female'))===166);
-    check('_mifflinBMR = 0 when age/height missing (neutral fallback)', G._mifflinBMR(90,0,40,'male')===0 && G._mifflinBMR(90,183,0,'male')===0);
-  }
-  var _optsP={heightCm:183,age:40,sex:'male',trainKcalPerDay:0};
-  var _mP=G.calcMacros(90,'recomp',false,_optsP);
-  check('calcMacros personalised: maintenance = round(BMR×1.25)+train', _mP.personalized===true && _mP.maint===Math.round(G._mifflinBMR(90,183,40,'male')*1.25), JSON.stringify({maint:_mP.maint,bmr:_mP.bmr}));
-  var _mTrain=G.calcMacros(90,'recomp',false,{heightCm:183,age:40,sex:'male',trainKcalPerDay:350});
-  check('calcMacros: measured training kcal raises the calorie target', _mTrain.kcal===_mP.kcal+350, _mTrain.kcal+' vs '+_mP.kcal);
-  var _mFallback=G.calcMacros(90,'recomp',false,{trainKcalPerDay:350});
-  check('calcMacros fallback (no height/age): 31 kcal/kg base, NO training added (no double-count)', _mFallback.personalized===false && _mFallback.trainKcal===0 && _mFallback.kcal===Math.round(90*31)+100, JSON.stringify({kcal:_mFallback.kcal}));
-  if(typeof G._macrosEnergyNote==='function'){
-    check('_macrosEnergyNote personalised shows BMR + training kcal', /BMR/.test(G._macrosEnergyNote(_mTrain,'recomp')) && /350/.test(G._macrosEnergyNote(_mTrain,'recomp')));
-    check('_macrosEnergyNote fallback prompts for Body Comp inputs', /Body Comp/.test(G._macrosEnergyNote(_mFallback,'recomp')));
+  // Calorie target is intake-only: ~31 kcal/kg ± phase, and NOT affected by the
+  // measured training burn (which is presented separately).
+  check('calcMacros recomp kcal = 31 kcal/kg + 100 (training not folded in)', G.calcMacros(90,'recomp',false).kcal===Math.round(90*31)+100, String(G.calcMacros(90,'recomp',false).kcal));
+  check('calcMacros returns no maintenance/train fields (target is training-independent)', G.calcMacros(90,'recomp',false).trainKcal===undefined && G.calcMacros(90,'recomp',false).maint===undefined);
+  // Training burn is shown separately via _macrosBurnCard, driven by _macrosTrainKcal.
+  if(typeof G._macrosBurnCard==='function'){
+    G._macrosTrainKcal=270;
+    check('_macrosBurnCard shows the burn kcal and marks it separate from the target', /270/.test(G._macrosBurnCard()) && /not added to the calorie target/i.test(G._macrosBurnCard()));
+    G._macrosTrainKcal=0;
+    check('_macrosBurnCard with no data prompts to log workouts, not zero-burn scare', /log your workouts/i.test(G._macrosBurnCard()));
   }
 }
 if(typeof G._macrosOnAndrogens==='function'){
