@@ -5155,6 +5155,16 @@ check('Labs dispatched in switchTab',   html.includes("if(id==='labs')buildLabs(
 check('tab-labs.js script included',    html.includes('tab-labs.js'));
 check('lab-markers catalogue synced on init', html.includes('syncLabMarkersFromAgent()'));
 
+// Session/auth diagnostic readout (Settings → Account).
+if(typeof G._fmtTokExp==='function'){
+  if(typeof G.atob!=='function')G.atob=function(s){return Buffer.from(s,'base64').toString('binary');};
+  var _futTok='h.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600})).toString('base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_')+'.s';
+  var _fe=G._fmtTokExp(_futTok);
+  check('_fmtTokExp decodes JWT exp → ~60m left', !!_fe && _fe.leftMin>=59 && _fe.leftMin<=61, _fe?String(_fe.leftMin):'null');
+  check('_fmtTokExp returns null for junk', G._fmtTokExp('not-a-jwt')===null);
+  check('_renderAuthDebug defined; Session row present', typeof G._renderAuthDebug==='function' && html.includes('id="s-session"'));
+}
+
 // Macros moved into the Today primary group as a sub-tab; visible by default.
 check('Macros is a Today sub-tab (primaryOf)', typeof G.primaryOf==='function' && G.primaryOf('macros')==='today');
 check('Macros in the Today group, not More (source)', /today:\[[^\]]*'macros'[^\]]*\]/.test(html) && !/more:\[[^\]]*'macros'/.test(html));
