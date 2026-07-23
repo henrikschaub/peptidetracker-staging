@@ -6037,66 +6037,104 @@ if(typeof G._injPkMeta==='function'){
   check('_injPkMeta peptide: null ester + null half-life (not PK-modelled)', _mP.ester===null && _mP.half_life_days===null, JSON.stringify(_mP));
 }
 
-// ── T-Historical (read-only free-T from logged injections) ─────────────────
-console.log('\n── T-Historical (read-only free-T) ────────────────────────');
-if(typeof G._thAccumulate==='function'){
-  var _thInj=[{compId:'testo',doseMg:'100',date:'2026-01-01'},{compId:'testo',doseMg:'100',date:'2026-01-08'}];
-  var _acc=G._thAccumulate(_thInj,14);
-  check('accumulate: lastDay = span between injections', !!_acc && _acc.lastDay===7, _acc?String(_acc.lastDay):'null');
-  check('accumulate: horizon = lastDay + 14-day tail', !!_acc && _acc.totalDays===21, _acc?String(_acc.totalDays):'null');
-  check('accumulate: curve rises after an injection', !!_acc && _acc.total[3]>0);
-  check('accumulate: single-injection log valid (tail only)', (function(){var a=G._thAccumulate([{compId:'testo',doseMg:'80',date:'2026-02-01'}],14);return !!a&&a.lastDay===0&&a.totalDays===14;})());
-  check('accumulate: empty log → null', G._thAccumulate([],14)===null);
-  var _cal=G._thCalFT(_acc,'400',0);
-  check('calFT positive with a measured free-T', _cal>0, String(_cal));
-  check('calFT positive via age-band default too', G._thCalFT(_acc,'',1990)>0);
-}
-if(typeof G._thLog==='function'){
-  G._thInjections=[{compound_id:'enanthate',dose:'125',date:'2026-02-01',tier:'trt',logged:true,half_life_days:4.5}];
-  var _l=G._thLog();
-  check('_thLog maps logged TRT injection → {compId,doseMg,date,half_life_days}', _l.length===1 && _l[0].compId==='enanthate' && _l[0].doseMg===125 && _l[0].half_life_days===4.5);
-  G._thInjections=[{compound_id:'ipamorelin',dose:'200',date:'2026-02-01',tier:'peptide',logged:true}];
-  check('_thLog excludes non-TRT tier (peptides)', G._thLog().length===0);
-}
-if(typeof G._thSeries==='function'){
-  G._tcp=G._tcp||{}; G._tcp.measuredFT='400'; G._tcp.birthYear='1990';
-  G._thInjections=[
-    {compound_id:'enanthate',dose:'100',date:'2026-01-08',tier:'trt',logged:true,half_life_days:4.5},
-    {compound_id:'enanthate',dose:'100',date:'2026-01-01',tier:'trt',logged:true,half_life_days:4.5},
-    {compound_id:'enanthate',dose:'100',date:'2026-01-15',tier:'trt',logged:false,half_life_days:4.5}, // scheduled, not checked
-    {compound_id:'nandrolone',dose:'100',date:'2026-01-10',tier:'enhanced',logged:true,half_life_days:7}, // not testosterone
-    {compound_id:'enanthate',dose:'0',date:'2026-01-20',tier:'trt',logged:true} // zero dose
+// ── T-Historical (free-T loaded from backend; captured by the T-Calc model) ──
+console.log('\n── T-Historical (backend-persisted free-T) ────────────────');
+
+// _thLoggedTrt / _thMergedPastLog: the injection source the capture computes from.
+if(typeof G._thLoggedTrt==='function'){
+  var _ltRows=[
+    {compound_id:'enanthate',dose:'125',date:'2026-02-01',tier:'trt',logged:true},
+    {compound_id:'enanthate',dose:'0',date:'2026-02-08',tier:'trt',logged:true},      // zero dose
+    {compound_id:'enanthate',dose:'100',date:'2026-02-15',tier:'trt',logged:false},   // unchecked
+    {compound_id:'ipamorelin',dose:'200',date:'2026-02-01',tier:'peptide',logged:true} // non-T
   ];
-  var _s=G._thSeries();
-  check('series: only logged TRT injections feed it (excludes unchecked/non-T/zero) → 2', !!_s && _s.count===2, _s?String(_s.count):'null');
-  check('series: curve ends at the last injection (no tail)', !!_s && _s.totalDays===_s.lastDay);
-  check('series: calibrated to pmol/L when measured FT present', !!_s && _s.calibrated===true && _s.maxFt>0);
-  check('series: free-T scale stays physiological, not blown up (steady-state anchored)', !!_s && _s.maxFt>0 && _s.maxFt<3000, _s?String(_s.maxFt):'null');
-  check('series: curve starts at the endogenous baseline (ft[0] > 0), like the T-Calc', !!_s && _s.ft[0] > 0, _s?String(_s.ft[0]):'null');
-  check('series: earliest injection is day 0 after sort', !!_s && _s.injections.length===2 && _s.injections[0].day===0);
-  G._thInjections=[];
-  check('series: empty log → null (drives empty state)', G._thSeries()===null);
+  var _lt=G._thLoggedTrt(_ltRows);
+  check('_thLoggedTrt: only logged TRT with dose>0 → 1, mapped to {compId,doseMg,date}',
+        _lt.length===1 && _lt[0].compId==='enanthate' && _lt[0].doseMg===125 && _lt[0].date==='2026-02-01', JSON.stringify(_lt));
+}
+if(typeof G._thMergedPastLog==='function'){
+  var _mlSaveTcp=G._tcp, _mlSaveInj=G._thInjections;
+  G._tcp={manualLog:[{compId:'enanthate',doseMg:100,date:'2026-01-01'}]};
+  G._thInjections=[
+    {compound_id:'enanthate',dose:'100',date:'2026-01-01',tier:'trt',logged:true},   // dup of manualLog → deduped
+    {compound_id:'enanthate',dose:'120',date:'2026-01-08',tier:'trt',logged:true},   // new
+    {compound_id:'enanthate',dose:'100',date:'2999-01-01',tier:'trt',logged:true}    // future → excluded
+  ];
+  var _ml=G._thMergedPastLog();
+  check('_thMergedPastLog: manualLog ∪ logged-trt, deduped, past-only, sorted → 2',
+        _ml.length===2 && _ml[0].date==='2026-01-01' && _ml[1].date==='2026-01-08', JSON.stringify(_ml.map(function(x){return x.date;})));
+  G._tcp=_mlSaveTcp; G._thInjections=_mlSaveInj;
 }
 
-// ── T-History MUST NEVER blow up — bounded scale with AND without bloodwork ─────
-// Hard regression for the ~50× / 9,345 pmol/L explosions. Tests the real user-facing
-// path (_thSeries) — a completed cycle must stay physiological in every calibration
-// state (no bloodwork, and a pre-cycle baseline blood test present — the case that
-// exploded). NOTE: T-History's own calibration is being replaced by backend-stored
-// daily values (Henrik's design); until then this guard keeps it from blowing up.
-console.log('\n── T-History never blows up (bounded) ─────────────────────');
+// _thSeries: builds the render series from STORED plasma rows (no PK math here).
 if(typeof G._thSeries==='function'){
-  var _coFT=G._tcp.measuredFT, _coDose=G._tcp.currentDoseMgWk, _coBw=G._tcBwEntries, _coBY=G._tcp.birthYear, _coInj=G._thInjections;
+  var _sSaveData=G._thData, _sSaveInj=G._thInjections;
+  G._thInjections=[];
+  G._thData=[
+    {date:'2026-03-01',marker:'free_t',value:300,unit:'pmol/L'},
+    {date:'2026-03-03',marker:'free_t',value:500,unit:'pmol/L'},   // gap on 03-02 → interpolated
+    {date:'2026-03-04',marker:'free_t',value:450,unit:'pmol/L'}
+  ];
+  var _s=G._thSeries();
+  check('_thSeries: spans first→last stored day (totalDays=3)', !!_s && _s.totalDays===3, _s?String(_s.totalDays):'null');
+  check('_thSeries: calibrated flag from stored unit (pmol/L)', !!_s && _s.calibrated===true);
+  check('_thSeries: plots the stored values (ft[0]=300, ft[3]=450)', !!_s && _s.ft[0]===300 && _s.ft[3]===450, _s?(_s.ft[0]+','+_s.ft[3]):'null');
+  check('_thSeries: gaps interpolated (ft[1] between 300 and 500)', !!_s && _s.ft[1]>300 && _s.ft[1]<500, _s?String(_s.ft[1]):'null');
+  check('_thSeries: maxFt = peak stored value', !!_s && _s.maxFt===500, _s?String(_s.maxFt):'null');
+  G._thData=[];
+  check('_thSeries: empty store → null (drives empty state)', G._thSeries()===null);
+  G._thData=_sSaveData; G._thInjections=_sSaveInj;
+}
+
+// ── Capture MUST reproduce the T-Calc curve and NEVER blow up ────────────────
+// Hard regression for the ~50× / 9,345 pmol/L explosions. The capture computes the
+// per-day free-T with the exact T-Calc model (no anchor override) — the value that
+// gets stored and plotted. It must stay physiological in every calibration state,
+// especially the pre-cycle baseline blood test case that used to explode.
+console.log('\n── Free-T capture reproduces T-Calc, bounded ──────────────');
+if(typeof G._thComputeFreeT==='function'){
+  var _coFT=G._tcp&&G._tcp.measuredFT, _coDose=G._tcp&&G._tcp.currentDoseMgWk, _coBw=G._tcBwEntries, _coBY=G._tcp&&G._tcp.birthYear, _coInj=G._thInjections, _coML=G._tcp&&G._tcp.manualLog;
+  G._tcp=G._tcp||{}; G._tcp.manualLog=[];
   var _coRows=[]; for(var _ci=0;_ci<10;_ci++){ var _cd=new Date(new Date('2026-01-05').getTime()+_ci*3.5*86400000);
     _coRows.push({compound_id:'enanthate',dose:'100',tier:'trt',logged:true,date:_cd.getFullYear()+'-'+String(_cd.getMonth()+1).padStart(2,'0')+'-'+String(_cd.getDate()).padStart(2,'0')}); }
   G._tcp.measuredFT='217'; G._tcp.currentDoseMgWk=''; G._tcp.birthYear='1990'; G._thInjections=_coRows;
   G._tcBwEntries=null;
-  var _sNo=G._thSeries();
-  check('T-History no-bloodwork: bounded, does not blow up (0 < max < 1500)', !!_sNo && _sNo.maxFt>0 && _sNo.maxFt<1500, _sNo?String(Math.round(_sNo.maxFt)):'null');
+  var _cNo=G._thComputeFreeT();
+  check('capture no-bloodwork: bounded, does not blow up (0 < max < 1500)', !!_cNo && _cNo.maxV>0 && _cNo.maxV<1500, _cNo?String(Math.round(_cNo.maxV)):'null');
+  check('capture: one entry per day incl. 14-day tail (first inj → last+14)', !!_cNo && _cNo.entries.length>=(31+14), _cNo?String(_cNo.entries.length):'null');
+  check('capture: entries carry marker=free_t and a date', !!_cNo && _cNo.entries[0].marker==='free_t' && /^\d{4}-\d{2}-\d{2}$/.test(_cNo.entries[0].date));
   G._tcBwEntries=[{date:'2025-12-20', free_t:217}];   // pre-cycle baseline draw — the case that exploded
-  var _sBw=G._thSeries();
-  check('T-History with pre-cycle bloodwork: bounded, does not blow up (0 < max < 1500)', !!_sBw && _sBw.maxFt>0 && _sBw.maxFt<1500, _sBw?String(Math.round(_sBw.maxFt)):'null');
-  G._tcp.measuredFT=_coFT; G._tcp.currentDoseMgWk=_coDose; G._tcBwEntries=_coBw; G._tcp.birthYear=_coBY; G._thInjections=_coInj;
+  var _cBw=G._thComputeFreeT();
+  check('capture with pre-cycle bloodwork: bounded, does not blow up (0 < max < 1500)', !!_cBw && _cBw.maxV>0 && _cBw.maxV<1500, _cBw?String(Math.round(_cBw.maxV)):'null');
+  check('capture with pre-cycle bloodwork: rises above the 217 baseline (on-cycle > baseline)', !!_cBw && _cBw.maxV>217, _cBw?String(Math.round(_cBw.maxV)):'null');
+  G._tcp.manualLog=[]; G._thInjections=[]; G._tcBwEntries=[{date:'2025-12-20', free_t:217}];
+  check('capture: no injections → null (nothing to store)', G._thComputeFreeT()===null);
+  if(G._tcp){G._tcp.measuredFT=_coFT; G._tcp.currentDoseMgWk=_coDose; G._tcp.birthYear=_coBY; G._tcp.manualLog=_coML;} G._tcBwEntries=_coBw; G._thInjections=_coInj;
+}
+
+// Capture persists via DELETE(clear marker)+POST(batch) to /plasma-history.
+if(typeof G._captureFreeTHistory==='function'){
+  var _pcSaveInj=G._thInjections, _pcSaveFetch=G.fetch, _pcSaveBw=G._tcBwEntries, _pcSaveML=G._tcp&&G._tcp.manualLog;
+  G._tcp=G._tcp||{}; G._tcp.manualLog=[]; G._tcp.measuredFT='217'; G._tcp.birthYear='1990';
+  G._tcBwEntries=[{date:'2025-12-20', free_t:217}];
+  G._thInjections=[{compound_id:'enanthate',dose:'100',tier:'trt',logged:true,date:'2026-05-01'},
+                   {compound_id:'enanthate',dose:'100',tier:'trt',logged:true,date:'2026-05-08'}];
+  var _pcCalls=[];
+  G.fetch=async function(url,opt){ _pcCalls.push({url:url,method:(opt&&opt.method)||'GET',body:opt&&opt.body}); return {ok:true,json:async function(){return {ok:true};}}; };
+  G._captureFreeTHistory().then(function(){
+    var _del=_pcCalls.find(function(c){return c.method==='DELETE'&&/plasma-history/.test(c.url);});
+    var _post=_pcCalls.find(function(c){return c.method==='POST'&&/plasma-history\/batch/.test(c.url);});
+    check('capture persist: clears the free_t marker (DELETE) before writing', !!_del && /marker=free_t/.test(_del.url));
+    check('capture persist: POSTs a non-empty batch of free_t entries', !!_post && (function(){try{var b=JSON.parse(_post.body);return b.entries&&b.entries.length>0&&b.entries[0].marker==='free_t';}catch(e){return false;}})());
+    G._thInjections=_pcSaveInj; G.fetch=_pcSaveFetch; G._tcBwEntries=_pcSaveBw; if(G._tcp)G._tcp.manualLog=_pcSaveML;
+  });
+}
+
+// Add-a-past-injection modal: catalogue wiring + validation surface.
+if(typeof G._piCat==='function'){
+  check('_piCat trt → TRT_CAT list', Array.isArray(G._piCat('trt')) && G._piCat('trt').length>0);
+  check('_piCat peptide → PEPTIDE_CAT list', Array.isArray(G._piCat('peptide')) && G._piCat('peptide').length>0);
+  check('_piDefaultUnit: peptide µg, trt mg', G._piDefaultUnit('peptide')==='µg' && G._piDefaultUnit('trt')==='mg');
 }
 
 // ── Compound-aware macros (Batch 2) ────────────────────────────────────────

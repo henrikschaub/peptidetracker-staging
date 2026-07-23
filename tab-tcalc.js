@@ -194,6 +194,9 @@ function _tcSaveProfile() {
     headers: Object.assign({'Content-Type':'application/json'}, h),
     body: JSON.stringify(_tcp)
   }).catch(function(){});
+  // The T-Calc manual log or calibration just changed — recompute & persist the
+  // free-T history so the (fetch-and-plot) T-History view stays in sync.
+  if (typeof _captureFreeTHistory === 'function') _captureFreeTHistory();
 }
 
 // Saturating Emax dose-response for SHBG suppression: effMaxSupp(dose) = emax·dose/(dose+ed50).
@@ -1205,18 +1208,6 @@ function _tcFreeTSeries(sorted, hooks) {
     var _adD = new Date(firstDate.getTime() + _anchorDay * 86400000);
     _anchorCutoffDate = _adD.getFullYear() + '-' + String(_adD.getMonth() + 1).padStart(2, '0') + '-' + String(_adD.getDate()).padStart(2, '0');
   }
-  // Opt-in anchor override (used only by the T-History tab), and ONLY when there is no bloodwork
-  // to anchor on. With a bloodwork entry the model already calibrates correctly (that is what
-  // gives the T-Calc curve its shape), so the override must NOT clobber it — otherwise T-History
-  // diverges from the T-Calc. Without bloodwork, a completed cycle (last injection before "today")
-  // falls to the degenerate day-0 anchor and the curve blows up ~50×; passing the last-injection
-  // day anchors calFT at the settled steady state instead. Other callers never pass anchorDay.
-  if (hooks && hooks.anchorDay != null && isFinite(hooks.anchorDay)) {
-    _anchorDay = Math.max(0, Math.min(totalDays, Math.round(hooks.anchorDay)));
-    var _adH = new Date(firstDate.getTime() + _anchorDay * 86400000);
-    _anchorCutoffDate = _adH.getFullYear() + '-' + String(_adH.getMonth() + 1).padStart(2, '0') + '-' + String(_adH.getDate()).padStart(2, '0');
-  }
-
   // Warm-start: pre-fill curve so the chart starts at the user's measured free T.
   if (calFT && _mftNum > 0) {
     if (_curDose > 0) {
