@@ -56,10 +56,6 @@
     <div id="today-supplements"></div>
     <button class="reset-btn" onclick="openPastInjection()" style="margin-bottom:8px">+ Log a past injection</button>
     <button class="reset-btn" onclick="resetToday()">Reset Today's Log</button>
-    <div class="card" id="today-checkin-card">
-      <div class="card-header" style="cursor:pointer" onclick="toggleTodayCheckIn()"><div class="card-title-wrap"><div class="card-dot" style="background:var(--accent4)"></div><div class="card-title">DAILY CHECK-IN</div></div><div style="display:flex;align-items:center;gap:8px"><span class="card-badge badge-today" id="today-bf-badge">0 / 10</span><span id="today-checkin-chev" style="color:var(--muted2);font-size:18px">&#x25B8;</span></div></div>
-      <div id="today-checkin-body" style="display:none"><div class="checklist" id="today-bf-list"></div></div>
-    </div>
   </div>
   <div class="content hidden" id="tab-stacks">
     <div id="stack-body"></div>
@@ -295,11 +291,11 @@ function _isActiveStack(i){return _activeStackIndices.indexOf(i)>=0;}
 let _stackViewTab='peptides';let _editInnerTab='peptides';
 let _reconStackIdx=0;let _reconStackPicked=false;let _reconState={};
 const TAB_LABELS=Object.assign({today:'Today',stacks:'Protocols',blood:'Levels',tcalc:'T-Calc',thist:'T-History',labs:'Labs',supplements:'Supplements',recon:'Recon',schedule:'Schedule',macros:'Macros',timeline:'Timeline',body:'Body Comp'},IS_STAGING?{storage:'Storage'}:{});
-const TAB_DEFAULTS=Object.assign({today:true,stacks:true,blood:true,tcalc:true,thist:true,labs:true,supplements:true,recon:true,schedule:false,macros:false,timeline:true,body:true},IS_STAGING?{storage:true}:{});
+const TAB_DEFAULTS=Object.assign({today:true,stacks:true,blood:true,tcalc:true,thist:true,labs:true,supplements:true,recon:true,schedule:false,macros:true,timeline:true,body:true},IS_STAGING?{storage:true}:{});
 // Two-tier navigation (usability study): 5 bottom "primary" tabs, each grouping
 // several of the existing destinations as a secondary sub-tab strip. Every legacy
 // tab id and switchTab(id,el) call is preserved — this is an additive nav layer.
-const PRIMARY_GROUPS={today:['today','supplements','schedule'],plan:['stacks','timeline','recon'],levels:['blood','tcalc','thist'],labs:['labs','body'],more:['macros','settings','storage']};
+const PRIMARY_GROUPS={today:['today','macros','supplements','schedule'],plan:['stacks','timeline','recon'],levels:['blood','tcalc','thist'],labs:['labs','body'],more:['settings','storage']};
 const PRIMARY_LABELS={today:'Today',plan:'Plan',levels:'Levels',labs:'Labs',more:'More'};
 const PRIMARY_ORDER=['today','plan','levels','labs','more'];
 // Human surface names for the sub-tabs (T-Calc→Testosterone, Recon→Reconstitution…).

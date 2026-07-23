@@ -5154,6 +5154,13 @@ check('Labs in TAB_DEFAULTS',           /TAB_DEFAULTS=[^;]*labs:true/.test(html)
 check('Labs dispatched in switchTab',   html.includes("if(id==='labs')buildLabs()"));
 check('tab-labs.js script included',    html.includes('tab-labs.js'));
 check('lab-markers catalogue synced on init', html.includes('syncLabMarkersFromAgent()'));
+
+// Macros moved into the Today primary group as a sub-tab; visible by default.
+check('Macros is a Today sub-tab (primaryOf)', typeof G.primaryOf==='function' && G.primaryOf('macros')==='today');
+check('Macros in the Today group, not More (source)', /today:\[[^\]]*'macros'[^\]]*\]/.test(html) && !/more:\[[^\]]*'macros'/.test(html));
+check('Macros visible by default', /TAB_DEFAULTS=[^;]*macros:true/.test(html));
+// Daily Check-in card removed from Today.
+check('Daily Check-in card removed from Today', !html.includes('today-checkin-card') && !html.includes('toggleTodayCheckIn()'));
 {
   const labsSrc = fs.readFileSync(path.join(__dirname, '../tab-labs.js'), 'utf8');
   check('tab-labs.js has no raw parseFloat', !labsSrc.includes('parseFloat('));
