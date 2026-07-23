@@ -6234,6 +6234,16 @@ if(typeof G._wizFlow==='function'){
   check('nutrition step precedes review', _nf.indexOf('nutrition') < _nf.indexOf('review'));
 }
 
+// ── Supplements sub-tab lives under the Plan group (moved from Today) ───────────
+console.log('\n── Supplements grouped under Plan ─────────────────────────');
+if(typeof G.primaryOf==='function'){
+  check('Supplements is in the Plan group', G.primaryOf('supplements')==='plan');
+  check('Supplements is no longer in the Today group', G.primaryOf('supplements')!=='today');
+  check('Stacks stays in Plan',                G.primaryOf('stacks')==='plan');
+  check('Today dashboard still owns its supplement card (renderTodaySupplements)',
+        typeof G.renderTodaySupplements==='function' && html.includes('id="today-supplements"'));
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
