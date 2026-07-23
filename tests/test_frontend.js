@@ -6244,6 +6244,25 @@ if(typeof G.primaryOf==='function'){
         typeof G.renderTodaySupplements==='function' && html.includes('id="today-supplements"'));
 }
 
+// ── HGH default timing: AM-fasted soft nudge ───────────────────────────────────
+// Rule (2026-07-23): exogenous HGH defaults to a single fasted AM dose (insulin opposes
+// GH's lipolytic action; AM off the overnight fast is the simplest low-insulin window).
+// PM remains available for users who split higher doses. Evidence: backend
+// docs/enhanced-bodybuilding/10-gh-injection-timing.md.
+console.log('\n── HGH default timing (AM-fasted nudge) ───────────────────');
+{
+  const _hi = html.indexOf("id:'hgh'");
+  check('peptide-tier HGH entry present', _hi >= 0);
+  if (_hi >= 0) {
+    const _seg = html.slice(_hi, _hi + 1600);
+    const _dfltM = _seg.match(/dflt:\{times:\[([^\]]*)\]/);
+    check('HGH default times is AM-only (no PM by default)',
+      !!_dfltM && /'AM'/.test(_dfltM[1]) && !/'PM'/.test(_dfltM[1]),
+      _dfltM ? _dfltM[1] : 'no dflt match');
+    check('HGH protocol still says inject fasted', /Inject fasted/i.test(_seg));
+  }
+}
+
 console.log('\n───────────────────────────────────────────────────────────');
 console.log(`  ${passed} passed  ${failed} failed  ${passed+failed} total`);
 if(failed>0)process.exit(1);
