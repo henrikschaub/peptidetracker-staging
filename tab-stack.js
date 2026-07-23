@@ -1843,11 +1843,12 @@ function wizStepNutrition(body,footer){
   }
   var phases=[{id:'reset',label:'Reset'},{id:'cut',label:'Cut'},{id:'recomp',label:'Recomp'}];
   html+='<div style="display:flex;gap:6px;margin-bottom:12px">'+phases.map(function(p){var s=_macrosPhase===p.id;return'<button onclick="wizSetMacroPhase(\''+p.id+'\')" style="flex:1;background:'+(s?'var(--accent)':'var(--surface2)')+';color:'+(s?'#000':'var(--muted2)')+';border:1px solid '+(s?'var(--accent)':'var(--border)')+';border-radius:20px;padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'+p.label+'</button>';}).join('')+'</div>';
-  var m=calcMacros(bw,_macrosPhase,onAndrogens,(typeof _macrosOpts==='function'?_macrosOpts():{}));
+  var m=calcMacros(bw,_macrosPhase,onAndrogens);
   var mi=[{l:'Calories',v:m.kcal,u:'kcal'},{l:'Protein',v:m.protein,u:'g'},{l:'Carbs',v:m.carbs,u:'g'},{l:'Fat',v:m.fat,u:'g'}];
   html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">'+mi.map(function(x,i){return'<div style="padding:14px 6px;text-align:center'+(i<3?';border-right:1px solid var(--border)':'')+'"><div style="font-family:var(--font-mono);font-size:22px;line-height:1;color:var(--text)">'+x.v+'</div><div style="font-size:9px;color:var(--muted2);text-transform:uppercase;margin-top:3px">'+x.u+'</div><div style="font-size:9px;color:var(--muted2)">'+x.l+'</div></div>';}).join('')+'</div>';
-  if(typeof _macrosEnergyNote==='function')html+='<div style="background:rgba(232,255,60,0.05);border-left:3px solid var(--accent);border-radius:8px;padding:11px 14px;font-size:11px;color:var(--muted2);line-height:1.6;margin-bottom:10px">'+_macrosEnergyNote(m,_macrosPhase)+'</div>';
   html+='<div style="background:rgba(60,255,160,0.06);border-left:3px solid var(--accent3);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--muted2);line-height:1.6">'+_macrosFatNote(onAndrogens,_macrosPhase)+'</div>';
+  // Training burn shown separately (not folded into the target above).
+  if(typeof _macrosTrainKcal!=='undefined'){ var _tb=Math.max(0,Math.round(_macrosTrainKcal||0)); if(_tb>0)html+='<div style="background:rgba(60,255,160,0.05);border-left:3px solid var(--accent2);border-radius:8px;padding:11px 14px;font-size:11px;color:var(--muted2);line-height:1.6;margin-top:10px">Your logged training burns about <b>+'+_tb+' kcal/day</b> (14-day avg, from the workout tracker) — shown separately, <b>not</b> added to the target above.</div>'; }
   body.innerHTML=html;
   // Pull the user's measured training burn once available; re-render only if it changed
   // (self-limiting — avoids a fetch/render loop).
