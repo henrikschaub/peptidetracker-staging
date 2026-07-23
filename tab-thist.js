@@ -18,7 +18,7 @@ var _thFocusDay  = null;       // as-of day index (days from first stored day); 
 var _thData      = undefined;  // cached /plasma-history rows (undefined until first fetch)
 var _thInjections;             // cached /injections rows (for tick marks + capture)
 var _TH_MARKER   = 'free_t';
-var _TH_TAIL_DAYS = 14;        // curve is captured to 14d past the last injection (decay tail)
+var _TH_TAIL_DAYS = 0;         // curve ends AT the last injection — never plot past it
 var _TH_MAX_SANE = 6000;       // pmol/L — above this the calibration is bad; never store it
 
 /* ── data source (backend) ──────────────────────────────────────────────── */
@@ -61,8 +61,8 @@ function _thUtcDateStr(ms) {
 // Pure computation: the per-day free-T series from the merged past log, using the
 // EXACT T-Calc model (no anchor override — identical math to the plasma chart).
 // Returns { entries:[{date,marker,value,unit}], maxV, unit } or null. No I/O, so
-// it is directly testable. `entries` runs from the first injection to 14d past the
-// last (decay tail).
+// it is directly testable. `entries` runs from the first injection to the last —
+// nothing is emitted past the latest injection (no decay tail).
 function _thComputeFreeT() {
   if (typeof _tcFreeTSeries !== 'function') return null;
   // Make sure the calibration profile (measured FT, birth year) is hydrated even
@@ -174,8 +174,16 @@ function buildTHist() {
   ]).then(function(res){
     _thData       = Array.isArray(res[0]) ? res[0] : [];
     _thInjections = Array.isArray(res[1]) ? res[1] : [];
-    var haveHistory = _thData.length > 0;
-    var haveInjections = _thMergedPastLog().length > 0;
+    var mergedLog = _thMergedPastLog();
+    var haveInjections = mergedLog.length > 0;
+    // Stored data is stale if it was written by an older build (e.g. the curve
+    // extends past the last injection — the removed decay tail). Re-capture so the
+    // history matches the current model without any manual step.
+    var lastInjDate = haveInjections ? mergedLog[mergedLog.length-1].date : '';
+    var storedMax = '';
+    _thData.forEach(function(e){ if ((e.marker||'free_t') === _TH_MARKER && e.date > storedMax) storedMax = e.date; });
+    var staleTail = haveInjections && storedMax && storedMax > lastInjDate;
+    var haveHistory = _thData.length > 0 && !staleTail;
     if (!haveHistory && haveInjections) {
       _captureFreeTHistory().then(function(){
         return fetch(AGENT_URL + '/plasma-history?marker=' + _TH_MARKER, { headers: hdrs }).then(function(r){ return r.ok ? r.json() : []; });
