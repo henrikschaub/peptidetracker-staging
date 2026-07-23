@@ -119,6 +119,17 @@ function _thDayToMs(series, day){ return series.firstMs + day * 86400000; }
 function _thFmtDate(ms){ var d = new Date(ms); var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return d.getDate()+' '+M[d.getMonth()]+' '+String(d.getFullYear()).slice(2); }
 var _TH_ZOOM_DAYS = { week: 7, month: 30, year: 365 };
 
+// Which zoom levels are meaningful for a history spanning `span` days. A window
+// wider than the data would just show everything — identical to "All" — so a W/M/Y
+// level is offered only when its window is actually narrower than the data. "All"
+// is always offered. This is why Month/Year appear only once enough history exists.
+function _thZoomLevels(span) {
+  var defs = [{id:'week',label:'W',days:7},{id:'month',label:'M',days:30},{id:'year',label:'Y',days:365}];
+  var out = defs.filter(function(z){ return z.days < span; });
+  out.push({id:'all',label:'All'});
+  return out;
+}
+
 // Build the render series from the stored free-T values — no PK math. Returns
 // {firstMs,totalDays,lastDay,ft:[pmol/L per day],maxFt,injections[],calibrated,unit} or null.
 function _thSeries() {
@@ -214,7 +225,8 @@ function _thRender(host) {
     return;
   }
   if (_thFocusDay === null || _thFocusDay < 0 || _thFocusDay > series.totalDays) _thFocusDay = series.lastDay;
-  var zooms = [{id:'week',label:'W'},{id:'month',label:'M'},{id:'year',label:'Y'},{id:'all',label:'All'}];
+  var zooms = _thZoomLevels(series.totalDays);
+  if (!zooms.some(function(z){ return z.id === _thZoom; })) _thZoom = 'all';
   var zBtns = zooms.map(function(z){
     var sel = _thZoom === z.id;
     return '<button id="th-zoom-'+z.id+'" onclick="_thSetZoom(\''+z.id+'\')" style="flex:1;background:'+(sel?'rgba(224,80,80,0.22)':'none')+';color:'+(sel?'#e05050':'var(--muted2)')+';border:1px solid '+(sel?'#e0505066':'var(--border)')+';border-radius:8px;padding:7px 4px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'+z.label+'</button>';

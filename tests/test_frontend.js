@@ -6086,6 +6086,18 @@ if(typeof G._thSeries==='function'){
   G._thData=_sSaveData; G._thInjections=_sSaveInj;
 }
 
+// _thZoomLevels: only offer a zoom window narrower than the data (else it == All).
+if(typeof G._thZoomLevels==='function'){
+  var _z27=G._thZoomLevels(27).map(function(z){return z.id;});
+  check('_thZoomLevels(27d): only Week + All (Month/Year would just be All)', _z27.join(',')==='week,all', _z27.join(','));
+  var _z100=G._thZoomLevels(100).map(function(z){return z.id;});
+  check('_thZoomLevels(100d): Week + Month + All (not Year)', _z100.join(',')==='week,month,all', _z100.join(','));
+  var _z400=G._thZoomLevels(400).map(function(z){return z.id;});
+  check('_thZoomLevels(400d): all four levels', _z400.join(',')==='week,month,year,all', _z400.join(','));
+  var _z5=G._thZoomLevels(5).map(function(z){return z.id;});
+  check('_thZoomLevels(5d): only All (nothing to zoom)', _z5.join(',')==='all', _z5.join(','));
+}
+
 // ── Capture MUST reproduce the T-Calc curve and NEVER blow up ────────────────
 // Hard regression for the ~50× / 9,345 pmol/L explosions. The capture computes the
 // per-day free-T with the exact T-Calc model (no anchor override) — the value that
