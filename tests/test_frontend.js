@@ -6086,16 +6086,23 @@ if(typeof G._thSeries==='function'){
   G._thData=_sSaveData; G._thInjections=_sSaveInj;
 }
 
-// _thZoomLevels: only offer a zoom window narrower than the data (else it == All).
+// _thZoomLevels: always W/M/Y/All (fixed windows, never hidden).
 if(typeof G._thZoomLevels==='function'){
-  var _z27=G._thZoomLevels(27).map(function(z){return z.id;});
-  check('_thZoomLevels(27d): only Week + All (Month/Year would just be All)', _z27.join(',')==='week,all', _z27.join(','));
-  var _z100=G._thZoomLevels(100).map(function(z){return z.id;});
-  check('_thZoomLevels(100d): Week + Month + All (not Year)', _z100.join(',')==='week,month,all', _z100.join(','));
-  var _z400=G._thZoomLevels(400).map(function(z){return z.id;});
-  check('_thZoomLevels(400d): all four levels', _z400.join(',')==='week,month,year,all', _z400.join(','));
-  var _z5=G._thZoomLevels(5).map(function(z){return z.id;});
-  check('_thZoomLevels(5d): only All (nothing to zoom)', _z5.join(',')==='all', _z5.join(','));
+  check('_thZoomLevels: always Week/Month/Year/All', G._thZoomLevels().map(function(z){return z.id;}).join(',')==='week,month,year,all');
+}
+// _thWindow: each period is EXACTLY 1 week / 1 month / 1 year wide, ending at the
+// as-of day, and may extend before the first data point on short histories.
+if(typeof G._thWindow==='function'){
+  var _wW=G._thWindow('week',27,27);
+  check('_thWindow week: exactly 7 days wide', (_wW.winEnd-_wW.winStart)===7, (_wW.winEnd-_wW.winStart)+'');
+  var _wM=G._thWindow('month',27,27);
+  check('_thWindow month: exactly 30 days even when history is shorter', (_wM.winEnd-_wM.winStart)===30 && _wM.winStart===-3 && _wM.winEnd===27, JSON.stringify(_wM));
+  var _wY=G._thWindow('year',27,27);
+  check('_thWindow year: exactly 365 days', (_wY.winEnd-_wY.winStart)===365, (_wY.winEnd-_wY.winStart)+'');
+  var _wA=G._thWindow('all',27,27);
+  check('_thWindow all: full history span', _wA.winStart===0 && _wA.winEnd===27);
+  var _wMid=G._thWindow('month',50,120);
+  check('_thWindow month: ends at the as-of day, still exactly 30 wide', _wMid.winEnd===50 && _wMid.winStart===20);
 }
 
 // ── Capture MUST reproduce the T-Calc curve and NEVER blow up ────────────────
