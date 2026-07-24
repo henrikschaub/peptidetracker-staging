@@ -352,7 +352,10 @@ function _piHtml() {
   var compOpts = comps.map(function(c){ return '<option value="'+_esc(c.id)+'"'+(c.id===d.compId?' selected':'')+'>'+_esc(c.name)+'</option>'; }).join('');
   var units = ['mg','ml','IU','µg','%'];
   var unitOpts = units.map(function(u){ return '<option'+(u===d.unit?' selected':'')+'>'+u+'</option>'; }).join('');
-  var times = [{id:'',label:'—'},{id:'AM',label:'AM'},{id:'PM',label:'PM'}];
+  var times = [{id:'',label:'—'}].concat(
+    (typeof TIME_SLOTS!=='undefined'?TIME_SLOTS:['AM','PM']).map(function(t){
+      return {id:t,label:(typeof _slotLabel==='function')?_slotLabel(t):t};
+    }));
   var timeBtns = times.map(function(tm){
     var sel = (d.time||'') === tm.id;
     return '<button onclick="_piSetField(\'time\',\''+tm.id+'\')" style="flex:1;background:'+(sel?'rgba(224,80,80,0.22)':'none')+';color:'+(sel?'#e05050':'var(--muted2)')+';border:1px solid '+(sel?'#e0505066':'var(--border)')+';border-radius:8px;padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'+tm.label+'</button>';

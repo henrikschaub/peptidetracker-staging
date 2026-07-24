@@ -232,8 +232,11 @@ function _tcSuppDailyDose(inter, kind, obj) {
   var nativeDaily = 0, nativeUnit = '';
   if (kind === 'peptide') {
     var times = obj.times || ['AM'];
-    var per = (times.indexOf('AM') >= 0 ? (parseDec(obj.dose_am) || 0) : 0) +
-              (times.indexOf('PM') >= 0 ? (parseDec(obj.dose_pm) || 0) : 0);
+    var _slots = (typeof TIME_SLOTS!=='undefined') ? TIME_SLOTS : ['AM','PM'];
+    var per = _slots.reduce(function(sum, t){
+      if (times.indexOf(t) < 0) return sum;
+      return sum + (parseDec(obj['dose_' + t.toLowerCase()]) || 0);
+    }, 0);
     var dpw = (obj.days || [0, 1, 2, 3, 4, 5, 6]).length;
     nativeDaily = per * dpw / 7;
     nativeUnit = obj.unit_am || obj.unit_pm || 'µg';

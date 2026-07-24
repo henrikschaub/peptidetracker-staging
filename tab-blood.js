@@ -295,7 +295,8 @@ function _blBuildLines(){
       var cat = (typeof PEPTIDE_CAT!=='undefined') ? PEPTIDE_CAT.find(function(x){ return x.id===p.id; }) : null;
       var hl = _parseHalfLifeDays(cat ? cat.halfLife : (p.halfLife||''));
       if(!hl) return;
-      var dose = (parseDec(p.dose_am)||0) + (parseDec(p.dose_pm)||0);
+      var dose = ((typeof TIME_SLOTS!=='undefined')?TIME_SLOTS:['AM','PM'])
+        .reduce(function(sum,t){ return sum + (parseDec(p['dose_'+t.toLowerCase()])||0); }, 0);
       if(!dose) return;
       var injDays = _pkInjectionDays(p, cycleLen, startDow);
       if(!injDays.length) return;

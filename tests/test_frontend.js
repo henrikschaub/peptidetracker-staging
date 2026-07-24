@@ -2332,10 +2332,12 @@ console.log('\n── Edit Enhanced tab — stack editor regression ────
     check('editSetEnhAmPm: sets amPm=false', G._editBuf.enhanced.compounds[0].amPm===false);
     // Edit view surfaces the Split AM / PM toggle row and honours the per-compound flag
     var enhEditOn=G._renderEditEnhanced({enabled:true,compounds:[{id:testId2,name:'Test',dose_am:'2',dose_pm:'1',unit:'IU/day',days:[1],amPm:true}]});
-    check('_renderEditEnhanced: shows Split AM / PM toggle', enhEditOn.includes('Split AM / PM'));
-    check('_renderEditEnhanced amPm on: shows AM Dose + PM Dose rows', enhEditOn.includes('AM Dose')&&enhEditOn.includes('PM Dose'));
+    check('_renderEditEnhanced: shows the split toggle', enhEditOn.includes('Split across AM / Pre-GYM / PM'));
+    check('_renderEditEnhanced amPm on: shows AM + Pre-GYM + PM Dose rows',
+      enhEditOn.includes('AM Dose')&&enhEditOn.includes('Pre-GYM Dose')&&enhEditOn.includes('PM Dose'));
     var enhEditOff=G._renderEditEnhanced({enabled:true,compounds:[{id:testId2,name:'Test',dose:'250',unit:'mg/week',days:[1],amPm:false}]});
-    check('_renderEditEnhanced amPm off: single Dose row, no AM Dose', enhEditOff.includes('Split AM / PM')&&!enhEditOff.includes('AM Dose'));
+    check('_renderEditEnhanced amPm off: single Dose row, no per-slot rows',
+      enhEditOff.includes('Split across AM / Pre-GYM / PM')&&!enhEditOff.includes('AM Dose')&&!enhEditOff.includes('Pre-GYM Dose'));
 
     G.editToggleEnhancedCompound(testId2);
     check('editToggleEnhancedCompound: removes compound on second call', G._editBuf.enhanced.compounds.length===0);
@@ -6254,13 +6256,72 @@ console.log('\n── HGH default timing (AM-fasted nudge) ───────
   const _hi = html.indexOf("id:'hgh'");
   check('peptide-tier HGH entry present', _hi >= 0);
   if (_hi >= 0) {
-    const _seg = html.slice(_hi, _hi + 1600);
+    const _seg = html.slice(_hi, _hi + 3200);
     const _dfltM = _seg.match(/dflt:\{times:\[([^\]]*)\]/);
     check('HGH default times is AM-only (no PM by default)',
       !!_dfltM && /'AM'/.test(_dfltM[1]) && !/'PM'/.test(_dfltM[1]),
       _dfltM ? _dfltM[1] : 'no dflt match');
     check('HGH protocol still says inject fasted', /Inject fasted/i.test(_seg));
   }
+}
+
+
+// ── Third intra-day dose slot: MID / "Pre-GYM" ────────────────────────────────
+// Exogenous HGH is commonly split into 2-3 fasted micro-doses, so a compound must be
+// able to schedule three doses in one day. MID sits between AM and PM everywhere:
+// slot constants, the stack/wizard editors, injection generation and the day ordering.
+// Backend counterpart: _TIME_SLOTS in routers/injections.py.
+console.log('\n── Third dose slot (AM / Pre-GYM / PM) ────────────────────');
+{
+  check('TIME_SLOTS is AM, MID, PM in chronological order',
+    Array.isArray(G.TIME_SLOTS) && G.TIME_SLOTS.join(',')==='AM,MID,PM');
+  check('MID is labelled "Pre-GYM" in the UI', G._slotLabel('MID')==='Pre-GYM');
+  check('AM/PM labels unchanged', G._slotLabel('AM')==='AM' && G._slotLabel('PM')==='PM');
+  check('_slotKey maps a slot to its field suffix',
+    G._slotKey('MID')==='mid' && G._slotKey('AM')==='am' && G._slotKey('PM')==='pm');
+  check('MID sorts between AM and PM',
+    G.TIME_RANK.AM < G.TIME_RANK.MID && G.TIME_RANK.MID < G.TIME_RANK.PM);
+
+  // Editor renders a dose row per selected slot, and only for selected slots.
+  var _p3={id:'hgh',name:'HGH',dot:'#3cffa0',times:['AM','MID','PM'],days:[1,2,3,4,5],
+           dose_am:'2',dose_mid:'2',dose_pm:'2',unit_am:'IU',unit_mid:'IU',unit_pm:'IU',active:true};
+  var _ed3=G._renderEditPep(_p3,0);
+  check('editor: three slots selected → three dose rows',
+    _ed3.includes('AM Dose')&&_ed3.includes('Pre-GYM Dose')&&_ed3.includes('PM Dose'));
+  check('editor: Pre-GYM input bound to dose_mid', _ed3.includes('dose_mid=this.value'));
+  var _ed1=G._renderEditPep({id:'hgh',name:'HGH',times:['AM'],days:[1],dose_am:'2',unit_am:'IU',active:true},0);
+  check('editor: AM-only → no Pre-GYM row', _ed1.includes('AM Dose')&&!_ed1.includes('Pre-GYM Dose'));
+
+  // GH-axis compounds carry the fasted-window qualifier Henrik specified.
+  check('GH-axis: fasted hint names all three windows',
+    _ed3.includes('AM (fasted)')&&_ed3.includes('Pre-GYM (2 h fasted)')&&_ed3.includes('PM (2 h fasted)'));
+  var _edRet=G._renderEditPep({id:'retatrutide',name:'Retatrutide',times:['AM'],days:[0],dose_am:'3',unit_am:'mg',active:true},0);
+  check('non-GH compound gets no fasted hint', !_edRet.includes('(fasted)'));
+
+  // A slot with no catalogue unit inherits the compound's unit, not a generic mg.
+  var _hghCat=G.PEPTIDE_CAT.find(function(c){return c.id==='hgh';});
+  check('slot unit inherits compound unit (IU, not mg)',
+    G._slotFieldsFromDflt(_hghCat.dflt).unit_mid==='IU');
+
+  // buildWeeklyFromProtocol surfaces all three doses.
+  var _wk3=G.buildWeeklyFromProtocol({peptides:[_p3]});
+  var _mid=_wk3.filter(function(e){return e.time==='MID';});
+  check('weekly view emits a MID entry', _mid.length>0);
+  check('weekly MID entry carries its own dose', _mid.length>0 && /2/.test(_mid[0].detail||''));
+
+  // Today ordering puts Pre-GYM between AM and PM.
+  var _doses=[{time_of_day:'PM'},{time_of_day:'MID'},{time_of_day:'AM'}];
+  _doses.sort(function(a,b){return (G.TIME_RANK[a.time_of_day]??2)-(G.TIME_RANK[b.time_of_day]??2);});
+  check('today ordering is AM → Pre-GYM → PM',
+    _doses.map(function(d){return d.time_of_day;}).join(',')==='AM,MID,PM');
+
+  // The HGH default is untouched by this change — still a single fasted AM dose.
+  check('HGH default is still AM-only (3-split stays opt-in)',
+    _hghCat.dflt.times.length===1 && _hghCat.dflt.times[0]==='AM');
+  check('HGH protocol documents the three fasted micro-doses',
+    /Pre-GYM/.test(_hghCat.protocol) && /2 \+ 2 \+ 2 IU/.test(_hghCat.protocol));
+  check('HGH protocol labels the 3-split as not trial-backed',
+    /rather than trial-backed/.test(_hghCat.protocol));
 }
 
 console.log('\n───────────────────────────────────────────────────────────');
